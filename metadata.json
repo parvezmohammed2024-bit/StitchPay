@@ -1,0 +1,6 @@
+{
+  "name": "StitchPay",
+  "description": "Piece-rate production tracking and payroll system for garments manufacturing",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
