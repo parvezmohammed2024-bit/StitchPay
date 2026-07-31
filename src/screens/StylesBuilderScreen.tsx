@@ -55,6 +55,8 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       setSelectedStyle(stList[0]);
       loadProcesses(stList[0].id);
     } else if (selectedStyle) {
+      const match = stList.find(s => s.id === selectedStyle.id);
+      if (match) setSelectedStyle(match);
       loadProcesses(selectedStyle.id);
     }
   };
@@ -71,11 +73,22 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
 
   const handleSaveStyle = async (e: React.FormEvent) => {
     e.preventDefault();
-    const saved = await dataService.saveStyle(styleForm);
-    setShowStyleModal(false);
-    setStyleForm({ name: '', style_code: '', buyer_name: '', order_qty: 10000 });
-    await loadData();
-    setSelectedStyle(saved);
+    try {
+      const saved = await dataService.saveStyle(styleForm);
+      setShowStyleModal(false);
+      setStyleForm({
+        name: '',
+        style_code: '',
+        buyer_name: '',
+        order_qty: 10000,
+        image_url: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&auto=format&fit=crop&q=80',
+      });
+      setSelectedStyle(saved);
+      await loadData();
+      await loadProcesses(saved.id);
+    } catch (err) {
+      console.error('Failed to create style:', err);
+    }
   };
 
   const handleSaveProcess = async (procData: Partial<GarmentProcess>) => {
@@ -163,43 +176,66 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       </div>
 
       {/* Style Cards Horizontal Carousel / Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {styles.map(st => {
-          const isSelected = selectedStyle?.id === st.id;
-          return (
-            <div
-              key={st.id}
-              onClick={() => handleSelectStyle(st)}
-              className={`p-4 rounded-2xl border cursor-pointer transition-all flex space-x-4 ${
-                isSelected
-                  ? 'bg-slate-800 border-indigo-500 shadow-xl ring-2 ring-indigo-500/30'
-                  : 'bg-slate-900 border-slate-800 hover:border-slate-700 hover:bg-slate-850'
-              }`}
+      {styles.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-4 shadow-xl">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+            <Shirt className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">No Garment Styles Created Yet</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              Start by adding garment styles (e.g. Denim Shirt, Polo, Trousers) to configure operation sequences and piece rates.
+            </p>
+          </div>
+          {isOwnerAdmin && (
+            <button
+              onClick={() => setShowStyleModal(true)}
+              className="inline-flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg transition-all text-xs"
             >
-              <img
-                src={st.image_url || 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&auto=format&fit=crop&q=80'}
-                alt={st.name}
-                className="w-20 h-20 rounded-xl object-cover border border-slate-700 shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-amber-400">{st.style_code}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
-                    {st.status}
-                  </span>
-                </div>
-                <h3 className="font-bold text-white text-base truncate mt-0.5">{st.name}</h3>
-                <p className="text-xs text-slate-400 truncate">{st.buyer_name || 'Generic Buyer'}</p>
+              <Plus className="w-4 h-4" />
+              <span>Create First Garment Style</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {styles.map(st => {
+            const isSelected = selectedStyle?.id === st.id;
+            return (
+              <div
+                key={st.id}
+                onClick={() => handleSelectStyle(st)}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all flex space-x-4 ${
+                  isSelected
+                    ? 'bg-slate-800 border-indigo-500 shadow-xl ring-2 ring-indigo-500/30'
+                    : 'bg-slate-900 border-slate-800 hover:border-slate-700 hover:bg-slate-850'
+                }`}
+              >
+                <img
+                  src={st.image_url || 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&auto=format&fit=crop&q=80'}
+                  alt={st.name}
+                  className="w-20 h-20 rounded-xl object-cover border border-slate-700 shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold text-amber-400">{st.style_code}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
+                      {st.status || 'active'}
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-white text-base truncate mt-0.5">{st.name}</h3>
+                  <p className="text-xs text-slate-400 truncate">{st.buyer_name || 'Generic Buyer'}</p>
 
-                <div className="mt-2 text-xs text-slate-300 flex justify-between font-mono">
-                  <span>Order: {st.order_qty.toLocaleString()}</span>
-                  <span className="text-indigo-300 font-bold">{currencySymbol}{st.total_labour_cost?.toFixed(2)} / pc</span>
+                  <div className="mt-2 text-xs text-slate-300 flex justify-between font-mono">
+                    <span>Order: {(st.order_qty || 0).toLocaleString()}</span>
+                    <span className="text-indigo-300 font-bold">{currencySymbol}{(st.total_labour_cost || 0).toFixed(2)} / pc</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Operation Breakdown Table for Selected Style */}
       {selectedStyle && (

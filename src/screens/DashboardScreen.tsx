@@ -1,19 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { 
-  Shirt, Users, DollarSign, Award, TrendingUp, CheckCircle2, ArrowUpRight 
+  Shirt, Users, DollarSign, Award, TrendingUp, CheckCircle2, ArrowUpRight,
+  AlertTriangle, Flame, Clock, BarChart3, Layers
 } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from 'recharts';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
-import { ProductionEntry, GarmentStyle, Worker, FactorySettings } from '../types';
+import { ProductionEntry, GarmentStyle, Worker, FactorySettings, DailyAssignment, GarmentProcess } from '../types';
 
 export const DashboardScreen: React.FC = () => {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<ProductionEntry[]>([]);
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
+  const [processes, setProcesses] = useState<GarmentProcess[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [assignments, setAssignments] = useState<DailyAssignment[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     loadDashboardData();
@@ -21,20 +26,23 @@ export const DashboardScreen: React.FC = () => {
 
   const loadDashboardData = async () => {
     setLoading(true);
-    const [eList, sList, wList, setRes] = await Promise.all([
+    const [eList, sList, pList, wList, aList, setRes] = await Promise.all([
       dataService.getProductionEntries(),
       dataService.getStyles(),
+      dataService.getProcesses(),
       dataService.getWorkers(),
+      dataService.getDailyAssignments(todayStr),
       dataService.getSettings(),
     ]);
     setEntries(eList);
     setStyles(sList);
+    setProcesses(pList);
     setWorkers(wList);
+    setAssignments(aList);
     setSettings(setRes);
     setLoading(false);
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
   const todayEntries = entries.filter(e => e.entry_date === todayStr);
 
   const todayPieces = todayEntries.reduce((sum, e) => sum + e.qty_ok, 0);
@@ -43,6 +51,86 @@ export const DashboardScreen: React.FC = () => {
   // Active floor workers today
   const activeWorkerIds = new Set(todayEntries.map(e => e.worker_id));
   const activeWorkersCount = activeWorkerIds.size;
+
+  // Planned targets today
+  const todayTargetTotal = assignments.reduce((sum, a) => sum + (a.target_qty || 250), 0);
+  const todayTargetCompletionPct = todayTargetTotal > 0 ? Math.min(100, Math.round((todayPieces / todayTargetTotal) * 100)) : 0;
+
+  // Compute Completed Garments vs Total Operations
+  // Completed Garments = Sum over active styles of min(output across operations in style sequence)
+  const completedGarments = React.useMemo(() => {
+    let sumGarments = 0;
+    const styleIds = Array.from(new Set(assignments.map(a => a.style_id)));
+    for (const sId of styleIds) {
+      const styleProcesses = processes.filter(p => p.style_id === sId);
+      if (styleProcesses.length === 0) continue;
+
+      let minProcOutput = Infinity;
+      for (const proc of styleProcesses) {
+        const procOutput = todayEntries
+          .filter(e => e.style_id === sId && e.process_id === proc.id)
+          .reduce((sum, e) => sum + e.qty_ok, 0);
+        if (procOutput < minProcOutput) minProcOutput = procOutput;
+      }
+      if (minProcOutput !== Infinity) sumGarments += minProcOutput;
+    }
+    return sumGarments;
+  }, [assignments, processes, todayEntries]);
+
+  // Per Process Completion Percentage Bar Chart (Bottleneck analysis - lowest completion first)
+  const processCompletionChart = React.useMemo(() => {
+    const procMap = new Map<string, { processName: string; styleCode: string; target: number; done: number; pct: number }>();
+
+    for (const a of assignments) {
+      const p = processes.find(proc => proc.id === a.process_id);
+      const s = styles.find(st => st.id === a.style_id);
+      const cur = procMap.get(a.process_id) || {
+        processName: p?.name || 'Operation',
+        styleCode: s?.style_code || '',
+        target: 0,
+        done: 0,
+        pct: 0,
+      };
+
+      const aDone = todayEntries
+        .filter(e => e.process_id === a.process_id && e.worker_id === a.worker_id)
+        .reduce((sum, e) => sum + e.qty_ok, 0);
+
+      cur.target += (a.target_qty || 250);
+      cur.done += aDone;
+      procMap.set(a.process_id, cur);
+    }
+
+    const list = Array.from(procMap.values()).map(item => ({
+      ...item,
+      pct: item.target > 0 ? Math.min(100, Math.round((item.done / item.target) * 100)) : 0,
+      label: `${item.styleCode} - ${item.processName}`,
+    }));
+
+    // Sort lowest completion percentage first (Bottlenecks at top!)
+    return list.sort((a, b) => a.pct - b.pct);
+  }, [assignments, processes, styles, todayEntries]);
+
+  // "Not Started" List: Assignments with 0 output today
+  const notStartedList = React.useMemo(() => {
+    const list: { assignment: DailyAssignment; worker: Worker | undefined; process: GarmentProcess | undefined; style: GarmentStyle | undefined }[] = [];
+
+    for (const a of assignments) {
+      const aDone = todayEntries
+        .filter(e => e.process_id === a.process_id && e.worker_id === a.worker_id)
+        .reduce((sum, e) => sum + e.qty_ok, 0);
+
+      if (aDone === 0) {
+        list.push({
+          assignment: a,
+          worker: workers.find(w => w.id === a.worker_id),
+          process: processes.find(p => p.id === a.process_id),
+          style: styles.find(s => s.id === a.style_id),
+        });
+      }
+    }
+    return list;
+  }, [assignments, todayEntries, workers, processes, styles]);
 
   // Top 5 earners today
   const workerEarningsMap = new Map<string, number>();
@@ -71,7 +159,7 @@ export const DashboardScreen: React.FC = () => {
     const pSum = dayEntries.reduce((sum, e) => sum + e.qty_ok, 0);
     const aSum = dayEntries.reduce((sum, e) => sum + e.amount, 0);
     chartData.push({
-      date: dStr.slice(5), // '07-31'
+      date: dStr.slice(5),
       pieces: pSum,
       amount: Math.round(aSum),
     });
@@ -90,77 +178,152 @@ export const DashboardScreen: React.FC = () => {
               {todayStr}
             </span>
           </h1>
-          <p className="text-xs text-slate-400">Live floor production summary & daily payroll metrics</p>
+          <p className="text-xs text-slate-400">Live floor line setup, bottleneck operations & payroll metrics</p>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Today's Pieces */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('today')} {t('pieces')}</span>
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <Shirt className="w-5 h-5" />
-            </div>
+      {/* TODAY'S PRODUCTION KPI CARD & BOTTLENECK SUMMARY */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <h2 className="text-lg font-bold text-white flex items-center space-x-2">
+            <Flame className="w-5 h-5 text-amber-400 fill-amber-400" />
+            <span>Today's Line Setup & Production Completion</span>
+          </h2>
+          <span className="text-xs font-mono font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+            {todayTargetCompletionPct}% Target Met
+          </span>
+        </div>
+
+        {/* Global Line Target Completion Progress Bar */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs text-slate-400 font-semibold">
+            <span>Overall Floor Progress: <strong className="text-white">{todayPieces.toLocaleString()} / {todayTargetTotal.toLocaleString()} pcs</strong></span>
+            <span className="text-emerald-400 font-bold">{todayTargetCompletionPct}%</span>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-black text-white font-mono tabular-nums">
-              {todayPieces.toLocaleString()} <span className="text-sm font-normal text-slate-400">pcs</span>
-            </div>
-            <p className="text-[11px] text-emerald-400 mt-1 flex items-center font-medium">
-              <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" /> Logged on floor today
-            </p>
+          <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-amber-500 to-emerald-400 h-full rounded-full transition-all duration-500"
+              style={{ width: `${todayTargetCompletionPct}%` }}
+            />
           </div>
         </div>
 
-        {/* Today's Wage Cost */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('today')} {t('totalWage')}</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <DollarSign className="w-5 h-5" />
+        {/* METRICS ROW */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">Completed Garments</div>
+            <div className="text-xl font-black text-emerald-400 font-mono mt-1">
+              {completedGarments.toLocaleString()} <span className="text-xs font-normal text-slate-400">full garments</span>
             </div>
+            <div className="text-[10px] text-slate-500 mt-1">Slowest bottleneck capacity</div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono tabular-nums">
-              {currencySymbol}{todayWageCost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">Total Operations Logged</div>
+            <div className="text-xl font-black text-indigo-400 font-mono mt-1">
+              {todayPieces.toLocaleString()} <span className="text-xs font-normal text-slate-400">op steps</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">Piece rate liability</p>
+            <div className="text-[10px] text-slate-500 mt-1">Sum across all processes</div>
+          </div>
+
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">Today's Piece Wage Cost</div>
+            <div className="text-xl font-black text-amber-400 font-mono mt-1">
+              {currencySymbol}{todayWageCost.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">Accrued piece rate pay</div>
+          </div>
+
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+            <div className="text-[10px] text-slate-400 font-bold uppercase">Active Floor Workers</div>
+            <div className="text-xl font-black text-white font-mono mt-1">
+              {activeWorkersCount} <span className="text-xs font-normal text-slate-400">/ {workers.length}</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">Logged pieces today</div>
           </div>
         </div>
+      </div>
 
-        {/* Active Floor Workers */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
+      {/* BOTTLENECK ANALYSIS & NOT STARTED WORKERS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Process Completion % Chart (Lowest Completion First) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('activeWorkers')}</span>
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Users className="w-5 h-5" />
-            </div>
+            <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <BarChart3 className="w-4 h-4 text-rose-400" />
+              <span>Process Line Completion (Bottlenecks First)</span>
+            </h3>
+            <span className="text-[10px] bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded font-mono">Lowest % Top</span>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-black text-white font-mono tabular-nums">
-              {activeWorkersCount} <span className="text-sm font-normal text-slate-400">/ {workers.length}</span>
+
+          {processCompletionChart.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-xs">No process assignments planned today.</div>
+          ) : (
+            <div className="space-y-3">
+              {processCompletionChart.slice(0, 6).map((item, idx) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-white truncate max-w-[220px]">{item.label}</span>
+                    <span className={`font-mono font-bold ${item.pct < 30 ? 'text-rose-400' : item.pct < 70 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {item.done} / {item.target} pcs ({item.pct}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        item.pct < 30 ? 'bg-rose-500' : item.pct < 70 ? 'bg-amber-400' : 'bg-emerald-400'
+                      }`}
+                      style={{ width: `${item.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="text-[11px] text-emerald-400 mt-1 font-medium">Recorded entries today</p>
-          </div>
+          )}
         </div>
 
-        {/* Garment Styles */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Styles</span>
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
-              <Award className="w-5 h-5" />
+        {/* Not Started List */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span>Not Started Today ({notStartedList.length})</span>
+              </h3>
+              <span className="text-[10px] bg-amber-400/10 text-amber-400 px-2 py-0.5 rounded font-mono">0 Output Logged</span>
             </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl sm:text-3xl font-black text-white font-mono tabular-nums">
-              {styles.filter(s => s.status === 'active').length}
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">In active sewing lines</p>
+
+            {notStartedList.length === 0 ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6 text-center text-emerald-300 text-xs font-medium">
+                All planned line workers have logged output today! Excellent line activation.
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                {notStartedList.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
+                    <div className="flex items-center space-x-3">
+                      {item.worker?.photo_url ? (
+                        <img src={item.worker.photo_url} alt={item.worker.full_name} className="w-9 h-9 rounded-full object-cover border border-slate-600" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold">
+                          {item.worker?.full_name.substring(0, 2)}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-white">{item.worker?.full_name}</div>
+                        <div className="text-[11px] text-amber-400 font-medium">
+                          {item.process?.name} <span className="text-slate-500">({item.style?.style_code})</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right text-[11px] font-mono text-slate-400">
+                      Target: {item.assignment.target_qty || 250} pcs
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

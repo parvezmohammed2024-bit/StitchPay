@@ -1,14 +1,19 @@
 import React from 'react';
 import { 
   LayoutDashboard, Zap, Scissors, Users, Table, 
-  CalendarCheck, Banknote, BarChart3, Settings 
+  CalendarCheck, Banknote, BarChart3, Settings,
+  Workflow, BadgePercent, UserCheck, Truck
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { UserRole } from '../types';
 
 export type ScreenId = 
   | 'dashboard' 
+  | 'workerPortal'
+  | 'dailySetup'
   | 'quickEntry' 
+  | 'deliveries'
+  | 'rateBids'
   | 'bulkGrid' 
   | 'styles' 
   | 'workers' 
@@ -27,8 +32,12 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
   const { t } = useTranslation();
 
   const navItems = [
+    { id: 'workerPortal' as ScreenId, label: 'Worker Portal', icon: UserCheck, roles: ['worker', 'admin', 'supervisor'] },
     { id: 'dashboard' as ScreenId, label: t('navDashboard'), icon: LayoutDashboard, roles: ['admin', 'supervisor', 'accounts'] },
+    { id: 'dailySetup' as ScreenId, label: 'Daily Line Setup', icon: Workflow, roles: ['admin', 'supervisor'] },
     { id: 'quickEntry' as ScreenId, label: t('navQuickEntry'), icon: Zap, roles: ['admin', 'supervisor'] },
+    { id: 'deliveries' as ScreenId, label: 'Delivery Reports', icon: Truck, roles: ['admin', 'supervisor', 'accounts', 'worker'] },
+    { id: 'rateBids' as ScreenId, label: 'Rate Approvals', icon: BadgePercent, roles: ['admin', 'supervisor'] },
     { id: 'styles' as ScreenId, label: t('navStyles'), icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'workers' as ScreenId, label: t('navWorkers'), icon: Users, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'bulkGrid' as ScreenId, label: t('navBulkGrid'), icon: Table, roles: ['admin', 'supervisor'] },
@@ -68,22 +77,22 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
       </aside>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-2xl px-2 py-1 flex justify-around items-center">
-        {visibleItems.slice(0, 5).map(item => {
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 shadow-2xl px-2 py-1 flex justify-around items-center overflow-x-auto">
+        {visibleItems.slice(0, 6).map(item => {
           const Icon = item.icon;
           const isActive = activeScreen === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg transition-all text-[11px] font-medium min-w-[56px] ${
+              className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-lg transition-all text-[10px] font-medium min-w-[50px] ${
                 isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <div className={`p-1 rounded-full ${isActive ? 'bg-indigo-600/30' : ''}`}>
-                <Icon className={`w-5 h-5 ${isActive ? 'text-amber-400 scale-110' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-amber-400 scale-110' : 'text-slate-400'}`} />
               </div>
-              <span className="truncate max-w-[64px]">{item.label.split(' ')[0]}</span>
+              <span className="truncate max-w-[58px]">{item.label.split(' ')[0]}</span>
             </button>
           );
         })}

@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Navigation, ScreenId } from './components/Navigation';
+import { UserRoleManagerModal } from './components/UserRoleManagerModal';
+import { AuthModal } from './components/AuthModal';
 import { LanguageContext, Language, translations } from './lib/i18n';
 import { dataService } from './lib/dataService';
-import { UserRole, FactorySettings } from './types';
+import { UserRole, FactorySettings, UserAccount, Worker } from './types';
 
 // Screens
 import { DashboardScreen } from './screens/DashboardScreen';
+import { WorkerPortalScreen } from './screens/WorkerPortalScreen';
+import { DailySetupScreen } from './screens/DailySetupScreen';
 import { QuickEntryScreen } from './screens/QuickEntryScreen';
+import { DeliveriesScreen } from './screens/DeliveriesScreen';
 import { BulkGridScreen } from './screens/BulkGridScreen';
+import { RateBidsScreen } from './screens/RateBidsScreen';
 import { StylesBuilderScreen } from './screens/StylesBuilderScreen';
 import { WorkersScreen } from './screens/WorkersScreen';
 import { AttendanceScreen } from './screens/AttendanceScreen';
@@ -21,9 +27,22 @@ export default function App() {
   const [role, setRole] = useState<UserRole>('admin');
   const [lang, setLang] = useState<Language>('en');
   const [settings, setSettings] = useState<FactorySettings | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [isRoleManagerOpen, setIsRoleManagerOpen] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     dataService.getSettings().then(setSettings);
+    dataService.getWorkers().then(setWorkers);
+    const user = dataService.getCurrentAuthUser();
+    if (user) {
+      setCurrentUser(user);
+      setRole(user.role);
+      if (user.role === 'worker') {
+        setActiveScreen('workerPortal');
+      }
+    }
   }, []);
 
   const handleRoleChange = (newRole: UserRole) => {
@@ -31,11 +50,23 @@ export default function App() {
     dataService.setRole(newRole);
 
     // Redirect to permitted screen if current screen is restricted for role
-    if (newRole === 'supervisor' && (activeScreen === 'payroll' || activeScreen === 'reports' || activeScreen === 'settings')) {
+    if (newRole === 'worker') {
+      setActiveScreen('workerPortal');
+    } else if (newRole === 'supervisor' && (activeScreen === 'payroll' || activeScreen === 'reports' || activeScreen === 'settings')) {
       setActiveScreen('quickEntry');
-    } else if (newRole === 'accounts' && (activeScreen === 'quickEntry' || activeScreen === 'bulkGrid' || activeScreen === 'settings')) {
+    } else if (newRole === 'accounts' && (activeScreen === 'quickEntry' || activeScreen === 'bulkGrid' || activeScreen === 'settings' || activeScreen === 'dailySetup')) {
       setActiveScreen('payroll');
     }
+  };
+
+  const handleAuthSuccess = (user: UserAccount) => {
+    setCurrentUser(user);
+    handleRoleChange(user.role);
+  };
+
+  const handleLogout = () => {
+    dataService.logoutUser();
+    setCurrentUser(null);
   };
 
   const t = (key: keyof typeof translations.en) => {
@@ -53,6 +84,25 @@ export default function App() {
           onLangChange={setLang}
           factoryName={settings?.factory_name || 'StitchPay Garments Ltd.'}
           logoUrl={settings?.logo_url}
+          currentUser={currentUser}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onLogout={handleLogout}
+          onOpenRoleManager={() => setIsRoleManagerOpen(true)}
+          isWorkerPortal={activeScreen === 'workerPortal'}
+        />
+
+        {/* Master Admin User Role Manager Modal */}
+        <UserRoleManagerModal
+          isOpen={isRoleManagerOpen}
+          onClose={() => setIsRoleManagerOpen(false)}
+        />
+
+        {/* Authentication Modal */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
+          workers={workers}
         />
 
         {/* Main Body */}
@@ -65,10 +115,14 @@ export default function App() {
           />
 
           {/* Screen Content Container */}
-          <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+          <main className="flex-1 p-3 sm:p-6 overflow-y-auto">
+            {activeScreen === 'workerPortal' && <WorkerPortalScreen />}
             {activeScreen === 'dashboard' && <DashboardScreen />}
+            {activeScreen === 'dailySetup' && <DailySetupScreen role={role} />}
             {activeScreen === 'quickEntry' && <QuickEntryScreen role={role} />}
+            {activeScreen === 'deliveries' && <DeliveriesScreen />}
             {activeScreen === 'bulkGrid' && <BulkGridScreen role={role} />}
+            {activeScreen === 'rateBids' && <RateBidsScreen role={role} />}
             {activeScreen === 'styles' && <StylesBuilderScreen role={role} />}
             {activeScreen === 'workers' && <WorkersScreen role={role} />}
             {activeScreen === 'attendance' && <AttendanceScreen role={role} />}

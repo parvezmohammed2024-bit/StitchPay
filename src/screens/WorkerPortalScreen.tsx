@@ -1,0 +1,777 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  UserCheck, Clock, MapPin, Play, Pause, Square, Lock, Unlock, 
+  Banknote, TrendingUp, Scissors, CheckCircle2, ShieldCheck, 
+  Smartphone, Mail, UserPlus, AlertCircle, RefreshCw, Zap, Award, ChevronRight, Truck, BarChart3,
+  DollarSign, Send, Crown, Trophy, Sparkles, Calendar, Layers
+} from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from 'recharts';
+import { dataService } from '../lib/dataService';
+import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess } from '../types';
+import { TimeClockModal } from '../components/TimeClockModal';
+import { RateBiddingModal } from '../components/RateBiddingModal';
+
+export const WorkerPortalScreen: React.FC = () => {
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string>(dataService.getActiveWorkerId());
+  const [currentWorker, setCurrentWorker] = useState<Worker | null>(null);
+  
+  // Attendance / Clock State
+  const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
+  const [assignedWorks, setAssignedWorks] = useState<DailyAssignment[]>([]);
+  const [todayEntries, setTodayEntries] = useState<ProductionEntry[]>([]);
+  const [allPeriodEntries, setAllPeriodEntries] = useState<ProductionEntry[]>([]);
+  const [allEntries, setAllEntries] = useState<ProductionEntry[]>([]);
+  const [styles, setStyles] = useState<GarmentStyle[]>([]);
+  const [processes, setProcesses] = useState<GarmentProcess[]>([]);
+
+  // Modals
+  const [isTimeClockOpen, setIsTimeClockOpen] = useState(false);
+  const [biddingAssignment, setBiddingAssignment] = useState<DailyAssignment | null>(null);
+
+  // Quick Production Entry Modal
+  const [entryQty, setEntryQty] = useState<string>('');
+  const [selectedWork, setSelectedWork] = useState<DailyAssignment | null>(null);
+  const [submittingEntry, setSubmittingEntry] = useState<boolean>(false);
+
+  // Location state
+  const [geoLoc, setGeoLoc] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [locLoading, setLocLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    loadWorkerData();
+    requestLocation();
+  }, [selectedWorkerId]);
+
+  const requestLocation = () => {
+    if ('geolocation' in navigator) {
+      setLocLoading(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGeoLoc({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
+          setLocLoading(false);
+        },
+        () => {
+          setLocLoading(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  };
+
+  const loadWorkerData = async () => {
+    setLoading(true);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const [wrkList, attList, assignList, entryList, stList, procList] = await Promise.all([
+      dataService.getWorkers(),
+      dataService.getAttendance(todayStr),
+      dataService.getDailyAssignments(todayStr),
+      dataService.getProductionEntries(),
+      dataService.getStyles(),
+      dataService.getProcesses(),
+    ]);
+
+    setWorkers(wrkList);
+    setStyles(stList);
+    setProcesses(procList);
+    setAllEntries(entryList);
+
+    const activeW = wrkList.find(w => w.id === selectedWorkerId) || wrkList[0];
+    if (activeW) {
+      setCurrentWorker(activeW);
+      dataService.setActiveWorkerId(activeW.id);
+
+      // Attendance
+      const att = attList.find(a => a.worker_id === activeW.id) || null;
+      setTodayAttendance(att);
+
+      // Works
+      const myWorks = assignList.filter(a => a.worker_id === activeW.id);
+      setAssignedWorks(myWorks);
+
+      // Entries
+      const myTodayEntries = entryList.filter(e => e.worker_id === activeW.id && e.entry_date === todayStr);
+      setTodayEntries(myTodayEntries);
+      setAllPeriodEntries(entryList.filter(e => e.worker_id === activeW.id));
+    }
+
+    setLoading(false);
+  };
+
+  const [clockMessage, setClockMessage] = useState<string | null>(null);
+
+  const handleWorkerSwitch = (workerId: string) => {
+    setSelectedWorkerId(workerId);
+  };
+
+  // Clock Actions
+  const handleClockIn = async () => {
+    if (!currentWorker) return;
+    try {
+      const att = await dataService.clockInWorker(
+        currentWorker.id,
+        geoLoc ? { lat: geoLoc.lat, lng: geoLoc.lng } : undefined
+      );
+      setTodayAttendance(att);
+      setClockMessage(`✅ Clocked In successfully at ${att.in_time || new Date().toLocaleTimeString()}! Floor work unlocked.`);
+      setTimeout(() => setClockMessage(null), 5000);
+      await loadWorkerData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to clock in');
+    }
+  };
+
+  const handleToggleBreak = async () => {
+    if (!currentWorker) return;
+    try {
+      const att = await dataService.toggleWorkerBreak(currentWorker.id);
+      setTodayAttendance(att);
+      setClockMessage(
+        att.is_on_break
+          ? `☕ Break started at ${att.break_start_time || new Date().toLocaleTimeString()}`
+          : `▶️ Break ended at ${att.break_end_time || new Date().toLocaleTimeString()}. Welcome back to work!`
+      );
+      setTimeout(() => setClockMessage(null), 5000);
+      await loadWorkerData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to toggle break');
+    }
+  };
+
+  const handleClockOut = async () => {
+    if (!currentWorker) return;
+    try {
+      const att = await dataService.clockOutWorker(
+        currentWorker.id,
+        geoLoc ? { lat: geoLoc.lat, lng: geoLoc.lng } : undefined
+      );
+      setTodayAttendance(att);
+      setClockMessage(`🛑 Clocked Out successfully at ${att.out_time || new Date().toLocaleTimeString()}. Shift ended.`);
+      setTimeout(() => setClockMessage(null), 5000);
+      await loadWorkerData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to clock out');
+    }
+  };
+
+  // Submit Rate Bid
+  const handleSubmitBid = async (assignmentId: string, proposedRate: number, reason: string) => {
+    // Save bid note/agreed rate update
+    const assignment = assignedWorks.find(a => a.id === assignmentId);
+    if (assignment) {
+      assignment.agreed_rate = proposedRate;
+      setClockMessage(`Submitted rate bid of ৳${proposedRate}/pc for ${assignment.process_name}`);
+      setTimeout(() => setClockMessage(null), 5000);
+    }
+  };
+
+  // Submit piece production output
+  const handleQuickEntrySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWork || !currentWorker || !entryQty || Number(entryQty) <= 0) return;
+
+    setSubmittingEntry(true);
+    try {
+      await dataService.saveProductionEntry({
+        worker_id: currentWorker.id,
+        style_id: selectedWork.style_id,
+        process_id: selectedWork.process_id,
+        assignment_id: selectedWork.id,
+        entry_date: new Date().toISOString().split('T')[0],
+        qty_ok: Number(entryQty),
+        qty_rework: 0,
+        qty_reject: 0,
+        rate_snapshot: selectedWork.agreed_rate,
+        shift: 'day',
+        note: 'Submitted via Worker Mobile Portal',
+      });
+
+      setSelectedWork(null);
+      setEntryQty('');
+      await loadWorkerData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to submit production');
+    } finally {
+      setSubmittingEntry(false);
+    }
+  };
+
+  // Calculations
+  const isClockedIn = todayAttendance?.status === 'present' && !!todayAttendance.in_time && !todayAttendance.out_time;
+  const isOnBreak = todayAttendance?.is_on_break || false;
+
+  const todayOutputPcs = todayEntries.reduce((sum, e) => sum + e.qty_ok, 0);
+  const todayEarningsBDT = todayEntries.reduce((sum, e) => sum + e.amount, 0);
+
+  const totalPeriodEarningsBDT = allPeriodEntries.reduce((sum, e) => sum + e.amount, 0);
+  const totalPeriodOutputPcs = allPeriodEntries.reduce((sum, e) => sum + e.qty_ok, 0);
+  const outstandingAdvanceBDT = currentWorker?.outstanding_advance || 0;
+  const netReceivableBDT = Math.max(0, totalPeriodEarningsBDT - outstandingAdvanceBDT);
+
+  // Compute Last 7 Days Production Breakdown
+  const last7DaysData: { date: string; dateFormatted: string; pcs: number; earnings: number; entries: ProductionEntry[] }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dStr = d.toISOString().split('T')[0];
+    const dayEntries = allPeriodEntries.filter(e => e.entry_date === dStr);
+    const pcs = dayEntries.reduce((s, e) => s + e.qty_ok, 0);
+    const earnings = dayEntries.reduce((s, e) => s + e.amount, 0);
+    
+    last7DaysData.push({
+      date: dStr,
+      dateFormatted: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+      pcs,
+      earnings,
+      entries: dayEntries,
+    });
+  }
+
+  // Compute Worker Ranking
+  const workerTotalsMap = new Map<string, { totalPcs: number; totalAmt: number }>();
+  allEntries.forEach(e => {
+    const cur = workerTotalsMap.get(e.worker_id) || { totalPcs: 0, totalAmt: 0 };
+    cur.totalPcs += e.qty_ok;
+    cur.totalAmt += e.amount;
+    workerTotalsMap.set(e.worker_id, cur);
+  });
+
+  const sortedWorkerRankings = Array.from(workerTotalsMap.entries())
+    .map(([wId, totals]) => ({ workerId: wId, ...totals }))
+    .sort((a, b) => b.totalAmt - a.totalAmt);
+
+  const workerRankIndex = sortedWorkerRankings.findIndex(item => item.workerId === currentWorker?.id);
+  const currentRank = workerRankIndex >= 0 ? workerRankIndex + 1 : 1;
+  const totalRankedWorkers = Math.max(workers.length, sortedWorkerRankings.length);
+
+  // Top 5 Performers Leaderboard
+  const topPerformers = sortedWorkerRankings.slice(0, 5).map((rankItem, idx) => {
+    const w = workers.find(work => work.id === rankItem.workerId) || {
+      id: rankItem.workerId,
+      full_name: `Worker #${idx + 1}`,
+      worker_code: `W-10${idx + 1}`,
+      photo_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      section: 'Sewing',
+    };
+    return {
+      rank: idx + 1,
+      worker: w,
+      totalPcs: rankItem.totalPcs,
+      totalAmt: rankItem.totalAmt,
+    };
+  });
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-28 animate-fade-in">
+      {/* 1. WORKER ACCOUNT HEADER & SWITCHER */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center space-x-4">
+          <img
+            src={currentWorker?.photo_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
+            alt="Worker Avatar"
+            className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-md"
+          />
+          <div>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-xl sm:text-2xl font-black text-white">{currentWorker?.full_name}</h1>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono border border-indigo-500/30 font-bold">
+                {currentWorker?.worker_code}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+              <span>Section: <strong className="text-slate-200">{currentWorker?.section || 'Sewing'}</strong></span>
+              <span>•</span>
+              <span>Line: <strong className="text-slate-200">{currentWorker?.line_no || 'Line-01'}</strong></span>
+              <span>•</span>
+              <span className="text-amber-400 font-bold flex items-center gap-1">
+                <Trophy className="w-3.5 h-3.5" /> Rank #{currentRank} of {totalRankedWorkers}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Worker Account Selector Dropdown */}
+        <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-2xl border border-slate-800 self-start md:self-center">
+          <span className="text-xs text-slate-400 font-medium pl-2 hidden sm:block">Switch Worker:</span>
+          <select
+            value={selectedWorkerId}
+            onChange={(e) => handleWorkerSwitch(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+          >
+            {workers.map(w => (
+              <option key={w.id} value={w.id}>
+                {w.worker_code} - {w.full_name} ({w.section || 'Sewing'})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* 2. TIME CLOCK CARD (Matching Image 1 UI Specs) */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+          <div className="flex items-center space-x-3.5">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shadow-inner ${
+              isClockedIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+            }`}>
+              <Clock className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-white flex items-center space-x-2">
+                <span>Shift Time & Attendance Clock</span>
+                {isClockedIn ? (
+                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-0.5 rounded-full border border-emerald-500/30 font-bold flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Clocked In (Active)</span>
+                  </span>
+                ) : (
+                  <span className="text-xs bg-slate-800 text-slate-400 px-3 py-0.5 rounded-full border border-slate-700">
+                    Off Duty / Not Clocked In
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isClockedIn 
+                  ? `Clocked In at: ${todayAttendance?.in_time || '08:00 AM'}` 
+                  : 'Click Clock In to view interactive mobile time clock & confirm shift'}
+              </p>
+            </div>
+          </div>
+
+          {/* Location Badge */}
+          <div className="flex items-center space-x-2 text-xs bg-slate-950 px-3.5 py-2 rounded-2xl border border-slate-800 self-start sm:self-center">
+            <MapPin className="w-4 h-4 text-purple-400 shrink-0" />
+            <div className="text-[11px] font-medium text-slate-300">
+              {geoLoc ? (
+                <span>GPS: {geoLoc.lat.toFixed(3)}, {geoLoc.lng.toFixed(3)} <span className="text-emerald-400 font-mono">(Verified)</span></span>
+              ) : (
+                <span>Dhaka Garments Zone #1</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Confirmation Banner */}
+        {clockMessage && (
+          <div className="bg-emerald-500/15 border border-emerald-500/40 rounded-2xl p-3.5 text-xs font-bold text-emerald-300 flex items-center justify-between animate-fade-in shadow-md">
+            <span>{clockMessage}</span>
+            <button onClick={() => setClockMessage(null)} className="text-emerald-400 hover:text-white text-xs ml-2">✕</button>
+          </div>
+        )}
+
+        {/* Punch Clock Main Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
+          {/* Direct Clock In Button */}
+          <button
+            onClick={isClockedIn ? () => setIsTimeClockOpen(true) : handleClockIn}
+            className={`py-3.5 px-5 rounded-2xl font-black text-xs sm:text-sm shadow-xl transition-all flex items-center justify-center space-x-2.5 ${
+              isClockedIn
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-500/30 hover:scale-[1.02]'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>{isClockedIn ? 'Clocked In ✓' : 'Clock In Now'}</span>
+          </button>
+
+          {/* Break Button */}
+          <button
+            onClick={handleToggleBreak}
+            disabled={!isClockedIn}
+            className={`py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm shadow-lg transition-all flex items-center justify-center space-x-2 ${
+              !isClockedIn
+                ? 'bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed'
+                : isOnBreak
+                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black animate-pulse'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+            }`}
+          >
+            <Pause className="w-4 h-4" />
+            <span>{isOnBreak ? 'Resume Work' : 'Take Break'}</span>
+          </button>
+
+          {/* Clock Out */}
+          <button
+            onClick={handleClockOut}
+            disabled={!isClockedIn}
+            className={`py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm shadow-lg transition-all flex items-center justify-center space-x-2 ${
+              !isClockedIn
+                ? 'bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed'
+                : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
+            }`}
+          >
+            <Square className="w-4 h-4 fill-current" />
+            <span>Clock Out</span>
+          </button>
+
+          {/* Open Mobile Time Clock Modal */}
+          <button
+            onClick={() => setIsTimeClockOpen(true)}
+            className="py-3.5 px-4 rounded-2xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30 shadow-md transition-all flex items-center justify-center space-x-2"
+          >
+            <MapPin className="w-4 h-4 text-purple-400" />
+            <span>GPS & Photo Clock</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 3. ASSIGNED WORK WITH APPROVED PRICE OR BIDDING OPTION */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-0">
+        <div className="p-5 border-b border-slate-800 bg-slate-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-black text-white flex items-center space-x-2">
+              <Scissors className="w-5 h-5 text-amber-400" />
+              <span>Today's Assigned Operations & Price Bidding ({assignedWorks.length})</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Assigned operations with approved piece rate or bid options
+            </p>
+          </div>
+        </div>
+
+        {!isClockedIn ? (
+          /* Locked State when not clocked in */
+          <div className="p-8 text-center bg-slate-950/60 space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-bold text-white">Assigned Works Locked</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Please clock in to unlock today's assigned line operations, target quotas, and price rates.
+            </p>
+            <button
+              onClick={handleClockIn}
+              className="mt-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-6 py-3 rounded-2xl text-xs shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
+            >
+              Clock In Now To Unlock
+            </button>
+          </div>
+        ) : assignedWorks.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-xs">
+            No line operations assigned to you today. Please check with line supervisor.
+          </div>
+        ) : (
+          /* Unlocked Assigned Works List */
+          <div className="divide-y divide-slate-800/80">
+            {assignedWorks.map(work => {
+              const myOutputForWork = todayEntries
+                .filter(e => e.process_id === work.process_id)
+                .reduce((s, e) => s + e.qty_ok, 0);
+
+              const targetQty = work.target_qty || 250;
+              const progressPct = Math.min(100, Math.round((myOutputForWork / targetQty) * 100));
+
+              return (
+                <div key={work.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-black text-base text-white">{work.process_name}</span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono font-bold border border-slate-700">
+                        {work.style_code}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                      <span>Style: <strong className="text-slate-200">{work.style_name}</strong></span>
+                      <span>Target: <strong className="text-slate-200">{targetQty} pcs</strong></span>
+                      <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                        Approved Rate: ৳{work.agreed_rate}/pc
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full max-w-md bg-slate-800 h-2.5 rounded-full overflow-hidden mt-1">
+                      <div
+                        className="bg-emerald-400 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${progressPct}%` }}
+                      ></div>
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Completed: <span className="font-bold text-emerald-400">{myOutputForWork}</span> / {targetQty} pcs ({progressPct}%)
+                    </div>
+                  </div>
+
+                  {/* Actions: Bidding Option + Log Production */}
+                  <div className="flex items-center space-x-2 self-start md:self-center shrink-0">
+                    <button
+                      onClick={() => setBiddingAssignment(work)}
+                      className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1"
+                    >
+                      <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Bidding Option</span>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedWork(work)}
+                      className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-2xl text-xs shadow-md transition-all flex items-center space-x-1.5"
+                    >
+                      <Zap className="w-4 h-4 fill-current" />
+                      <span>Log Output</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 4. TILL NOW EARNING & PRODUCTION GRAPH WITH RANKING */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <h2 className="text-lg font-black text-white flex items-center space-x-2">
+              <TrendingUp className="w-5 h-5 text-indigo-400" />
+              <span>Production Output & Earnings Till Now</span>
+            </h2>
+            <p className="text-xs text-slate-400">Overall cumulative piece output & rate pay earnings graph</p>
+          </div>
+
+          {/* Ranking Badge */}
+          <div className="bg-gradient-to-r from-amber-500/20 via-slate-800 to-indigo-500/20 border border-amber-500/30 px-4 py-2 rounded-2xl flex items-center space-x-3 self-start sm:self-center">
+            <Trophy className="w-6 h-6 text-amber-400" />
+            <div>
+              <div className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Factory Worker Rank</div>
+              <div className="text-sm font-black text-white">
+                Rank #{currentRank} <span className="text-xs text-slate-400 font-normal">of {totalRankedWorkers} Workers</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Metric Cards Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+            <div className="text-xs font-bold text-slate-400 uppercase">Today's Piece Earnings</div>
+            <div className="text-2xl font-black text-amber-400 mt-1 font-mono">৳{todayEarningsBDT.toLocaleString()}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">{todayOutputPcs} pieces completed today</div>
+          </div>
+
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+            <div className="text-xs font-bold text-slate-400 uppercase">Current Period Earnings</div>
+            <div className="text-2xl font-black text-indigo-400 mt-1 font-mono">৳{totalPeriodEarningsBDT.toLocaleString()}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">{totalPeriodOutputPcs} total pieces logged</div>
+          </div>
+
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+            <div className="text-xs font-bold text-slate-400 uppercase">Net Payable Amount</div>
+            <div className="text-2xl font-black text-emerald-400 mt-1 font-mono">৳{netReceivableBDT.toLocaleString()}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">After advance deductions (৳{outstandingAdvanceBDT})</div>
+          </div>
+        </div>
+
+        {/* Visual Graph: Earnings & Production over last 7 days */}
+        <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80 space-y-2">
+          <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+            <span>Last 7 Days Production Trend</span>
+            <span className="text-[10px] text-slate-500 font-mono">Output Pieces & Earnings (৳ BDT)</span>
+          </div>
+
+          <div className="h-56 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={last7DaysData}>
+                <defs>
+                  <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorPcs" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#6366F1" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <XAxis dataKey="dateFormatted" stroke="#64748B" fontSize={11} />
+                <YAxis stroke="#64748B" fontSize={11} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', borderRadius: '12px' }}
+                  labelStyle={{ color: '#F8FAFC', fontWeight: 'bold' }}
+                />
+                <Area type="monotone" dataKey="earnings" name="Earnings (৳)" stroke="#10B981" fillOpacity={1} fill="url(#colorEarnings)" />
+                <Area type="monotone" dataKey="pcs" name="Pieces (Pcs)" stroke="#6366F1" fillOpacity={1} fill="url(#colorPcs)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. LAST 7 DAYS PRODUCTION DETAILS BREAKDOWN */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h2 className="text-base font-black text-white flex items-center space-x-2">
+            <Calendar className="w-5 h-5 text-indigo-400" />
+            <span>Last 7 Days Production Details</span>
+          </h2>
+          <span className="text-xs text-slate-400 font-mono">Daily Breakdown</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                <th className="py-2.5 px-3">Date</th>
+                <th className="py-2.5 px-3">Completed Pieces</th>
+                <th className="py-2.5 px-3">Day Earnings</th>
+                <th className="py-2.5 px-3">Logged Operations</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+              {last7DaysData.map((day, idx) => (
+                <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                  <td className="py-3 px-3 font-bold text-white">{day.dateFormatted}</td>
+                  <td className="py-3 px-3 font-mono text-indigo-300 font-bold">{day.pcs} pcs</td>
+                  <td className="py-3 px-3 font-mono text-emerald-400 font-bold">৳{day.earnings.toLocaleString()}</td>
+                  <td className="py-3 px-3 text-slate-400">
+                    {day.entries.length > 0 ? (
+                      <span className="bg-slate-800 px-2 py-1 rounded text-[11px] text-slate-300">
+                        {day.entries.length} log submissions
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">No logs / Off day</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 6. TOP PERFORMANCE LEADERBOARD TILL NOW */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h2 className="text-base font-black text-white flex items-center space-x-2">
+            <Crown className="w-5 h-5 text-amber-400" />
+            <span>Top Performers Till Now (Factory Leaderboard)</span>
+          </h2>
+          <span className="text-xs text-amber-400 font-bold bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+            Top 5 Workers
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {topPerformers.map(item => (
+            <div
+              key={item.worker.id}
+              className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${
+                item.rank === 1
+                  ? 'bg-gradient-to-b from-amber-500/20 to-slate-950 border-amber-500/40 shadow-lg shadow-amber-500/10'
+                  : 'bg-slate-950 border-slate-800'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
+                  item.rank === 1 ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-300'
+                }`}>
+                  #{item.rank}
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">{item.worker.worker_code}</span>
+              </div>
+
+              <div className="flex items-center space-x-2.5">
+                <img
+                  src={item.worker.photo_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
+                  alt={item.worker.full_name}
+                  className="w-10 h-10 rounded-xl object-cover border border-slate-700"
+                />
+                <div>
+                  <div className="text-xs font-bold text-white truncate max-w-[100px]">{item.worker.full_name}</div>
+                  <div className="text-[10px] text-slate-400">{item.worker.section || 'Sewing'}</div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-800/80 pt-2 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Total Output:</span>
+                  <strong className="text-indigo-300 font-mono">{item.totalPcs} pcs</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Total Pay:</span>
+                  <strong className="text-emerald-400 font-mono">৳{item.totalAmt.toLocaleString()}</strong>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* MODALS */}
+      {/* Time Clock Modal */}
+      <TimeClockModal
+        isOpen={isTimeClockOpen}
+        onClose={() => setIsTimeClockOpen(false)}
+        worker={currentWorker}
+        attendance={todayAttendance}
+        geoLoc={geoLoc}
+        onConfirmClockIn={handleClockIn}
+        onConfirmClockOut={handleClockOut}
+      />
+
+      {/* Rate Bidding Modal */}
+      <RateBiddingModal
+        isOpen={Boolean(biddingAssignment)}
+        onClose={() => setBiddingAssignment(null)}
+        assignment={biddingAssignment}
+        onSubmitBid={handleSubmitBid}
+      />
+
+      {/* Production Output Log Modal */}
+      {selectedWork && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <Zap className="w-5 h-5 text-amber-400" />
+              <span>Log Production Output</span>
+            </h3>
+
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-xs space-y-1">
+              <div className="text-amber-400 font-bold">{selectedWork.process_name}</div>
+              <div className="text-slate-300">Style: {selectedWork.style_name}</div>
+              <div className="text-slate-400">Approved Rate: ৳{selectedWork.agreed_rate} per piece</div>
+            </div>
+
+            <form onSubmit={handleQuickEntrySubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Quantity OK Pieces Completed <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  placeholder="e.g. 50"
+                  value={entryQty}
+                  onChange={(e) => setEntryQty(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-xl font-black text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedWork(null)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEntry}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl text-xs shadow-lg"
+                >
+                  {submittingEntry ? 'Submitting...' : 'Confirm & Save Output'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

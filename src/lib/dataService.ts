@@ -1,13 +1,16 @@
 import { 
   Worker, GarmentStyle, GarmentProcess, ProductionEntry, 
   AttendanceRecord, Adjustment, PayrollPeriod, PayrollLine, 
-  FactorySettings, UserRole, ProcessRateHistory 
+  FactorySettings, UserRole, ProcessRateHistory, DailyAssignment, RateBid,
+  UserAccount, DeliveryReport
 } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_SETTINGS, INITIAL_WORKERS, INITIAL_STYLES, 
   INITIAL_PROCESSES, INITIAL_PAYROLL_PERIOD, 
-  INITIAL_PRODUCTION_ENTRIES, INITIAL_ADJUSTMENTS, INITIAL_ATTENDANCE 
+  INITIAL_PRODUCTION_ENTRIES, INITIAL_ADJUSTMENTS, INITIAL_ATTENDANCE,
+  INITIAL_DAILY_ASSIGNMENTS, INITIAL_RATE_BIDS,
+  INITIAL_USER_ACCOUNTS, INITIAL_DELIVERIES
 } from './store';
 
 class DataService {
@@ -18,13 +21,47 @@ class DataService {
   private productionEntries: ProductionEntry[] = [...INITIAL_PRODUCTION_ENTRIES];
   private attendance: AttendanceRecord[] = [...INITIAL_ATTENDANCE];
   private adjustments: Adjustment[] = [...INITIAL_ADJUSTMENTS];
+  private dailyAssignments: DailyAssignment[] = [...INITIAL_DAILY_ASSIGNMENTS];
+  private rateBids: RateBid[] = [...INITIAL_RATE_BIDS];
+  private userAccounts: UserAccount[] = [...INITIAL_USER_ACCOUNTS];
+  private deliveries: DeliveryReport[] = [...INITIAL_DELIVERIES];
   private payrollPeriod: PayrollPeriod = { ...INITIAL_PAYROLL_PERIOD };
   private payrollLines: PayrollLine[] = [];
   private currentRole: UserRole = 'admin';
+  private activeWorkerId: string = 'b1111111-1111-1111-1111-111111111101'; // Default worker for worker portal view
+  private currentAuthUser: UserAccount | null = null;
   private initializedSupabase: boolean = false;
 
   constructor() {
     this.recalculatePayrollLinesInMemory();
+    this.initAuthUser();
+  }
+
+  private initAuthUser() {
+    try {
+      const saved = localStorage.getItem('stitchpay_auth_user');
+      if (saved) {
+        this.currentAuthUser = JSON.parse(saved);
+        if (this.currentAuthUser?.role) {
+          this.currentRole = this.currentAuthUser.role;
+        }
+        if (this.currentAuthUser?.worker_id) {
+          this.activeWorkerId = this.currentAuthUser.worker_id;
+        }
+      } else {
+        const masterAdmin = this.userAccounts.find(u => u.email_or_phone === 'parvezmohammed2024@gmail.com') || {
+          id: 'master-admin-01',
+          email_or_phone: 'parvezmohammed2024@gmail.com',
+          full_name: 'Parvez Mohammed (Master Admin)',
+          role: 'admin' as UserRole,
+          status: 'active' as const,
+          created_at: new Date().toISOString(),
+        };
+        this.currentAuthUser = masterAdmin;
+      }
+    } catch (e) {
+      console.error('Error reading saved auth user', e);
+    }
   }
 
   /**
@@ -92,13 +129,210 @@ class DataService {
     }
   }
 
-  // --- ROLE MANAGEMENT ---
+  // --- ROLE & ACCOUNT MANAGEMENT ---
   public setRole(role: UserRole) {
     this.currentRole = role;
   }
 
   public getRole(): UserRole {
     return this.currentRole;
+  }
+
+  public setActiveWorkerId(workerId: string) {
+    this.activeWorkerId = workerId;
+  }
+
+  public getActiveWorkerId(): string {
+    return this.activeWorkerId;
+  }
+
+  public getCurrentAuthUser(): UserAccount | null {
+    if (!this.currentAuthUser) {
+      this.initAuthUser();
+    }
+    return this.currentAuthUser;
+  }
+
+  public async loginUser(emailOrPhone: string, password?: string): Promise<UserAccount> {
+    await this.ensureSupabaseSeeded();
+    const cleanIdentifier = emailOrPhone.trim().toLowerCase();
+
+    // Check existing user accounts
+    let account = this.userAccounts.find(
+      u => u.email_or_phone.trim().toLowerCase() === cleanIdentifier
+    );
+
+    if (!account) {
+      // Check workers list to match phone or email
+      const workerMatch = this.workers.find(
+        w => (w.email && w.email.trim().toLowerCase() === cleanIdentifier) ||
+             (w.phone && w.phone.trim().toLowerCase() === cleanIdentifier)
+      );
+
+      if (workerMatch) {
+        account = await this.saveUserAccount({
+          email_or_phone: cleanIdentifier,
+          password: password || '123456',
+          full_name: workerMatch.full_name,
+          role: 'worker',
+          worker_id: workerMatch.id,
+          status: 'active',
+        });
+      } else {
+        // Create account on the fly for login
+        const defaultRole: UserRole = cleanIdentifier.includes('admin') ? 'admin' :
+                                      cleanIdentifier.includes('super') ? 'supervisor' :
+                                      cleanIdentifier.includes('account') ? 'accounts' : 'worker';
+        let linkedWorkerId: string | null = null;
+        if (defaultRole === 'worker') {
+          linkedWorkerId = this.workers[0]?.id || null;
+        }
+
+        account = await this.saveUserAccount({
+          email_or_phone: cleanIdentifier,
+          password: password || '123456',
+          full_name: cleanIdentifier.split('@')[0] || 'User',
+          role: defaultRole,
+          worker_id: linkedWorkerId,
+          status: 'active',
+        });
+      }
+    }
+
+    this.currentAuthUser = account;
+    this.currentRole = account.role;
+    if (account.worker_id) {
+      this.activeWorkerId = account.worker_id;
+    }
+
+    try {
+      localStorage.setItem('stitchpay_auth_user', JSON.stringify(account));
+    } catch (e) {
+      console.error('Failed to write auth to localStorage', e);
+    }
+
+    return account;
+  }
+
+  public async signupUser(accountData: {
+    email_or_phone: string;
+    password?: string;
+    full_name: string;
+    role: UserRole;
+    worker_id?: string | null;
+  }): Promise<UserAccount> {
+    await this.ensureSupabaseSeeded();
+
+    let linkedWorkerId = accountData.worker_id || null;
+
+    if (accountData.role === 'worker' && !linkedWorkerId) {
+      const newWorker = await this.saveWorker({
+        full_name: accountData.full_name,
+        phone: accountData.email_or_phone.includes('@') ? null : accountData.email_or_phone,
+        email: accountData.email_or_phone.includes('@') ? accountData.email_or_phone : null,
+        worker_code: `W-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: 'active',
+        payment_method: 'cash',
+        payment_details: {},
+      });
+      linkedWorkerId = newWorker.id;
+    }
+
+    const account = await this.saveUserAccount({
+      email_or_phone: accountData.email_or_phone.trim().toLowerCase(),
+      password: accountData.password || '123456',
+      full_name: accountData.full_name,
+      role: accountData.role,
+      worker_id: linkedWorkerId,
+      status: 'active',
+    });
+
+    this.currentAuthUser = account;
+    this.currentRole = account.role;
+    if (account.worker_id) {
+      this.activeWorkerId = account.worker_id;
+    }
+
+    try {
+      localStorage.setItem('stitchpay_auth_user', JSON.stringify(account));
+    } catch (e) {
+      console.error('Failed to write auth to localStorage', e);
+    }
+
+    return account;
+  }
+
+  public logoutUser(): void {
+    this.currentAuthUser = null;
+    try {
+      localStorage.removeItem('stitchpay_auth_user');
+    } catch (e) {
+      console.error('Failed to remove auth from localStorage', e);
+    }
+  }
+
+  public async getUserAccounts(): Promise<UserAccount[]> {
+    await this.ensureSupabaseSeeded();
+    let result = [...this.userAccounts];
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.from('user_accounts').select('*').order('created_at', { ascending: false });
+        if (!error && data) {
+          const map = new Map<string, UserAccount>();
+          for (const d of data) map.set(d.id, d);
+          for (const localU of this.userAccounts) {
+            if (!map.has(localU.id)) map.set(localU.id, localU);
+          }
+          result = Array.from(map.values());
+          this.userAccounts = result;
+        }
+      } catch (err) {
+        console.error('getUserAccounts error:', err);
+      }
+    }
+    return result;
+  }
+
+  public async saveUserAccount(account: Partial<UserAccount>): Promise<UserAccount> {
+    const id = account.id || crypto.randomUUID();
+    const newAccount: UserAccount = {
+      id,
+      email_or_phone: account.email_or_phone!,
+      full_name: account.full_name || 'User',
+      role: account.role || 'worker',
+      worker_id: account.worker_id || null,
+      status: account.status || 'active',
+      created_at: account.created_at || new Date().toISOString(),
+    };
+
+    const idx = this.userAccounts.findIndex(u => u.id === id || u.email_or_phone === account.email_or_phone);
+    if (idx >= 0) {
+      this.userAccounts[idx] = { ...this.userAccounts[idx], ...newAccount };
+    } else {
+      this.userAccounts.push(newAccount);
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('user_accounts').upsert(newAccount);
+    }
+
+    return newAccount;
+  }
+
+  public async updateUserRole(accountId: string, newRole: UserRole, workerId?: string | null): Promise<void> {
+    const idx = this.userAccounts.findIndex(u => u.id === accountId);
+    if (idx >= 0) {
+      this.userAccounts[idx].role = newRole;
+      if (workerId !== undefined) {
+        this.userAccounts[idx].worker_id = workerId;
+      }
+      if (isSupabaseConfigured) {
+        await supabase.from('user_accounts').update({
+          role: newRole,
+          worker_id: workerId !== undefined ? workerId : this.userAccounts[idx].worker_id,
+        }).eq('id', accountId);
+      }
+    }
   }
 
   // --- SETTINGS ---
@@ -126,10 +360,21 @@ class DataService {
     await this.ensureSupabaseSeeded();
     let result = [...this.workers];
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('workers').select('*').order('worker_code');
-      if (!error && data && data.length > 0) {
-        result = data;
-        this.workers = data;
+      try {
+        const { data, error } = await supabase.from('workers').select('*');
+        if (!error && data && data.length > 0) {
+          const map = new Map<string, Worker>();
+          for (const d of data) map.set(d.id, d);
+          for (const localW of this.workers) {
+            if (!map.has(localW.id)) {
+              map.set(localW.id, localW);
+            }
+          }
+          result = Array.from(map.values());
+          this.workers = result;
+        }
+      } catch (err) {
+        console.error('getWorkers error:', err);
       }
     }
 
@@ -158,7 +403,11 @@ class DataService {
         this.workers[index] = { ...this.workers[index], ...worker };
       }
       if (isSupabaseConfigured) {
-        await supabase.from('workers').update(worker).eq('id', worker.id);
+        try {
+          await supabase.from('workers').update(worker).eq('id', worker.id);
+        } catch (err) {
+          console.error('saveWorker update error:', err);
+        }
       }
       return this.workers[index] || worker as Worker;
     } else {
@@ -177,7 +426,11 @@ class DataService {
       };
       this.workers.push(newWorker);
       if (isSupabaseConfigured) {
-        await supabase.from('workers').insert(newWorker);
+        try {
+          await supabase.from('workers').insert(newWorker);
+        } catch (err) {
+          console.error('saveWorker insert error:', err);
+        }
       }
       return newWorker;
     }
@@ -188,20 +441,32 @@ class DataService {
     await this.ensureSupabaseSeeded();
     let result = [...this.styles];
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('styles').select('*').order('created_at', { ascending: false });
-      if (!error && data && data.length > 0) {
-        result = data;
-        this.styles = data;
+      try {
+        const { data, error } = await supabase.from('styles').select('*');
+        if (!error && data && data.length > 0) {
+          const map = new Map<string, GarmentStyle>();
+          for (const d of data) map.set(d.id, d);
+          for (const localSt of this.styles) {
+            if (!map.has(localSt.id)) {
+              map.set(localSt.id, localSt);
+            }
+          }
+          result = Array.from(map.values());
+          this.styles = result;
+        }
+      } catch (err) {
+        console.error('getStyles error:', err);
       }
     }
 
-    // Attach completed pieces and total labour cost
+    // Attach completed pieces, delivered pieces, remaining pieces, and total labour cost
     const procs = await this.getProcesses();
     const entries = await this.getProductionEntries();
+    const deliveriesList = await this.getDeliveries();
 
     return result.map(st => {
       const styleProcs = procs.filter(p => p.style_id === st.id);
-      const totalLabourCost = styleProcs.reduce((sum, p) => sum + Number(p.rate), 0);
+      const totalLabourCost = styleProcs.reduce((sum, p) => sum + Number(p.rate || 0), 0);
       
       // Completed pieces based on final process in sequence
       const lastProc = styleProcs.sort((a, b) => b.seq_no - a.seq_no)[0];
@@ -209,13 +474,22 @@ class DataService {
       if (lastProc) {
         completed_pieces = entries
           .filter(e => e.style_id === st.id && e.process_id === lastProc.id)
-          .reduce((sum, e) => sum + Number(e.qty_ok), 0);
+          .reduce((sum, e) => sum + Number(e.qty_ok || 0), 0);
       }
+
+      // Delivered pieces from delivery reports
+      const delivered_pieces = deliveriesList
+        .filter(d => d.style_id === st.id)
+        .reduce((sum, d) => sum + Number(d.delivered_qty || 0), 0);
+
+      const remaining_pieces = Math.max(0, (st.order_qty || 0) - delivered_pieces);
 
       return {
         ...st,
         total_labour_cost: totalLabourCost,
         completed_pieces,
+        delivered_pieces,
+        remaining_pieces,
       };
     });
   }
@@ -225,7 +499,11 @@ class DataService {
       const idx = this.styles.findIndex(s => s.id === style.id);
       if (idx >= 0) this.styles[idx] = { ...this.styles[idx], ...style };
       if (isSupabaseConfigured) {
-        await supabase.from('styles').update(style).eq('id', style.id);
+        try {
+          await supabase.from('styles').update(style).eq('id', style.id);
+        } catch (err) {
+          console.error('saveStyle update error:', err);
+        }
       }
       return this.styles[idx] || style as GarmentStyle;
     } else {
@@ -240,9 +518,13 @@ class DataService {
         status: style.status || 'active',
         notes: style.notes || null,
       };
-      this.styles.push(newStyle);
+      this.styles.unshift(newStyle);
       if (isSupabaseConfigured) {
-        await supabase.from('styles').insert(newStyle);
+        try {
+          await supabase.from('styles').insert(newStyle);
+        } catch (err) {
+          console.error('saveStyle insert error:', err);
+        }
       }
       return newStyle;
     }
@@ -252,10 +534,21 @@ class DataService {
     await this.ensureSupabaseSeeded();
     let procs = [...this.processes];
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('processes').select('*').order('seq_no');
-      if (!error && data && data.length > 0) {
-        procs = data;
-        this.processes = data;
+      try {
+        const { data, error } = await supabase.from('processes').select('*');
+        if (!error && data && data.length > 0) {
+          const map = new Map<string, GarmentProcess>();
+          for (const d of data) map.set(d.id, d);
+          for (const localP of this.processes) {
+            if (!map.has(localP.id)) {
+              map.set(localP.id, localP);
+            }
+          }
+          procs = Array.from(map.values());
+          this.processes = procs;
+        }
+      } catch (err) {
+        console.error('getProcesses error:', err);
       }
     }
     if (styleId) {
@@ -269,7 +562,11 @@ class DataService {
       const idx = this.processes.findIndex(p => p.id === proc.id);
       if (idx >= 0) this.processes[idx] = { ...this.processes[idx], ...proc };
       if (isSupabaseConfigured) {
-        await supabase.from('processes').update(proc).eq('id', proc.id);
+        try {
+          await supabase.from('processes').update(proc).eq('id', proc.id);
+        } catch (err) {
+          console.error('saveProcess update error:', err);
+        }
       }
       return this.processes[idx] || proc as GarmentProcess;
     } else {
@@ -285,7 +582,11 @@ class DataService {
       };
       this.processes.push(newProc);
       if (isSupabaseConfigured) {
-        await supabase.from('processes').insert(newProc);
+        try {
+          await supabase.from('processes').insert(newProc);
+        } catch (err) {
+          console.error('saveProcess insert error:', err);
+        }
       }
       return newProc;
     }
@@ -322,13 +623,22 @@ class DataService {
     await this.ensureSupabaseSeeded();
     let entries = [...this.productionEntries];
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase
-        .from('production_entries')
-        .select('*')
-        .order('entry_date', { ascending: false });
-      if (!error && data && data.length > 0) {
-        entries = data;
-        this.productionEntries = data;
+      try {
+        const { data, error } = await supabase
+          .from('production_entries')
+          .select('*')
+          .order('entry_date', { ascending: false });
+        if (!error && data) {
+          const map = new Map<string, ProductionEntry>();
+          for (const d of data) map.set(d.id, d);
+          for (const localE of this.productionEntries) {
+            if (!map.has(localE.id)) map.set(localE.id, localE);
+          }
+          entries = Array.from(map.values());
+          this.productionEntries = entries;
+        }
+      } catch (err) {
+        console.error('getProductionEntries error:', err);
       }
     }
 
@@ -370,8 +680,24 @@ class DataService {
       throw new Error('Cannot save or edit production entries inside a locked or paid payroll period.');
     }
 
-    const proc = this.processes.find(p => p.id === entry.process_id);
-    const rateSnapshot = entry.rate_snapshot ?? proc?.rate ?? 3.5;
+    let rateSnapshot = entry.rate_snapshot;
+    let assignmentId = entry.assignment_id || null;
+
+    if (rateSnapshot === undefined) {
+      const assignment = this.dailyAssignments.find(a => 
+        a.worker_id === entry.worker_id && 
+        a.process_id === entry.process_id && 
+        a.work_date === entryDate
+      );
+      if (assignment) {
+        rateSnapshot = assignment.agreed_rate;
+        assignmentId = assignment.id;
+      } else {
+        const proc = this.processes.find(p => p.id === entry.process_id);
+        rateSnapshot = proc?.rate ?? 3.5;
+      }
+    }
+
     const qtyOk = entry.qty_ok || 0;
     const qtyRework = entry.qty_rework || 0;
     const qtyReject = entry.qty_reject || 0;
@@ -390,6 +716,7 @@ class DataService {
         this.productionEntries[idx] = {
           ...this.productionEntries[idx],
           ...entry,
+          assignment_id: assignmentId,
           rate_snapshot: rateSnapshot,
           amount,
         };
@@ -397,6 +724,7 @@ class DataService {
       if (isSupabaseConfigured) {
         await supabase.from('production_entries').update({
           ...entry,
+          assignment_id: assignmentId,
           rate_snapshot: rateSnapshot,
           amount,
         }).eq('id', entry.id);
@@ -406,6 +734,7 @@ class DataService {
     } else {
       const newEntry: ProductionEntry = {
         id: crypto.randomUUID(),
+        assignment_id: assignmentId,
         entry_date: entryDate,
         worker_id: entry.worker_id!,
         style_id: entry.style_id!,
@@ -422,6 +751,7 @@ class DataService {
       if (isSupabaseConfigured) {
         await supabase.from('production_entries').insert({
           id: newEntry.id,
+          assignment_id: newEntry.assignment_id,
           entry_date: newEntry.entry_date,
           worker_id: newEntry.worker_id,
           style_id: newEntry.style_id,
@@ -440,21 +770,201 @@ class DataService {
     }
   }
 
-  // --- ATTENDANCE ---
+  // --- DELIVERIES / DISPATCH REPORTS ---
+  public async getDeliveries(styleId?: string): Promise<DeliveryReport[]> {
+    await this.ensureSupabaseSeeded();
+    let list = [...this.deliveries];
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.from('delivery_reports').select('*').order('delivery_date', { ascending: false });
+        if (!error && data) {
+          const map = new Map<string, DeliveryReport>();
+          for (const d of data) map.set(d.id, d);
+          for (const localD of this.deliveries) {
+            if (!map.has(localD.id)) map.set(localD.id, localD);
+          }
+          list = Array.from(map.values());
+          this.deliveries = list;
+        }
+      } catch (err) {
+        console.error('getDeliveries error:', err);
+      }
+    }
+
+    const stylesMap = new Map((await this.getStyles()).map(s => [s.id, s]));
+
+    const result = list.map(d => {
+      const s = stylesMap.get(d.style_id);
+      return {
+        ...d,
+        style_code: s?.style_code || '',
+        style_name: s?.name || '',
+        buyer_name: s?.buyer_name || '',
+      };
+    });
+
+    if (styleId) {
+      return result.filter(d => d.style_id === styleId);
+    }
+    return result;
+  }
+
+  public async saveDelivery(delivery: Partial<DeliveryReport>): Promise<DeliveryReport> {
+    const id = delivery.id || crypto.randomUUID();
+    const newDelivery: DeliveryReport = {
+      id,
+      delivery_date: delivery.delivery_date || new Date().toISOString().split('T')[0],
+      style_id: delivery.style_id!,
+      delivered_qty: Number(delivery.delivered_qty || 0),
+      vehicle_no: delivery.vehicle_no || null,
+      driver_name: delivery.driver_name || null,
+      destination: delivery.destination || null,
+      notes: delivery.notes || null,
+      created_at: delivery.created_at || new Date().toISOString(),
+    };
+
+    const idx = this.deliveries.findIndex(d => d.id === id);
+    if (idx >= 0) {
+      this.deliveries[idx] = newDelivery;
+    } else {
+      this.deliveries.unshift(newDelivery);
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('delivery_reports').upsert(newDelivery);
+    }
+
+    return newDelivery;
+  }
+
+  public async deleteDelivery(id: string): Promise<void> {
+    this.deliveries = this.deliveries.filter(d => d.id !== id);
+    if (isSupabaseConfigured) {
+      await supabase.from('delivery_reports').delete().eq('id', id);
+    }
+  }
+
+  // --- ATTENDANCE & PUNCH CLOCK ---
   public async getAttendance(dateStr?: string): Promise<AttendanceRecord[]> {
     await this.ensureSupabaseSeeded();
     let records = [...this.attendance];
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('attendance').select('*');
-      if (!error && data && data.length > 0) {
-        records = data;
-        this.attendance = data;
+      try {
+        const { data, error } = await supabase.from('attendance').select('*');
+        if (!error && data && data.length > 0) {
+          const map = new Map<string, AttendanceRecord>();
+          for (const d of data) map.set(d.id, d);
+          for (const localRec of this.attendance) {
+            if (!map.has(localRec.id)) {
+              map.set(localRec.id, localRec);
+            }
+          }
+          records = Array.from(map.values());
+          this.attendance = records;
+        }
+      } catch (err) {
+        console.error('getAttendance error:', err);
       }
     }
     if (dateStr) {
       return records.filter(a => a.date === dateStr);
     }
     return records;
+  }
+
+  public async clockInWorker(workerId: string, location?: { lat: number; lng: number; address?: string }): Promise<AttendanceRecord> {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const nowTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let record = this.attendance.find(a => a.worker_id === workerId && a.date === todayStr);
+
+    if (record) {
+      record.status = 'present';
+      record.in_time = nowTimeStr;
+      record.out_time = null; // Clear out_time so worker is marked clocked in
+      record.is_on_break = false;
+      if (location) {
+        record.clock_in_lat = location.lat;
+        record.clock_in_lng = location.lng;
+        record.clock_in_address = location.address || `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
+      }
+    } else {
+      record = {
+        id: crypto.randomUUID(),
+        worker_id: workerId,
+        date: todayStr,
+        status: 'present',
+        in_time: nowTimeStr,
+        out_time: null,
+        is_on_break: false,
+        ot_hours: 0,
+        clock_in_lat: location?.lat || null,
+        clock_in_lng: location?.lng || null,
+        clock_in_address: location?.address || (location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : null),
+      };
+      this.attendance.push(record);
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('attendance').upsert(record);
+      } catch (err) {
+        console.error('Supabase attendance clock-in error:', err);
+      }
+    }
+
+    this.recalculatePayrollLinesInMemory();
+    return { ...record };
+  }
+
+  public async toggleWorkerBreak(workerId: string): Promise<AttendanceRecord> {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const nowTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let record = this.attendance.find(a => a.worker_id === workerId && a.date === todayStr);
+    if (!record) {
+      record = await this.clockInWorker(workerId);
+    }
+
+    if (record.is_on_break) {
+      record.is_on_break = false;
+      record.break_end_time = nowTimeStr;
+    } else {
+      record.is_on_break = true;
+      record.break_start_time = nowTimeStr;
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('attendance').upsert(record);
+    }
+
+    return record;
+  }
+
+  public async clockOutWorker(workerId: string, location?: { lat: number; lng: number; address?: string }): Promise<AttendanceRecord> {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const nowTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let record = this.attendance.find(a => a.worker_id === workerId && a.date === todayStr);
+    if (!record) {
+      record = await this.clockInWorker(workerId, location);
+    }
+
+    record.out_time = nowTimeStr;
+    record.is_on_break = false;
+
+    if (location) {
+      record.clock_out_lat = location.lat;
+      record.clock_out_lng = location.lng;
+      record.clock_out_address = location.address || `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('attendance').upsert(record);
+    }
+
+    this.recalculatePayrollLinesInMemory();
+    return record;
   }
 
   public async saveAttendance(record: Partial<AttendanceRecord>): Promise<AttendanceRecord> {
@@ -492,10 +1002,19 @@ class DataService {
     await this.ensureSupabaseSeeded();
     let adjusts = [...this.adjustments];
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('adjustments').select('*');
-      if (!error && data && data.length > 0) {
-        adjusts = data;
-        this.adjustments = data;
+      try {
+        const { data, error } = await supabase.from('adjustments').select('*');
+        if (!error && data) {
+          const map = new Map<string, Adjustment>();
+          for (const d of data) map.set(d.id, d);
+          for (const localA of this.adjustments) {
+            if (!map.has(localA.id)) map.set(localA.id, localA);
+          }
+          adjusts = Array.from(map.values());
+          this.adjustments = adjusts;
+        }
+      } catch (err) {
+        console.error('getAdjustments error:', err);
       }
     }
     return adjusts;
@@ -516,6 +1035,338 @@ class DataService {
     }
     this.recalculatePayrollLinesInMemory();
     return newAdj;
+  }
+
+  // --- DAILY ASSIGNMENTS ---
+  public async getDailyAssignments(workDate?: string): Promise<DailyAssignment[]> {
+    await this.ensureSupabaseSeeded();
+    const dateToFetch = workDate || new Date().toISOString().split('T')[0];
+    let rawList = [...this.dailyAssignments];
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('daily_assignments')
+          .select('*')
+          .eq('work_date', dateToFetch);
+        if (!error && data) {
+          const map = new Map<string, DailyAssignment>();
+          for (const d of data) map.set(d.id, d);
+          for (const localA of this.dailyAssignments.filter(a => a.work_date === dateToFetch)) {
+            if (!map.has(localA.id)) map.set(localA.id, localA);
+          }
+          rawList = Array.from(map.values());
+        }
+      } catch (err) {
+        console.error('getDailyAssignments error:', err);
+      }
+    } else {
+      rawList = this.dailyAssignments.filter(a => a.work_date === dateToFetch);
+    }
+
+    // Join display fields
+    const workersMap = new Map((await this.getWorkers()).map(w => [w.id, w]));
+    const stylesMap = new Map((await this.getStyles()).map(s => [s.id, s]));
+    const processesMap = new Map((await this.getProcesses()).map(p => [p.id, p]));
+
+    return rawList.map(a => {
+      const w = workersMap.get(a.worker_id);
+      const s = stylesMap.get(a.style_id);
+      const p = processesMap.get(a.process_id);
+      return {
+        ...a,
+        worker_name: w?.full_name || 'Worker',
+        worker_code: w?.worker_code || '',
+        worker_photo: w?.photo_url || undefined,
+        style_name: s?.name || '',
+        style_code: s?.style_code || '',
+        process_name: p?.name || '',
+        standard_rate: p?.rate || a.agreed_rate,
+      };
+    });
+  }
+
+  public async saveDailyAssignment(assignment: Partial<DailyAssignment>): Promise<DailyAssignment> {
+    const id = assignment.id || crypto.randomUUID();
+    const workDate = assignment.work_date || new Date().toISOString().split('T')[0];
+
+    // Check if worker has an approved bid for this process to set default agreed_rate if not explicitly set
+    let defaultRate = assignment.agreed_rate;
+    if (defaultRate === undefined) {
+      const approvedBid = this.rateBids.find(b => b.worker_id === assignment.worker_id && b.process_id === assignment.process_id && b.status === 'approved');
+      if (approvedBid) {
+        defaultRate = approvedBid.counter_rate || approvedBid.proposed_rate;
+      } else {
+        const proc = this.processes.find(p => p.id === assignment.process_id);
+        defaultRate = proc ? proc.rate : 0;
+      }
+    }
+
+    const record: DailyAssignment = {
+      id,
+      work_date: workDate,
+      style_id: assignment.style_id!,
+      process_id: assignment.process_id!,
+      worker_id: assignment.worker_id!,
+      target_qty: assignment.target_qty ?? null,
+      agreed_rate: Number(defaultRate || 0),
+      status: assignment.status || 'active',
+      note: assignment.note || null,
+      created_at: assignment.created_at || new Date().toISOString(),
+    };
+
+    const existingIdx = this.dailyAssignments.findIndex(a => a.id === id);
+    if (existingIdx >= 0) {
+      this.dailyAssignments[existingIdx] = record;
+    } else {
+      this.dailyAssignments.push(record);
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('daily_assignments').upsert({
+        id: record.id,
+        work_date: record.work_date,
+        style_id: record.style_id,
+        process_id: record.process_id,
+        worker_id: record.worker_id,
+        target_qty: record.target_qty,
+        agreed_rate: record.agreed_rate,
+        status: record.status,
+        note: record.note,
+      });
+    }
+
+    const fullList = await this.getDailyAssignments(workDate);
+    return fullList.find(a => a.id === id) || record;
+  }
+
+  public async deleteDailyAssignment(id: string): Promise<void> {
+    this.dailyAssignments = this.dailyAssignments.filter(a => a.id !== id);
+    if (isSupabaseConfigured) {
+      await supabase.from('daily_assignments').delete().eq('id', id);
+    }
+  }
+
+  public async copyAssignmentsFromDate(fromDate: string, targetDate: string): Promise<DailyAssignment[]> {
+    const sourceAssignments = await this.getDailyAssignments(fromDate);
+    if (sourceAssignments.length === 0) return [];
+
+    const newAssignments: DailyAssignment[] = [];
+    for (const src of sourceAssignments) {
+      const cloned = await this.saveDailyAssignment({
+        work_date: targetDate,
+        style_id: src.style_id,
+        process_id: src.process_id,
+        worker_id: src.worker_id,
+        target_qty: src.target_qty,
+        agreed_rate: src.agreed_rate,
+        status: 'planned',
+        note: `Cloned from ${fromDate}`,
+      });
+      newAssignments.push(cloned);
+    }
+    return newAssignments;
+  }
+
+  public async autoAssignFromHistory(styleIds: string[], targetDate: string): Promise<{ draft: DailyAssignment[]; skippedWorkers: string[]; unassignedProcesses: string[] }> {
+    const workers = await this.getWorkers();
+    const attendanceToday = await this.getAttendance(targetDate);
+    const absentWorkerIds = new Set(attendanceToday.filter(a => a.status === 'absent').map(a => a.worker_id));
+    
+    const availableWorkers = workers.filter(w => w.status === 'active' && !absentWorkerIds.has(w.id));
+    const availableWorkerIds = new Set(availableWorkers.map(w => w.id));
+
+    // Calculate worker output history on each process over last 30 days
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    const recentEntries = this.productionEntries.filter(e => e.entry_date >= thirtyDaysAgo);
+
+    const draftAssignments: DailyAssignment[] = [];
+    const skippedWorkers: string[] = workers.filter(w => absentWorkerIds.has(w.id)).map(w => `${w.full_name} (${w.worker_code})`);
+    const unassignedProcesses: string[] = [];
+
+    const allProcesses = await this.getProcesses();
+    const targetProcesses = allProcesses.filter(p => styleIds.includes(p.style_id) && p.is_active);
+
+    for (const proc of targetProcesses) {
+      // Find worker who ran this process most frequently and with highest output in last 30 days
+      const candidates = recentEntries.filter(e => e.process_id === proc.id && availableWorkerIds.has(e.worker_id));
+      
+      const scoreMap = new Map<string, { count: number; totalQty: number }>();
+      for (const entry of candidates) {
+        const cur = scoreMap.get(entry.worker_id) || { count: 0, totalQty: 0 };
+        scoreMap.set(entry.worker_id, {
+          count: cur.count + 1,
+          totalQty: cur.totalQty + entry.qty_ok,
+        });
+      }
+
+      let bestWorkerId: string | null = null;
+      let highestQty = -1;
+
+      for (const [wId, stats] of scoreMap.entries()) {
+        if (stats.totalQty > highestQty) {
+          highestQty = stats.totalQty;
+          bestWorkerId = wId;
+        }
+      }
+
+      // If no history found, assign next available worker in line
+      if (!bestWorkerId && availableWorkers.length > 0) {
+        const index = draftAssignments.length % availableWorkers.length;
+        bestWorkerId = availableWorkers[index]?.id || null;
+      }
+
+      if (bestWorkerId) {
+        // Check for worker rate bid
+        const approvedBid = this.rateBids.find(b => b.worker_id === bestWorkerId && b.process_id === proc.id && b.status === 'approved');
+        const rateToUse = approvedBid ? (approvedBid.counter_rate || approvedBid.proposed_rate) : proc.rate;
+
+        draftAssignments.push({
+          id: `draft-${proc.id}-${bestWorkerId}`,
+          work_date: targetDate,
+          style_id: proc.style_id,
+          process_id: proc.id,
+          worker_id: bestWorkerId,
+          target_qty: 250, // default line target
+          agreed_rate: rateToUse,
+          status: 'planned',
+          note: 'Auto-assigned from 30-day production history',
+        });
+      } else {
+        unassignedProcesses.push(proc.name);
+      }
+    }
+
+    return { draft: draftAssignments, skippedWorkers, unassignedProcesses };
+  }
+
+  // --- RATE BIDS ---
+  public async getRateBids(): Promise<RateBid[]> {
+    await this.ensureSupabaseSeeded();
+    let rawList = [...this.rateBids];
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.from('rate_bids').select('*').order('submitted_at', { ascending: false });
+        if (!error && data) {
+          const map = new Map<string, RateBid>();
+          for (const d of data) map.set(d.id, d);
+          for (const localB of this.rateBids) {
+            if (!map.has(localB.id)) map.set(localB.id, localB);
+          }
+          rawList = Array.from(map.values());
+          this.rateBids = rawList;
+        }
+      } catch (err) {
+        console.error('getRateBids error:', err);
+      }
+    }
+
+    const workersMap = new Map((await this.getWorkers()).map(w => [w.id, w]));
+    const processesMap = new Map((await this.getProcesses()).map(p => [p.id, p]));
+    const stylesMap = new Map((await this.getStyles()).map(s => [s.id, s]));
+
+    return rawList.map(b => {
+      const w = workersMap.get(b.worker_id);
+      const p = processesMap.get(b.process_id);
+      const s = p ? stylesMap.get(p.style_id) : undefined;
+
+      return {
+        ...b,
+        worker_name: w?.full_name || 'Worker',
+        worker_code: w?.worker_code || '',
+        worker_photo: w?.photo_url || undefined,
+        process_name: p?.name || '',
+        style_code: s?.style_code || '',
+        style_name: s?.name || '',
+      };
+    });
+  }
+
+  public async createRateBid(bidData: Partial<RateBid>): Promise<RateBid> {
+    const proc = this.processes.find(p => p.id === bidData.process_id);
+    const currentRate = bidData.current_rate ?? (proc ? proc.rate : 0);
+
+    const newBid: RateBid = {
+      id: crypto.randomUUID(),
+      process_id: bidData.process_id!,
+      worker_id: bidData.worker_id!,
+      current_rate: currentRate,
+      proposed_rate: Number(bidData.proposed_rate || currentRate),
+      counter_rate: bidData.counter_rate ? Number(bidData.counter_rate) : null,
+      reason: bidData.reason || null,
+      status: 'pending',
+      submitted_at: new Date().toISOString(),
+    };
+
+    this.rateBids.unshift(newBid);
+
+    if (isSupabaseConfigured) {
+      await supabase.from('rate_bids').insert({
+        id: newBid.id,
+        process_id: newBid.process_id,
+        worker_id: newBid.worker_id,
+        current_rate: newBid.current_rate,
+        proposed_rate: newBid.proposed_rate,
+        counter_rate: newBid.counter_rate,
+        reason: newBid.reason,
+        status: newBid.status,
+        submitted_at: newBid.submitted_at,
+      });
+    }
+
+    return newBid;
+  }
+
+  public async reviewRateBid(bidId: string, status: 'approved' | 'rejected' | 'countered', reviewNote?: string, counterRate?: number): Promise<void> {
+    const bidIndex = this.rateBids.findIndex(b => b.id === bidId);
+    if (bidIndex === -1) return;
+
+    const bid = this.rateBids[bidIndex];
+    const reviewedAt = new Date().toISOString();
+
+    bid.status = status;
+    bid.reviewed_at = reviewedAt;
+    bid.review_note = reviewNote || null;
+    if (counterRate !== undefined) {
+      bid.counter_rate = counterRate;
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('rate_bids').update({
+        status,
+        reviewed_at: reviewedAt,
+        review_note: reviewNote || null,
+        counter_rate: bid.counter_rate,
+      }).eq('id', bidId);
+    }
+
+    // ON APPROVAL: Update agreed_rate on that worker's CURRENT and FUTURE assignments for that process
+    if (status === 'approved') {
+      const finalRate = bid.counter_rate || bid.proposed_rate;
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // Update in-memory
+      for (const assign of this.dailyAssignments) {
+        if (assign.worker_id === bid.worker_id && assign.process_id === bid.process_id && assign.work_date >= todayStr) {
+          assign.agreed_rate = finalRate;
+        }
+      }
+
+      if (isSupabaseConfigured) {
+        await supabase.from('daily_assignments')
+          .update({ agreed_rate: finalRate })
+          .eq('worker_id', bid.worker_id)
+          .eq('process_id', bid.process_id)
+          .gte('work_date', todayStr);
+      }
+    }
+  }
+
+  public async acceptCounterBid(bidId: string): Promise<void> {
+    const bid = this.rateBids.find(b => b.id === bidId);
+    if (!bid || bid.status !== 'countered') return;
+    await this.reviewRateBid(bidId, 'approved', 'Counter offer accepted by worker/supervisor');
   }
 
   // --- PAYROLL RUN & RPC ---

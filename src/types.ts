@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'supervisor' | 'accounts';
+export type UserRole = 'admin' | 'supervisor' | 'accounts' | 'worker';
 
 export interface Profile {
   id: string;
@@ -14,11 +14,23 @@ export interface UserRoleRecord {
   role: UserRole;
 }
 
+export interface UserAccount {
+  id: string;
+  email_or_phone: string;
+  password?: string;
+  full_name: string;
+  role: UserRole;
+  worker_id?: string | null; // linked worker profile ID if role is worker
+  status: 'active' | 'inactive';
+  created_at: string;
+}
+
 export interface Worker {
   id: string;
   worker_code: string;
   full_name: string;
   phone: string | null;
+  email?: string | null;
   photo_url: string | null;
   section: string | null;
   line_no: string | null;
@@ -44,6 +56,8 @@ export interface GarmentStyle {
   created_at?: string;
   // Computed
   completed_pieces?: number;
+  delivered_pieces?: number;
+  remaining_pieces?: number;
   total_labour_cost?: number;
 }
 
@@ -71,6 +85,7 @@ export interface ProcessRateHistory {
 
 export interface ProductionEntry {
   id: string;
+  assignment_id?: string | null;
   entry_date: string;
   worker_id: string;
   style_id: string;
@@ -92,6 +107,50 @@ export interface ProductionEntry {
   process_name?: string;
 }
 
+export interface DailyAssignment {
+  id: string;
+  work_date: string;
+  style_id: string;
+  process_id: string;
+  worker_id: string;
+  target_qty: number | null;
+  agreed_rate: number;
+  status: 'planned' | 'active' | 'completed' | 'cancelled';
+  assigned_by?: string | null;
+  note?: string | null;
+  created_at?: string;
+  // Joined fields for UI
+  worker_name?: string;
+  worker_code?: string;
+  worker_photo?: string;
+  style_name?: string;
+  style_code?: string;
+  process_name?: string;
+  standard_rate?: number;
+}
+
+export interface RateBid {
+  id: string;
+  process_id: string;
+  worker_id: string;
+  current_rate: number;
+  proposed_rate: number;
+  counter_rate: number | null;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'countered' | 'withdrawn';
+  submitted_at?: string;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  // Joined fields for UI
+  worker_name?: string;
+  worker_code?: string;
+  worker_photo?: string;
+  process_name?: string;
+  style_code?: string;
+  style_name?: string;
+}
+
 export interface AttendanceRecord {
   id: string;
   worker_id: string;
@@ -99,8 +158,33 @@ export interface AttendanceRecord {
   status: 'present' | 'absent' | 'half_day' | 'leave' | 'holiday';
   in_time?: string | null;
   out_time?: string | null;
+  break_start_time?: string | null;
+  break_end_time?: string | null;
+  is_on_break?: boolean;
   ot_hours: number;
+  clock_in_lat?: number | null;
+  clock_in_lng?: number | null;
+  clock_in_address?: string | null;
+  clock_out_lat?: number | null;
+  clock_out_lng?: number | null;
+  clock_out_address?: string | null;
   created_at?: string;
+}
+
+export interface DeliveryReport {
+  id: string;
+  delivery_date: string;
+  style_id: string;
+  delivered_qty: number;
+  vehicle_no: string | null;
+  driver_name: string | null;
+  destination: string | null;
+  notes: string | null;
+  created_at?: string;
+  // Joined fields for UI
+  style_code?: string;
+  style_name?: string;
+  buyer_name?: string;
 }
 
 export interface Adjustment {

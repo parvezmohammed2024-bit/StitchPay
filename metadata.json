@@ -1,6 +1,6 @@
 {
   "name": "StitchPay",
-  "description": "Piece-rate production tracking and payroll system for garments manufacturing",
-  "requestFramePermissions": [],
+  "description": "Piece-rate production tracking, worker portal, daily delivery reports, and payroll system for garments manufacturing",
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
