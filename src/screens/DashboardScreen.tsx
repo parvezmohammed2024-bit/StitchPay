@@ -149,8 +149,9 @@ export const DashboardScreen: React.FC = () => {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
 
-  // 14-day production output data for Recharts
-  const chartData: { date: string; pieces: number; amount: number }[] = [];
+  // 14-day or 7-day production output data for Recharts
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const fullChartData: { date: string; pieces: number; amount: number }[] = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -158,21 +159,23 @@ export const DashboardScreen: React.FC = () => {
     const dayEntries = entries.filter(e => e.entry_date === dStr);
     const pSum = dayEntries.reduce((sum, e) => sum + e.qty_ok, 0);
     const aSum = dayEntries.reduce((sum, e) => sum + e.amount, 0);
-    chartData.push({
+    fullChartData.push({
       date: dStr.slice(5),
       pieces: pSum,
       amount: Math.round(aSum),
     });
   }
 
+  const chartData = isMobile ? fullChartData.slice(7) : fullChartData;
+
   const currencySymbol = settings?.currency_symbol || '৳';
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 sm:space-y-6 pb-12 w-full max-w-full overflow-hidden">
       {/* Page Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
             <span>Production Overview</span>
             <span className="text-xs font-normal text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">
               {todayStr}
@@ -183,22 +186,22 @@ export const DashboardScreen: React.FC = () => {
       </div>
 
       {/* TODAY'S PRODUCTION KPI CARD & BOTTLENECK SUMMARY */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-          <h2 className="text-lg font-bold text-white flex items-center space-x-2">
-            <Flame className="w-5 h-5 text-amber-400 fill-amber-400" />
-            <span>Today's Line Setup & Production Completion</span>
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4 w-full max-w-full">
+        <div className="flex justify-between items-center border-b border-slate-800 pb-3 gap-2">
+          <h2 className="text-sm sm:text-lg font-bold text-white flex items-center space-x-2 truncate">
+            <Flame className="w-5 h-5 text-amber-400 fill-amber-400 shrink-0" />
+            <span className="truncate">Today's Line Setup & Production</span>
           </h2>
-          <span className="text-xs font-mono font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+          <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20 shrink-0">
             {todayTargetCompletionPct}% Target Met
           </span>
         </div>
 
         {/* Global Line Target Completion Progress Bar */}
         <div className="space-y-1.5">
-          <div className="flex justify-between text-xs text-slate-400 font-semibold">
-            <span>Overall Floor Progress: <strong className="text-white">{todayPieces.toLocaleString()} / {todayTargetTotal.toLocaleString()} pcs</strong></span>
-            <span className="text-emerald-400 font-bold">{todayTargetCompletionPct}%</span>
+          <div className="flex justify-between text-xs text-slate-400 font-semibold gap-2">
+            <span className="truncate">Overall Floor Progress: <strong className="text-white">{todayPieces.toLocaleString()} / {todayTargetTotal.toLocaleString()} pcs</strong></span>
+            <span className="text-emerald-400 font-bold shrink-0">{todayTargetCompletionPct}%</span>
           </div>
           <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
             <div 
@@ -208,38 +211,38 @@ export const DashboardScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* METRICS ROW */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-bold uppercase">Completed Garments</div>
-            <div className="text-xl font-black text-emerald-400 font-mono mt-1">
-              {completedGarments.toLocaleString()} <span className="text-xs font-normal text-slate-400">full garments</span>
+        {/* METRICS ROW: Stack 1 column on mobile, 2 on 480px+, 4 on desktop */}
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Completed Garments</div>
+            <div className="text-2xl font-black text-emerald-400 font-mono tracking-tight mt-1 tabular-nums">
+              {completedGarments.toLocaleString()}
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">Slowest bottleneck capacity</div>
+            <div className="text-[10px] text-slate-500 mt-1 truncate">Slowest bottleneck capacity</div>
           </div>
 
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-bold uppercase">Total Operations Logged</div>
-            <div className="text-xl font-black text-indigo-400 font-mono mt-1">
-              {todayPieces.toLocaleString()} <span className="text-xs font-normal text-slate-400">op steps</span>
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Total Operations Logged</div>
+            <div className="text-2xl font-black text-indigo-400 font-mono tracking-tight mt-1 tabular-nums">
+              {todayPieces.toLocaleString()}
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">Sum across all processes</div>
+            <div className="text-[10px] text-slate-500 mt-1 truncate">Sum across all processes</div>
           </div>
 
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-bold uppercase">Today's Piece Wage Cost</div>
-            <div className="text-xl font-black text-amber-400 font-mono mt-1">
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Today's Piece Wage Cost</div>
+            <div className="text-2xl font-black text-amber-400 font-mono tracking-tight mt-1 tabular-nums">
               {currencySymbol}{todayWageCost.toLocaleString(undefined, { minimumFractionDigits: 0 })}
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">Accrued piece rate pay</div>
+            <div className="text-[10px] text-slate-500 mt-1 truncate">Accrued piece rate pay</div>
           </div>
 
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-bold uppercase">Active Floor Workers</div>
-            <div className="text-xl font-black text-white font-mono mt-1">
+          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Active Floor Workers</div>
+            <div className="text-2xl font-black text-white font-mono tracking-tight mt-1 tabular-nums">
               {activeWorkersCount} <span className="text-xs font-normal text-slate-400">/ {workers.length}</span>
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">Logged pieces today</div>
+            <div className="text-[10px] text-slate-500 mt-1 truncate">Logged pieces today</div>
           </div>
         </div>
       </div>
@@ -346,7 +349,16 @@ export const DashboardScreen: React.FC = () => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickLine={false} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="#64748b" 
+                  fontSize={10} 
+                  tickLine={false} 
+                  interval={isMobile ? 0 : 'preserveEnd'} 
+                  angle={isMobile ? -25 : 0} 
+                  textAnchor={isMobile ? 'end' : 'middle'} 
+                  height={isMobile ? 40 : 30} 
+                />
                 <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}

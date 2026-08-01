@@ -668,8 +668,8 @@ export const WorkerPortalScreen: React.FC = () => {
           <span className="text-xs text-slate-400 font-mono">Daily Breakdown</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="w-full max-w-full overflow-x-auto">
+          <table className="w-full text-left text-xs min-w-[480px]">
             <thead>
               <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-2.5 px-3">Date</th>

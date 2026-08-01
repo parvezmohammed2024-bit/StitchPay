@@ -146,7 +146,7 @@ export default function App() {
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>
       <ToastContainer />
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white max-w-full overflow-x-hidden">
         {/* Header */}
         <Header
           currentRole={role}
@@ -168,16 +168,17 @@ export default function App() {
         />
 
         {/* Main Body */}
-        <div className="flex-1 flex overflow-hidden max-w-7xl w-full mx-auto">
+        <div className="flex-1 flex overflow-hidden max-w-7xl w-full mx-auto pb-16 md:pb-0">
           {/* Desktop Navigation Sidebar */}
           <Navigation
             activeScreen={activeScreen}
             onNavigate={setActiveScreen}
             role={role}
+            onLogout={handleLogout}
           />
 
           {/* Screen Content Container */}
-          <main className="flex-1 p-3 sm:p-6 overflow-y-auto">
+          <main className="flex-1 p-3 sm:p-6 overflow-y-auto w-full max-w-full">
             {activeScreen === 'dashboard' && <DashboardScreen />}
             {activeScreen === 'dailySetup' && <DailySetupScreen role={role} />}
             {activeScreen === 'quickEntry' && <QuickEntryScreen role={role} />}

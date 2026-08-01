@@ -155,8 +155,9 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
       </div>
 
       {/* Spreadsheet Matrix Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl overflow-x-auto">
-        <table className="w-full text-left text-xs border-collapse min-w-[800px]">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl w-full max-w-full overflow-hidden">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[800px]">
           <thead>
             <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-300 font-mono">
               <th className="p-3 sticky left-0 z-10 bg-slate-800 min-w-[160px]">Worker Name</th>
@@ -218,5 +219,6 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
         </table>
       </div>
     </div>
-  );
+  </div>
+);
 };

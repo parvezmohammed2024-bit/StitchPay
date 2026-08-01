@@ -160,93 +160,141 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
       )}
 
       {/* Summary KPI Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <span className="text-xs text-slate-400 uppercase font-semibold">Total Net Liability</span>
-          <div className="text-2xl font-black text-emerald-400 font-mono mt-1">
+      <div className="grid grid-cols-1 min-[480px]:grid-cols-3 gap-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Net Liability</span>
+          <div className="text-2xl font-black text-emerald-400 font-mono tracking-tight mt-1 tabular-nums">
             {currencySymbol}{totalPayrollCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <span className="text-xs text-slate-400 uppercase font-semibold">Total Garment Pieces</span>
-          <div className="text-2xl font-black text-white font-mono mt-1">
-            {totalPiecesDone.toLocaleString()} pcs
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Garment Pieces</span>
+          <div className="text-2xl font-black text-white font-mono tracking-tight mt-1 tabular-nums">
+            {totalPiecesDone.toLocaleString()} <span className="text-xs text-slate-400 font-normal">pcs</span>
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <span className="text-xs text-slate-400 uppercase font-semibold">Min Wage Top-up Total</span>
-          <div className="text-2xl font-black text-amber-400 font-mono mt-1">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+          <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Min Wage Top-up Total</span>
+          <div className="text-2xl font-black text-amber-400 font-mono tracking-tight mt-1 tabular-nums">
             {currencySymbol}{totalTopup.toFixed(2)}
           </div>
         </div>
       </div>
 
       {/* Payroll Lines Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl overflow-x-auto">
-        <table className="w-full text-left text-xs border-collapse min-w-[700px]">
-          <thead>
-            <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-400 font-mono uppercase">
-              <th className="p-3">Worker</th>
-              <th className="p-3 text-right">Pieces</th>
-              <th className="p-3 text-right">Piece Gross</th>
-              <th className="p-3 text-right">Min Wage Topup</th>
-              <th className="p-3 text-right">Deductions</th>
-              <th className="p-3 text-right">Net Payable</th>
-              <th className="p-3 text-center">Payslip</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {payrollLines.map(line => (
-              <tr key={line.id} className="hover:bg-slate-800/40">
-                <td className="p-3 font-medium text-white flex items-center space-x-3">
-                  <img src={line.worker?.photo_url || ''} className="w-8 h-8 rounded-full object-cover" />
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl w-full max-w-full overflow-hidden">
+        {/* Mobile View: Stacked Cards */}
+        <div className="space-y-3 md:hidden">
+          {payrollLines.map(line => (
+            <div key={line.id} className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <img src={line.worker?.photo_url || ''} className="w-9 h-9 rounded-full object-cover shrink-0" />
                   <div>
-                    <div className="font-bold">{line.worker?.full_name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
+                    <div className="font-bold text-white text-sm">{line.worker?.full_name}</div>
+                    <div className="text-xs text-slate-400 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
                   </div>
-                </td>
+                </div>
+                <button
+                  onClick={() => setSelectedLine(line)}
+                  className="px-2.5 py-1.5 rounded-lg bg-indigo-600/30 text-indigo-300 font-bold text-xs hover:bg-indigo-600/50 flex items-center space-x-1"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Payslip</span>
+                </button>
+              </div>
 
-                <td className="p-3 text-right font-mono text-slate-300 font-bold">
-                  {line.pieces_total} pcs
-                </td>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-800/80">
+                <div>
+                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Pieces Logged</span>
+                  <span className="font-mono font-bold text-slate-200">{line.pieces_total} pcs</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Piece Gross</span>
+                  <span className="font-mono font-bold text-emerald-400">{currencySymbol}{line.piece_earnings.toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Min Wage Top-up</span>
+                  <span className="font-mono font-bold text-amber-400">
+                    {line.minimum_wage_topup > 0 ? `+${currencySymbol}${line.minimum_wage_topup.toFixed(2)}` : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Net Payable</span>
+                  <span className="font-mono font-black text-amber-400 text-sm">{currencySymbol}{line.net_payable.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
 
-                <td className="p-3 text-right font-mono text-emerald-400 font-bold">
-                  {currencySymbol}{line.piece_earnings.toFixed(2)}
-                </td>
-
-                <td className="p-3 text-right font-mono">
-                  {line.minimum_wage_topup > 0 ? (
-                    <span className="px-2 py-0.5 rounded bg-amber-400/10 text-amber-400 font-bold border border-amber-400/30">
-                      +{currencySymbol}{line.minimum_wage_topup.toFixed(2)}
-                    </span>
-                  ) : (
-                    <span className="text-slate-600">-</span>
-                  )}
-                </td>
-
-                <td className="p-3 text-right font-mono text-rose-400">
-                  -{currencySymbol}{line.deductions.toFixed(2)}
-                </td>
-
-                <td className="p-3 text-right font-mono font-black text-amber-400 text-sm">
-                  {currencySymbol}{line.net_payable.toFixed(2)}
-                </td>
-
-                <td className="p-3 text-center">
-                  <button
-                    onClick={() => setSelectedLine(line)}
-                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg border border-slate-700 transition-colors"
-                    title="View Printable Payslip"
-                  >
-                    <FileText className="w-4 h-4" />
-                  </button>
-                </td>
+        {/* Desktop View: Scrollable Table */}
+        <div className="hidden md:block w-full overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[700px]">
+            <thead>
+              <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-400 font-mono uppercase">
+                <th className="p-3">Worker</th>
+                <th className="p-3 text-right">Pieces</th>
+                <th className="p-3 text-right">Piece Gross</th>
+                <th className="p-3 text-right">Min Wage Topup</th>
+                <th className="p-3 text-right">Deductions</th>
+                <th className="p-3 text-right">Net Payable</th>
+                <th className="p-3 text-center">Payslip</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {payrollLines.map(line => (
+                <tr key={line.id} className="hover:bg-slate-800/40">
+                  <td className="p-3 font-medium text-white flex items-center space-x-3">
+                    <img src={line.worker?.photo_url || ''} className="w-8 h-8 rounded-full object-cover" />
+                    <div>
+                      <div className="font-bold">{line.worker?.full_name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
+                    </div>
+                  </td>
+
+                  <td className="p-3 text-right font-mono text-slate-300 font-bold">
+                    {line.pieces_total} pcs
+                  </td>
+
+                  <td className="p-3 text-right font-mono text-emerald-400 font-bold">
+                    {currencySymbol}{line.piece_earnings.toFixed(2)}
+                  </td>
+
+                  <td className="p-3 text-right font-mono">
+                    {line.minimum_wage_topup > 0 ? (
+                      <span className="px-2 py-0.5 rounded bg-amber-400/10 text-amber-400 font-bold border border-amber-400/30">
+                        +{currencySymbol}{line.minimum_wage_topup.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600">-</span>
+                    )}
+                  </td>
+
+                  <td className="p-3 text-right font-mono text-rose-400">
+                    -{currencySymbol}{line.deductions.toFixed(2)}
+                  </td>
+
+                  <td className="p-3 text-right font-mono font-black text-amber-400 text-sm">
+                    {currencySymbol}{line.net_payable.toFixed(2)}
+                  </td>
+
+                  <td className="p-3 text-center">
+                    <button
+                      onClick={() => setSelectedLine(line)}
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg border border-slate-700 transition-colors"
+                      title="View Printable Payslip"
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Payslip Modal */}

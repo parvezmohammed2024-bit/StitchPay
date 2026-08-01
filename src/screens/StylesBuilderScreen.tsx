@@ -826,8 +826,8 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
           </div>
 
           {/* Processes List Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse min-w-[500px]">
               <thead>
                 <tr className="text-xs text-slate-400 uppercase bg-slate-800/60 border-b border-slate-800 font-mono">
                   <th className="py-3 px-3 w-12 text-center">{t('processSeq')}</th>

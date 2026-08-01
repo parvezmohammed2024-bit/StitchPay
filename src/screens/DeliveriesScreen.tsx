@@ -179,7 +179,7 @@ export const DeliveriesScreen: React.FC = () => {
           ))}
         </div>
 
-        <div className="relative min-w-[200px]">
+        <div className="relative w-full sm:w-64">
           <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
           <input
             type="text"
@@ -192,7 +192,7 @@ export const DeliveriesScreen: React.FC = () => {
       </div>
 
       {/* KPI Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Total Order Quantity */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -374,8 +374,8 @@ export const DeliveriesScreen: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="w-full max-w-full overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[700px]">
               <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
                 <tr>
                   <th className="py-3 px-4">Date</th>
