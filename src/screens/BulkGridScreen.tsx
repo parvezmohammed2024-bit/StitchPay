@@ -3,6 +3,7 @@ import { Table, Calendar, Save, CheckCircle, RefreshCw } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole } from '../types';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 interface BulkGridScreenProps {
   role: UserRole;
@@ -185,7 +186,12 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
               return (
                 <tr key={worker.id} className="hover:bg-slate-800/40">
                   <td className="p-3 sticky left-0 z-10 bg-slate-900 font-medium text-white flex items-center space-x-2">
-                    <img src={worker.photo_url || ''} className="w-7 h-7 rounded-full object-cover" />
+                    <WorkerAvatar
+                      photoUrl={worker.photo_url}
+                      name={worker.full_name}
+                      size="sm"
+                      className="rounded-full"
+                    />
                     <div className="truncate">
                       <div className="font-bold">{worker.full_name}</div>
                       <div className="text-[10px] text-slate-400 font-mono">{worker.worker_code}</div>

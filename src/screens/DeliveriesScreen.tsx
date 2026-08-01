@@ -6,6 +6,7 @@ import {
 import { dataService } from '../lib/dataService';
 import { showErrorToast } from '../lib/toast';
 import { GarmentStyle, DeliveryReport } from '../types';
+import { StyleImage } from '../components/StyleImage';
 
 export const DeliveriesScreen: React.FC = () => {
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
@@ -293,10 +294,10 @@ export const DeliveriesScreen: React.FC = () => {
                         <h3 className="text-base font-black text-white mt-1">{st.name}</h3>
                         <p className="text-xs text-slate-400">Buyer: <strong className="text-slate-200">{st.buyer_name}</strong></p>
                       </div>
-                      <img
-                        src={st.image_url || 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=150&auto=format&fit=crop&q=80'}
-                        alt={st.name}
-                        className="w-12 h-12 rounded-xl object-cover border border-slate-800 shrink-0"
+                      <StyleImage
+                        imageUrl={st.image_url}
+                        styleName={st.name}
+                        className="w-12 h-12 rounded-xl object-cover"
                       />
                     </div>
 

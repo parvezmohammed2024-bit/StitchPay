@@ -4,6 +4,7 @@ import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { PayrollPeriod, PayrollLine, FactorySettings, UserRole } from '../types';
 import { PayslipModal } from './PayslipModal';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 interface PayrollRunScreenProps {
   role: UserRole;
@@ -191,7 +192,12 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
             <div key={line.id} className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <img src={line.worker?.photo_url || ''} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                  <WorkerAvatar
+                    photoUrl={line.worker?.photo_url}
+                    name={line.worker?.full_name || 'Worker'}
+                    size="md"
+                    className="rounded-full shrink-0"
+                  />
                   <div>
                     <div className="font-bold text-white text-sm">{line.worker?.full_name}</div>
                     <div className="text-xs text-slate-400 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
@@ -248,7 +254,12 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
               {payrollLines.map(line => (
                 <tr key={line.id} className="hover:bg-slate-800/40">
                   <td className="p-3 font-medium text-white flex items-center space-x-3">
-                    <img src={line.worker?.photo_url || ''} className="w-8 h-8 rounded-full object-cover" />
+                    <WorkerAvatar
+                      photoUrl={line.worker?.photo_url}
+                      name={line.worker?.full_name || 'Worker'}
+                      size="sm"
+                      className="rounded-full"
+                    />
                     <div>
                       <div className="font-bold">{line.worker?.full_name}</div>
                       <div className="text-[10px] text-slate-400 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>

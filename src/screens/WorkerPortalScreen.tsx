@@ -8,6 +8,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianG
 import { dataService } from '../lib/dataService';
 import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess } from '../types';
 import { RateBiddingModal } from '../components/RateBiddingModal';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 export const WorkerPortalScreen: React.FC = () => {
   // Session Worker State
@@ -357,7 +358,7 @@ export const WorkerPortalScreen: React.FC = () => {
       id: rankItem.workerId,
       full_name: `Worker #${idx + 1}`,
       worker_code: `W-10${idx + 1}`,
-      photo_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      photo_url: null,
       section: 'Sewing',
     };
     return {
@@ -373,10 +374,11 @@ export const WorkerPortalScreen: React.FC = () => {
       {/* 1. WORKER ACCOUNT HEADER & LOGOUT */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
-          <img
-            src={currentWorker.photo_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
-            alt="Worker Avatar"
-            className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-md"
+          <WorkerAvatar
+            photoUrl={currentWorker.photo_url}
+            name={currentWorker.full_name}
+            size="2xl"
+            className="rounded-2xl border-2 border-indigo-500/50 shadow-md"
           />
           <div>
             <div className="flex items-center space-x-2">
@@ -732,10 +734,11 @@ export const WorkerPortalScreen: React.FC = () => {
               </div>
 
               <div className="flex items-center space-x-2.5">
-                <img
-                  src={item.worker.photo_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
-                  alt={item.worker.full_name}
-                  className="w-10 h-10 rounded-xl object-cover border border-slate-700"
+                <WorkerAvatar
+                  photoUrl={item.worker.photo_url}
+                  name={item.worker.full_name}
+                  size="md"
+                  className="rounded-xl"
                 />
                 <div>
                   <div className="text-xs font-bold text-white truncate max-w-[100px]">{item.worker.full_name}</div>

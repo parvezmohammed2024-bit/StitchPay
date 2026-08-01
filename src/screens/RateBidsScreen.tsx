@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { RateBid, UserRole, FactorySettings, Worker, GarmentProcess, ProductionEntry } from '../types';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 interface RateBidsScreenProps {
   role: UserRole;
@@ -238,13 +239,12 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                 {/* WORKER & PROCESS TOP HEADER */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
-                    {bid.worker_photo ? (
-                      <img src={bid.worker_photo} alt={bid.worker_name} className="w-11 h-11 rounded-full object-cover border border-slate-700" />
-                    ) : (
-                      <div className="w-11 h-11 rounded-full bg-slate-800 flex items-center justify-center text-slate-200 font-bold text-sm">
-                        {bid.worker_name?.substring(0, 2).toUpperCase()}
-                      </div>
-                    )}
+                    <WorkerAvatar
+                      photoUrl={bid.worker_photo}
+                      name={bid.worker_name || 'Worker'}
+                      size="lg"
+                      className="rounded-full"
+                    />
                     <div>
                       <div className="text-base font-bold text-white">{bid.worker_name}</div>
                       <div className="text-xs text-amber-400 font-medium">

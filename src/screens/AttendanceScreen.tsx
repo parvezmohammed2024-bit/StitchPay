@@ -3,6 +3,7 @@ import { CalendarCheck, Clock, AlertTriangle, CheckCircle, Save } from 'lucide-r
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { Worker, AttendanceRecord, UserRole } from '../types';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 interface AttendanceScreenProps {
   role: UserRole;
@@ -116,10 +117,11 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ role }) => {
             >
               {/* Worker Info */}
               <div className="flex items-center space-x-3">
-                <img
-                  src={worker.photo_url || ''}
-                  alt={worker.full_name}
-                  className="w-11 h-11 rounded-xl object-cover border border-slate-600 shrink-0"
+                <WorkerAvatar
+                  photoUrl={worker.photo_url}
+                  name={worker.full_name}
+                  size="lg"
+                  className="rounded-xl shrink-0"
                 />
                 <div>
                   <div className="font-bold text-white text-base">{worker.full_name}</div>

@@ -7,6 +7,7 @@ import {
 import { dataService, getLocalDateString } from '../lib/dataService';
 import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
 import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole } from '../types';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 interface DailySetupScreenProps {
   role?: UserRole;
@@ -528,17 +529,12 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                               >
                                 {/* WORKER INFO */}
                                 <div className="flex items-center space-x-3">
-                                  {assign.worker_photo ? (
-                                    <img 
-                                      src={assign.worker_photo} 
-                                      alt={assign.worker_name}
-                                      className="w-10 h-10 rounded-full object-cover border border-slate-700 shrink-0" 
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-bold shrink-0">
-                                      {assign.worker_name?.substring(0, 2).toUpperCase()}
-                                    </div>
-                                  )}
+                                  <WorkerAvatar
+                                    photoUrl={assign.worker_photo}
+                                    name={assign.worker_name || 'Worker'}
+                                    size="lg"
+                                    className="rounded-full shrink-0"
+                                  />
 
                                   <div>
                                     <div className="text-sm font-semibold text-white flex items-center space-x-2">
@@ -731,13 +727,12 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                       className="flex items-center justify-between bg-slate-800/80 hover:bg-slate-800 p-3 rounded-xl border border-slate-700/60 cursor-pointer transition"
                     >
                       <div className="flex items-center space-x-3">
-                        {worker.photo_url ? (
-                          <img src={worker.photo_url} alt={worker.full_name} className="w-9 h-9 rounded-full object-cover border border-slate-600" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-slate-200 font-bold">
-                            {worker.full_name.substring(0, 2).toUpperCase()}
-                          </div>
-                        )}
+                        <WorkerAvatar
+                          photoUrl={worker.photo_url}
+                          name={worker.full_name}
+                          size="md"
+                          className="rounded-full shrink-0"
+                        />
                         <div>
                           <div className="text-sm font-semibold text-white">{worker.full_name}</div>
                           <div className="text-xs text-slate-400">{worker.worker_code} • {worker.section || 'Sewing'}</div>

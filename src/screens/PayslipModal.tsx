@@ -2,6 +2,7 @@ import React from 'react';
 import { Shirt, Printer, Share2, X, CheckCircle2 } from 'lucide-react';
 import { PayrollLine, FactorySettings, PayrollPeriod } from '../types';
 import { useTranslation } from '../lib/i18n';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 interface PayslipModalProps {
   line: PayrollLine;
@@ -66,10 +67,11 @@ Deductions: ${currency}${line.deductions}
 
         {/* Worker Info */}
         <div className="flex items-center space-x-4 bg-slate-800/60 p-3 rounded-xl mb-4 border border-slate-700/60">
-          <img
-            src={worker?.photo_url || ''}
-            alt={worker?.full_name}
-            className="w-12 h-12 rounded-xl object-cover border border-slate-600"
+          <WorkerAvatar
+            photoUrl={worker?.photo_url}
+            name={worker?.full_name || 'Worker'}
+            size="xl"
+            className="rounded-xl"
           />
           <div>
             <div className="font-bold text-base text-white">{worker?.full_name}</div>

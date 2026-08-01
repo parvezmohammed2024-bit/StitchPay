@@ -7,6 +7,8 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianG
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { ProductionEntry, GarmentStyle, Worker, FactorySettings, DailyAssignment, GarmentProcess } from '../types';
+import { WorkerAvatar } from '../components/WorkerAvatar';
+import { StyleImage } from '../components/StyleImage';
 
 export const DashboardScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -305,13 +307,12 @@ export const DashboardScreen: React.FC = () => {
                 {notStartedList.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
                     <div className="flex items-center space-x-3">
-                      {item.worker?.photo_url ? (
-                        <img src={item.worker.photo_url} alt={item.worker.full_name} className="w-9 h-9 rounded-full object-cover border border-slate-600" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold">
-                          {item.worker?.full_name.substring(0, 2)}
-                        </div>
-                      )}
+                      <WorkerAvatar
+                        photoUrl={item.worker?.photo_url}
+                        name={item.worker?.full_name || 'Worker'}
+                        size="md"
+                        className="rounded-full"
+                      />
                       <div>
                         <div className="text-xs font-bold text-white">{item.worker?.full_name}</div>
                         <div className="text-[11px] text-amber-400 font-medium">
@@ -401,10 +402,11 @@ export const DashboardScreen: React.FC = () => {
                   >
                     <div className="flex items-center space-x-3">
                       <div className="relative">
-                        <img 
-                          src={item.worker?.photo_url || ''} 
-                          alt={item.worker?.full_name} 
-                          className="w-10 h-10 rounded-full object-cover border border-slate-600"
+                        <WorkerAvatar
+                          photoUrl={item.worker?.photo_url}
+                          name={item.worker?.full_name || 'Worker'}
+                          size="lg"
+                          className="rounded-full"
                         />
                         <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-950 ${
                           idx === 0 ? 'bg-amber-400' : idx === 1 ? 'bg-slate-300' : idx === 2 ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300'
@@ -454,10 +456,10 @@ export const DashboardScreen: React.FC = () => {
               <div key={style.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center space-x-3">
-                    <img 
-                      src={style.image_url || ''} 
-                      alt={style.name} 
-                      className="w-12 h-12 rounded-lg object-cover border border-slate-600"
+                    <StyleImage
+                      imageUrl={style.image_url}
+                      styleName={style.name}
+                      className="w-12 h-12 rounded-lg object-cover"
                     />
                     <div>
                       <h4 className="font-bold text-sm text-white">{style.name}</h4>

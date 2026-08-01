@@ -11,6 +11,7 @@ import {
   FactorySettings, UserRole, DailyAssignment 
 } from '../types';
 import { DuplicateConfirmModal } from '../components/DuplicateConfirmModal';
+import { WorkerAvatar } from '../components/WorkerAvatar';
 
 interface QuickEntryScreenProps {
   role: UserRole;
@@ -390,17 +391,12 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             {/* WORKER PHOTO & INFO */}
                             <div className="flex items-center space-x-3">
-                              {worker?.photo_url ? (
-                                <img 
-                                  src={worker.photo_url} 
-                                  alt={worker.full_name} 
-                                  className="w-11 h-11 rounded-full object-cover border border-slate-700 shrink-0" 
-                                />
-                              ) : (
-                                <div className="w-11 h-11 rounded-full bg-slate-800 flex items-center justify-center text-slate-200 font-bold shrink-0">
-                                  {worker?.full_name.substring(0, 2).toUpperCase()}
-                                </div>
-                              )}
+                              <WorkerAvatar
+                                photoUrl={worker?.photo_url}
+                                name={worker?.full_name || 'Worker'}
+                                size="lg"
+                                className="rounded-full shrink-0"
+                              />
 
                               <div>
                                 <div className="text-sm font-bold text-white flex items-center space-x-2">

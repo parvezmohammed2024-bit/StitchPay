@@ -9,6 +9,8 @@ import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { showErrorToast, showSuccessToast } from '../lib/toast';
 import { GarmentStyle, GarmentProcess, UserRole, FactorySettings, ProductionEntry } from '../types';
+import { StyleImage } from '../components/StyleImage';
+import { StyleImageUploader } from '../components/StyleImageUploader';
 
 interface StylesBuilderScreenProps {
   role: UserRole;
@@ -62,6 +64,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
   const [procForm, setProcForm] = useState<Partial<GarmentProcess>>({});
 
   // New Style Form
+  const [isUploadingStyleImage, setIsUploadingStyleImage] = useState(false);
   const [styleForm, setStyleForm] = useState<Partial<GarmentStyle>>({
     name: '',
     style_code: '',
@@ -70,7 +73,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     start_date: new Date().toISOString().split('T')[0],
     target_ship_date: '',
     status: 'upcoming',
-    image_url: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&auto=format&fit=crop&q=80',
+    image_url: null,
   });
 
   const isOwnerAdmin = role === 'admin';
@@ -142,7 +145,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
         start_date: new Date().toISOString().split('T')[0],
         target_ship_date: '',
         status: 'upcoming',
-        image_url: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&auto=format&fit=crop&q=80',
+        image_url: null,
       });
       setSelectedStyle(saved);
       await loadData();
@@ -449,10 +452,10 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
           >
             {/* Top Row: Code, Status Badge, Image, Title */}
             <div className="flex space-x-3">
-              <img
-                src={st.image_url || 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&auto=format&fit=crop&q=80'}
-                alt={st.name}
-                className="w-16 h-16 rounded-2xl object-cover border border-slate-700 shrink-0"
+              <StyleImage
+                imageUrl={st.image_url}
+                styleName={st.name}
+                className="w-16 h-16 rounded-2xl object-cover"
               />
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center justify-between gap-1">
@@ -1056,10 +1059,10 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 {historyStyles.map(st => (
                   <div key={st.id} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
                     <div className="flex space-x-3">
-                      <img
-                        src={st.image_url || 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&auto=format&fit=crop&q=80'}
-                        alt={st.name}
-                        className="w-14 h-14 rounded-xl object-cover border border-slate-800 shrink-0"
+                      <StyleImage
+                        imageUrl={st.image_url}
+                        styleName={st.name}
+                        className="w-14 h-14 rounded-xl object-cover"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
@@ -1330,6 +1333,16 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
             </div>
 
             <form onSubmit={handleSaveStyle} className="space-y-3">
+              {/* Image Uploader */}
+              <div className="pb-2 border-b border-slate-800">
+                <StyleImageUploader
+                  currentImageUrl={styleForm.image_url}
+                  styleCode={styleForm.style_code || 'STYLE'}
+                  onImageChanged={(url) => setStyleForm(prev => ({ ...prev, image_url: url }))}
+                  onUploadingStateChange={setIsUploadingStyleImage}
+                />
+              </div>
+
               <div>
                 <label className="text-xs text-slate-400 block font-medium">Style Name *</label>
                 <input
@@ -1423,9 +1436,17 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg"
+                  disabled={isUploadingStyleImage}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg flex items-center justify-center space-x-2"
                 >
-                  Create Style Order
+                  {isUploadingStyleImage ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Uploading Image...</span>
+                    </>
+                  ) : (
+                    <span>Create Style Order</span>
+                  )}
                 </button>
               </div>
             </form>

@@ -112,22 +112,10 @@ export default function App() {
               <div>
                 <span className="font-black text-sm text-white tracking-tight">{settings?.factory_name || 'StitchPay Garments Ltd.'}</span>
                 <span className="text-[10px] bg-sky-500/20 text-sky-400 font-bold px-2 py-0.5 rounded-full ml-2 border border-sky-500/30">
-                  Worker Portal (/worker)
+                  Worker Portal
                 </span>
               </div>
             </div>
-
-            <a
-              href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                window.history.pushState({}, '', '/');
-                setPathname('/');
-              }}
-              className="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 font-medium transition-all"
-            >
-              ← Admin App
-            </a>
           </header>
 
           <main className="flex-1 overflow-y-auto">

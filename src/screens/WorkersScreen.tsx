@@ -9,6 +9,8 @@ import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { showErrorToast, showSuccessToast } from '../lib/toast';
 import { Worker, ProductionEntry, AttendanceRecord, Adjustment, FactorySettings, UserRole } from '../types';
+import { WorkerAvatar } from '../components/WorkerAvatar';
+import { WorkerPhotoUploader } from '../components/WorkerPhotoUploader';
 
 interface WorkersScreenProps {
   role: UserRole;
@@ -29,6 +31,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
   // Add / Edit Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [workerForm, setWorkerForm] = useState<{
     worker_code: string;
     full_name: string;
@@ -37,7 +40,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     line_no: string;
     payment_method: 'cash' | 'bank' | 'mobile_wallet';
     payment_details: Record<string, any>;
-    photo_url: string;
+    photo_url: string | null;
     pin?: string;
   }>({
     worker_code: '',
@@ -47,7 +50,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     line_no: 'Line-01',
     payment_method: 'mobile_wallet',
     payment_details: { provider: 'bKash', account: '' },
-    photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    photo_url: null,
     pin: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
@@ -125,7 +128,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       line_no: 'Line-01',
       payment_method: 'mobile_wallet',
       payment_details: { provider: 'bKash', account: '' },
-      photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      photo_url: null,
       pin: '',
     });
     setFormError(null);
@@ -142,7 +145,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       line_no: worker.line_no || 'Line-01',
       payment_method: worker.payment_method || 'mobile_wallet',
       payment_details: worker.payment_details || { provider: 'bKash', account: '' },
-      photo_url: worker.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      photo_url: worker.photo_url || null,
       pin: '',
     });
     setFormError(null);
@@ -413,10 +416,11 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
             >
               <div>
                 <div className="flex items-start space-x-3.5">
-                  <img
-                    src={worker.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
-                    alt={worker.full_name}
-                    className="w-14 h-14 rounded-2xl object-cover border-2 border-slate-700 shrink-0 shadow-md"
+                  <WorkerAvatar
+                    photoUrl={worker.photo_url}
+                    name={worker.full_name}
+                    size="xl"
+                    className="rounded-2xl"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
@@ -516,10 +520,11 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
               {/* Profile Header */}
               <div className="flex items-start space-x-4 border-b border-slate-800 pb-5">
-                <img
-                  src={selectedWorker.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
-                  alt={selectedWorker.full_name}
-                  className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500 shadow-md shrink-0"
+                <WorkerAvatar
+                  photoUrl={selectedWorker.photo_url}
+                  name={selectedWorker.full_name}
+                  size="2xl"
+                  className="rounded-2xl"
                 />
                 <div className="flex-1 min-w-0 pr-6">
                   <div className="flex items-center space-x-2 flex-wrap gap-y-1">
@@ -675,6 +680,17 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
             )}
 
             <form onSubmit={handleSaveWorker} className="space-y-4">
+              {/* Photo Uploader */}
+              <div className="pb-2 border-b border-slate-800">
+                <WorkerPhotoUploader
+                  currentPhotoUrl={workerForm.photo_url}
+                  workerCode={workerForm.worker_code}
+                  workerName={workerForm.full_name}
+                  onPhotoChanged={(url) => setWorkerForm(prev => ({ ...prev, photo_url: url }))}
+                  onUploadingStateChange={setIsUploadingPhoto}
+                />
+              </div>
+
               {/* Worker Code (Required & Unique) */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1">
@@ -822,13 +838,18 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={savingWorker}
+                  disabled={savingWorker || isUploadingPhoto}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center space-x-2"
                 >
                   {savingWorker ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
                       <span>Saving...</span>
+                    </>
+                  ) : isUploadingPhoto ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Uploading Photo...</span>
                     </>
                   ) : (
                     <span>{editingWorker ? 'Update Worker' : 'Save Worker'}</span>
