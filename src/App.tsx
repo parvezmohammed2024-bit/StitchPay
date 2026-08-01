@@ -180,7 +180,7 @@ export default function App() {
             {activeScreen === 'dailySetup' && <DailySetupScreen role={role} />}
             {activeScreen === 'quickEntry' && <QuickEntryScreen role={role} />}
             {activeScreen === 'deliveries' && <DeliveriesScreen />}
-            {activeScreen === 'bulkGrid' && <BulkGridScreen role={role} />}
+            {activeScreen === 'bulkGrid' && <BulkGridScreen role={role} onNavigate={(scr) => setActiveScreen(scr)} />}
             {activeScreen === 'rateBids' && <RateBidsScreen role={role} />}
             {activeScreen === 'styles' && <StylesBuilderScreen role={role} />}
             {activeScreen === 'workers' && <WorkersScreen role={role} />}
