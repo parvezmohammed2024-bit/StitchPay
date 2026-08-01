@@ -78,7 +78,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
       ]);
 
       setAssignments(assignList);
-      setStyles(stList);
+      setStyles(stList.filter(s => !s.status || s.status.toLowerCase() === 'active'));
       setProcesses(procList);
       setWorkers(wList);
       setEntries(entryList);

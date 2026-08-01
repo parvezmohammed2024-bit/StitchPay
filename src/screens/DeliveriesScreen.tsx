@@ -4,6 +4,7 @@ import {
   BarChart3, CheckCircle2, RefreshCw, FileText, ArrowRight, ShieldAlert, X
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
+import { showErrorToast } from '../lib/toast';
 import { GarmentStyle, DeliveryReport } from '../types';
 
 export const DeliveriesScreen: React.FC = () => {
@@ -31,16 +32,21 @@ export const DeliveriesScreen: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const [stList, delList] = await Promise.all([
-      dataService.getStyles(),
-      dataService.getDeliveries(selectedStyleId === 'all' ? undefined : selectedStyleId),
-    ]);
-    setStyles(stList);
-    setDeliveries(delList);
-    setLoading(false);
+    try {
+      const [stList, delList] = await Promise.all([
+        dataService.getStyles(),
+        dataService.getDeliveries(selectedStyleId === 'all' ? undefined : selectedStyleId),
+      ]);
+      setStyles(stList);
+      setDeliveries(delList);
 
-    if (stList.length > 0 && !modalStyleId) {
-      setModalStyleId(stList[0].id);
+      if (stList.length > 0 && !modalStyleId) {
+        setModalStyleId(stList[0].id);
+      }
+    } catch (err: any) {
+      showErrorToast(`Failed to load deliveries data: ${err.message || String(err)}`);
+    } finally {
+      setLoading(false);
     }
   };
 

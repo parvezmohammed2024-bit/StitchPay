@@ -6,6 +6,7 @@ import {
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
+import { showErrorToast } from '../lib/toast';
 import { Worker, ProductionEntry, AttendanceRecord, Adjustment, FactorySettings, UserRole } from '../types';
 
 interface WorkersScreenProps {
@@ -43,18 +44,22 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
   }, []);
 
   const loadData = async () => {
-    const [wList, eList, aList, adjList, setRes] = await Promise.all([
-      dataService.getWorkers(),
-      dataService.getProductionEntries(),
-      dataService.getAttendance(),
-      dataService.getAdjustments(),
-      dataService.getSettings(),
-    ]);
-    setWorkers(wList);
-    setEntries(eList);
-    setAttendance(aList);
-    setAdjustments(adjList);
-    setSettings(setRes);
+    try {
+      const [wList, eList, aList, adjList, setRes] = await Promise.all([
+        dataService.getWorkers(),
+        dataService.getProductionEntries(),
+        dataService.getAttendance(),
+        dataService.getAdjustments(),
+        dataService.getSettings(),
+      ]);
+      setWorkers(wList);
+      setEntries(eList);
+      setAttendance(aList);
+      setAdjustments(adjList);
+      setSettings(setRes);
+    } catch (err: any) {
+      showErrorToast(`Failed to load workers data: ${err.message || String(err)}`);
+    }
   };
 
   const handleSaveWorker = async (e: React.FormEvent) => {

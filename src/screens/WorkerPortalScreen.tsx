@@ -1,127 +1,135 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  UserCheck, Clock, MapPin, Play, Pause, Square, Lock, Unlock, 
-  Banknote, TrendingUp, Scissors, CheckCircle2, ShieldCheck, 
-  Smartphone, Mail, UserPlus, AlertCircle, RefreshCw, Zap, Award, ChevronRight, Truck, BarChart3,
-  DollarSign, Send, Crown, Trophy, Sparkles, Calendar, Layers
+  UserCheck, Clock, Pause, Square, Scissors, TrendingUp, CheckCircle2, 
+  Zap, Trophy, Calendar, Crown, DollarSign, LogOut, Key, ShieldAlert,
+  ArrowRight, AlertCircle, RefreshCw
 } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { dataService } from '../lib/dataService';
 import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess } from '../types';
-import { TimeClockModal } from '../components/TimeClockModal';
 import { RateBiddingModal } from '../components/RateBiddingModal';
 
 export const WorkerPortalScreen: React.FC = () => {
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string>(dataService.getActiveWorkerId());
+  // Session Worker State
   const [currentWorker, setCurrentWorker] = useState<Worker | null>(null);
-  
-  // Attendance / Clock State
+
+  // Login Form State
+  const [workerCodeInput, setWorkerCodeInput] = useState<string>('W-001');
+  const [pinInput, setPinInput] = useState<string>('1111');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState<boolean>(false);
+
+  // Portal Data State
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [assignedWorks, setAssignedWorks] = useState<DailyAssignment[]>([]);
   const [todayEntries, setTodayEntries] = useState<ProductionEntry[]>([]);
   const [allPeriodEntries, setAllPeriodEntries] = useState<ProductionEntry[]>([]);
   const [allEntries, setAllEntries] = useState<ProductionEntry[]>([]);
-  const [styles, setStyles] = useState<GarmentStyle[]>([]);
-  const [processes, setProcesses] = useState<GarmentProcess[]>([]);
+  const [workersList, setWorkersList] = useState<Worker[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // Modals
-  const [isTimeClockOpen, setIsTimeClockOpen] = useState(false);
+  // Modals & Forms
   const [biddingAssignment, setBiddingAssignment] = useState<DailyAssignment | null>(null);
-
-  // Quick Production Entry Modal
   const [entryQty, setEntryQty] = useState<string>('');
   const [selectedWork, setSelectedWork] = useState<DailyAssignment | null>(null);
   const [submittingEntry, setSubmittingEntry] = useState<boolean>(false);
+  const [clockMessage, setClockMessage] = useState<string | null>(null);
 
-  // Location state
-  const [geoLoc, setGeoLoc] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
-  const [locLoading, setLocLoading] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-
+  // Check existing session on mount
   useEffect(() => {
-    loadWorkerData();
-    requestLocation();
-  }, [selectedWorkerId]);
+    initSession();
+  }, []);
 
-  const requestLocation = () => {
-    if ('geolocation' in navigator) {
-      setLocLoading(true);
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGeoLoc({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-          });
-          setLocLoading(false);
-        },
-        () => {
-          setLocLoading(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
+  const initSession = async () => {
+    setLoading(true);
+    const savedWorkerId = sessionStorage.getItem('stitchpay_worker_id');
+    const allWrks = await dataService.getWorkers();
+    setWorkersList(allWrks);
+
+    if (savedWorkerId) {
+      const match = allWrks.find(w => w.id === savedWorkerId);
+      if (match) {
+        setCurrentWorker(match);
+        await loadWorkerData(match.id);
+      } else {
+        sessionStorage.removeItem('stitchpay_worker_id');
+      }
+    }
+    setLoading(false);
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workerCodeInput.trim() || !pinInput.trim()) {
+      setLoginError('Please enter both Worker Code and 4-digit PIN');
+      return;
+    }
+
+    setLoggingIn(true);
+    setLoginError(null);
+
+    try {
+      const verified = await dataService.verifyWorkerPin(workerCodeInput, pinInput);
+      if (verified) {
+        sessionStorage.setItem('stitchpay_worker_id', verified.id);
+        setCurrentWorker(verified);
+        await loadWorkerData(verified.id);
+      } else {
+        setLoginError('Invalid Worker Code or PIN. Please try again.');
+      }
+    } catch (err: any) {
+      setLoginError(err?.message || 'Login failed. Please check credentials.');
+    } finally {
+      setLoggingIn(false);
     }
   };
 
-  const loadWorkerData = async () => {
+  const handleLogout = () => {
+    sessionStorage.removeItem('stitchpay_worker_id');
+    setCurrentWorker(null);
+    setTodayAttendance(null);
+    setAssignedWorks([]);
+    setTodayEntries([]);
+    setAllPeriodEntries([]);
+  };
+
+  const loadWorkerData = async (workerId: string) => {
     setLoading(true);
     const todayStr = new Date().toISOString().split('T')[0];
 
-    const [wrkList, attList, assignList, entryList, stList, procList] = await Promise.all([
+    const [wrkList, attList, assignList, entryList] = await Promise.all([
       dataService.getWorkers(),
       dataService.getAttendance(todayStr),
       dataService.getDailyAssignments(todayStr),
       dataService.getProductionEntries(),
-      dataService.getStyles(),
-      dataService.getProcesses(),
     ]);
 
-    setWorkers(wrkList);
-    setStyles(stList);
-    setProcesses(procList);
+    setWorkersList(wrkList);
     setAllEntries(entryList);
 
-    const activeW = wrkList.find(w => w.id === selectedWorkerId) || wrkList[0];
-    if (activeW) {
-      setCurrentWorker(activeW);
-      dataService.setActiveWorkerId(activeW.id);
+    // Filter data strictly by workerId
+    const att = attList.find(a => a.worker_id === workerId) || null;
+    setTodayAttendance(att);
 
-      // Attendance
-      const att = attList.find(a => a.worker_id === activeW.id) || null;
-      setTodayAttendance(att);
+    const myWorks = assignList.filter(a => a.worker_id === workerId);
+    setAssignedWorks(myWorks);
 
-      // Works
-      const myWorks = assignList.filter(a => a.worker_id === activeW.id);
-      setAssignedWorks(myWorks);
-
-      // Entries
-      const myTodayEntries = entryList.filter(e => e.worker_id === activeW.id && e.entry_date === todayStr);
-      setTodayEntries(myTodayEntries);
-      setAllPeriodEntries(entryList.filter(e => e.worker_id === activeW.id));
-    }
+    const myTodayEntries = entryList.filter(e => e.worker_id === workerId && e.entry_date === todayStr);
+    setTodayEntries(myTodayEntries);
+    setAllPeriodEntries(entryList.filter(e => e.worker_id === workerId));
 
     setLoading(false);
-  };
-
-  const [clockMessage, setClockMessage] = useState<string | null>(null);
-
-  const handleWorkerSwitch = (workerId: string) => {
-    setSelectedWorkerId(workerId);
   };
 
   // Clock Actions
   const handleClockIn = async () => {
     if (!currentWorker) return;
     try {
-      const att = await dataService.clockInWorker(
-        currentWorker.id,
-        geoLoc ? { lat: geoLoc.lat, lng: geoLoc.lng } : undefined
-      );
+      const att = await dataService.clockInWorker(currentWorker.id);
       setTodayAttendance(att);
-      setClockMessage(`✅ Clocked In successfully at ${att.in_time || new Date().toLocaleTimeString()}! Floor work unlocked.`);
+      setClockMessage(`✅ Clocked In successfully at ${att.in_time || new Date().toLocaleTimeString()}!`);
       setTimeout(() => setClockMessage(null), 5000);
-      await loadWorkerData();
+      await loadWorkerData(currentWorker.id);
     } catch (err: any) {
       alert(err.message || 'Failed to clock in');
     }
@@ -138,7 +146,7 @@ export const WorkerPortalScreen: React.FC = () => {
           : `▶️ Break ended at ${att.break_end_time || new Date().toLocaleTimeString()}. Welcome back to work!`
       );
       setTimeout(() => setClockMessage(null), 5000);
-      await loadWorkerData();
+      await loadWorkerData(currentWorker.id);
     } catch (err: any) {
       alert(err.message || 'Failed to toggle break');
     }
@@ -147,14 +155,11 @@ export const WorkerPortalScreen: React.FC = () => {
   const handleClockOut = async () => {
     if (!currentWorker) return;
     try {
-      const att = await dataService.clockOutWorker(
-        currentWorker.id,
-        geoLoc ? { lat: geoLoc.lat, lng: geoLoc.lng } : undefined
-      );
+      const att = await dataService.clockOutWorker(currentWorker.id);
       setTodayAttendance(att);
       setClockMessage(`🛑 Clocked Out successfully at ${att.out_time || new Date().toLocaleTimeString()}. Shift ended.`);
       setTimeout(() => setClockMessage(null), 5000);
-      await loadWorkerData();
+      await loadWorkerData(currentWorker.id);
     } catch (err: any) {
       alert(err.message || 'Failed to clock out');
     }
@@ -162,7 +167,6 @@ export const WorkerPortalScreen: React.FC = () => {
 
   // Submit Rate Bid
   const handleSubmitBid = async (assignmentId: string, proposedRate: number, reason: string) => {
-    // Save bid note/agreed rate update
     const assignment = assignedWorks.find(a => a.id === assignmentId);
     if (assignment) {
       assignment.agreed_rate = proposedRate;
@@ -194,7 +198,7 @@ export const WorkerPortalScreen: React.FC = () => {
 
       setSelectedWork(null);
       setEntryQty('');
-      await loadWorkerData();
+      await loadWorkerData(currentWorker.id);
     } catch (err: any) {
       alert(err.message || 'Failed to submit production');
     } finally {
@@ -202,7 +206,102 @@ export const WorkerPortalScreen: React.FC = () => {
     }
   };
 
-  // Calculations
+  // --- WORKER PIN LOGIN SCREEN ---
+  if (!currentWorker) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto shadow-inner">
+              <UserCheck className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">Worker Portal</h1>
+            <p className="text-xs text-slate-400">Enter your Worker Code and 4-digit PIN to access your account</p>
+          </div>
+
+          {loginError && (
+            <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-3.5 text-xs text-rose-300 font-medium flex items-center space-x-2">
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+                Worker Code
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={workerCodeInput}
+                  onChange={(e) => setWorkerCodeInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. W-001"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-white focus:outline-none focus:border-indigo-500 uppercase"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+                4-Digit PIN
+              </label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  maxLength={4}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  placeholder="e.g. 1111"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-lg font-mono tracking-widest font-bold text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loggingIn}
+              className="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all active:scale-98 flex items-center justify-center space-x-2"
+            >
+              {loggingIn ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Verifying PIN...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In to Worker Portal</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Test Credentials Box */}
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1.5 text-xs text-slate-400">
+            <div className="font-bold text-slate-300 flex items-center space-x-1.5">
+              <Key className="w-3.5 h-3.5 text-amber-400" />
+              <span>Test Credentials:</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+              <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block">Worker 1:</span>
+                <span className="font-mono text-amber-400 font-bold">W-001</span> / <span className="font-mono text-amber-400 font-bold">1111</span>
+              </div>
+              <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block">Worker 2:</span>
+                <span className="font-mono text-amber-400 font-bold">W-002</span> / <span className="font-mono text-amber-400 font-bold">2222</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- LOGGED-IN WORKER DASHBOARD VIEW ---
   const isClockedIn = todayAttendance?.status === 'present' && !!todayAttendance.in_time && !todayAttendance.out_time;
   const isOnBreak = todayAttendance?.is_on_break || false;
 
@@ -211,7 +310,7 @@ export const WorkerPortalScreen: React.FC = () => {
 
   const totalPeriodEarningsBDT = allPeriodEntries.reduce((sum, e) => sum + e.amount, 0);
   const totalPeriodOutputPcs = allPeriodEntries.reduce((sum, e) => sum + e.qty_ok, 0);
-  const outstandingAdvanceBDT = currentWorker?.outstanding_advance || 0;
+  const outstandingAdvanceBDT = currentWorker.outstanding_advance || 0;
   const netReceivableBDT = Math.max(0, totalPeriodEarningsBDT - outstandingAdvanceBDT);
 
   // Compute Last 7 Days Production Breakdown
@@ -246,13 +345,13 @@ export const WorkerPortalScreen: React.FC = () => {
     .map(([wId, totals]) => ({ workerId: wId, ...totals }))
     .sort((a, b) => b.totalAmt - a.totalAmt);
 
-  const workerRankIndex = sortedWorkerRankings.findIndex(item => item.workerId === currentWorker?.id);
+  const workerRankIndex = sortedWorkerRankings.findIndex(item => item.workerId === currentWorker.id);
   const currentRank = workerRankIndex >= 0 ? workerRankIndex + 1 : 1;
-  const totalRankedWorkers = Math.max(workers.length, sortedWorkerRankings.length);
+  const totalRankedWorkers = Math.max(workersList.length, sortedWorkerRankings.length);
 
   // Top 5 Performers Leaderboard
   const topPerformers = sortedWorkerRankings.slice(0, 5).map((rankItem, idx) => {
-    const w = workers.find(work => work.id === rankItem.workerId) || {
+    const w = workersList.find(work => work.id === rankItem.workerId) || {
       id: rankItem.workerId,
       full_name: `Worker #${idx + 1}`,
       worker_code: `W-10${idx + 1}`,
@@ -269,25 +368,25 @@ export const WorkerPortalScreen: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-28 animate-fade-in">
-      {/* 1. WORKER ACCOUNT HEADER & SWITCHER */}
+      {/* 1. WORKER ACCOUNT HEADER & LOGOUT */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
           <img
-            src={currentWorker?.photo_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
+            src={currentWorker.photo_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
             alt="Worker Avatar"
             className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-md"
           />
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-xl sm:text-2xl font-black text-white">{currentWorker?.full_name}</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-white">{currentWorker.full_name}</h1>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono border border-indigo-500/30 font-bold">
-                {currentWorker?.worker_code}
+                {currentWorker.worker_code}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-              <span>Section: <strong className="text-slate-200">{currentWorker?.section || 'Sewing'}</strong></span>
+              <span>Section: <strong className="text-slate-200">{currentWorker.section || 'Sewing'}</strong></span>
               <span>•</span>
-              <span>Line: <strong className="text-slate-200">{currentWorker?.line_no || 'Line-01'}</strong></span>
+              <span>Line: <strong className="text-slate-200">{currentWorker.line_no || 'Line-01'}</strong></span>
               <span>•</span>
               <span className="text-amber-400 font-bold flex items-center gap-1">
                 <Trophy className="w-3.5 h-3.5" /> Rank #{currentRank} of {totalRankedWorkers}
@@ -296,24 +395,17 @@ export const WorkerPortalScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Worker Account Selector Dropdown */}
-        <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-2xl border border-slate-800 self-start md:self-center">
-          <span className="text-xs text-slate-400 font-medium pl-2 hidden sm:block">Switch Worker:</span>
-          <select
-            value={selectedWorkerId}
-            onChange={(e) => handleWorkerSwitch(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
-          >
-            {workers.map(w => (
-              <option key={w.id} value={w.id}>
-                {w.worker_code} - {w.full_name} ({w.section || 'Sewing'})
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Sign Out Button */}
+        <button
+          onClick={handleLogout}
+          className="flex items-center space-x-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all self-start md:self-center"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sign Out</span>
+        </button>
       </div>
 
-      {/* 2. TIME CLOCK CARD (Matching Image 1 UI Specs) */}
+      {/* 2. SHIFT TIME & ATTENDANCE CLOCK (NO GPS / LOCATION) */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
           <div className="flex items-center space-x-3.5">
@@ -339,20 +431,8 @@ export const WorkerPortalScreen: React.FC = () => {
               <p className="text-xs text-slate-400 mt-0.5">
                 {isClockedIn 
                   ? `Clocked In at: ${todayAttendance?.in_time || '08:00 AM'}` 
-                  : 'Click Clock In to view interactive mobile time clock & confirm shift'}
+                  : 'Click Clock In Now to record your shift start'}
               </p>
-            </div>
-          </div>
-
-          {/* Location Badge */}
-          <div className="flex items-center space-x-2 text-xs bg-slate-950 px-3.5 py-2 rounded-2xl border border-slate-800 self-start sm:self-center">
-            <MapPin className="w-4 h-4 text-purple-400 shrink-0" />
-            <div className="text-[11px] font-medium text-slate-300">
-              {geoLoc ? (
-                <span>GPS: {geoLoc.lat.toFixed(3)}, {geoLoc.lng.toFixed(3)} <span className="text-emerald-400 font-mono">(Verified)</span></span>
-              ) : (
-                <span>Dhaka Garments Zone #1</span>
-              )}
             </div>
           </div>
         </div>
@@ -365,15 +445,16 @@ export const WorkerPortalScreen: React.FC = () => {
           </div>
         )}
 
-        {/* Punch Clock Main Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
-          {/* Direct Clock In Button */}
+        {/* Attendance Action Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          {/* Clock In */}
           <button
-            onClick={isClockedIn ? () => setIsTimeClockOpen(true) : handleClockIn}
+            onClick={handleClockIn}
+            disabled={isClockedIn}
             className={`py-3.5 px-5 rounded-2xl font-black text-xs sm:text-sm shadow-xl transition-all flex items-center justify-center space-x-2.5 ${
               isClockedIn
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-emerald-500/30 hover:scale-[1.02]'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/30 hover:scale-[1.02]'
             }`}
           >
             <Clock className="w-4 h-4" />
@@ -409,55 +490,29 @@ export const WorkerPortalScreen: React.FC = () => {
             <Square className="w-4 h-4 fill-current" />
             <span>Clock Out</span>
           </button>
-
-          {/* Open Mobile Time Clock Modal */}
-          <button
-            onClick={() => setIsTimeClockOpen(true)}
-            className="py-3.5 px-4 rounded-2xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30 shadow-md transition-all flex items-center justify-center space-x-2"
-          >
-            <MapPin className="w-4 h-4 text-purple-400" />
-            <span>GPS & Photo Clock</span>
-          </button>
         </div>
       </div>
 
-      {/* 3. ASSIGNED WORK WITH APPROVED PRICE OR BIDDING OPTION */}
+      {/* 3. ASSIGNED OPERATIONS & PIECE RATES (NO CLOCK-IN GATE REQUIRED) */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-0">
         <div className="p-5 border-b border-slate-800 bg-slate-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-black text-white flex items-center space-x-2">
               <Scissors className="w-5 h-5 text-amber-400" />
-              <span>Today's Assigned Operations & Price Bidding ({assignedWorks.length})</span>
+              <span>Assigned Operations & Piece Rates ({assignedWorks.length})</span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Assigned operations with approved piece rate or bid options
+              Operations assigned to you with target quantities and approved piece rates
             </p>
           </div>
         </div>
 
-        {!isClockedIn ? (
-          /* Locked State when not clocked in */
-          <div className="p-8 text-center bg-slate-950/60 space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
-              <Lock className="w-7 h-7" />
-            </div>
-            <h3 className="text-base font-bold text-white">Assigned Works Locked</h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Please clock in to unlock today's assigned line operations, target quotas, and price rates.
-            </p>
-            <button
-              onClick={handleClockIn}
-              className="mt-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-6 py-3 rounded-2xl text-xs shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
-            >
-              Clock In Now To Unlock
-            </button>
-          </div>
-        ) : assignedWorks.length === 0 ? (
+        {assignedWorks.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-xs">
             No line operations assigned to you today. Please check with line supervisor.
           </div>
         ) : (
-          /* Unlocked Assigned Works List */
+          /* Assigned Works List available directly without clocking in */
           <div className="divide-y divide-slate-800/80">
             {assignedWorks.map(work => {
               const myOutputForWork = todayEntries
@@ -480,7 +535,7 @@ export const WorkerPortalScreen: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
                       <span>Style: <strong className="text-slate-200">{work.style_name}</strong></span>
                       <span>Target: <strong className="text-slate-200">{targetQty} pcs</strong></span>
-                      <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                      <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
                         Approved Rate: ৳{work.agreed_rate}/pc
                       </span>
                     </div>
@@ -522,7 +577,7 @@ export const WorkerPortalScreen: React.FC = () => {
         )}
       </div>
 
-      {/* 4. TILL NOW EARNING & PRODUCTION GRAPH WITH RANKING */}
+      {/* 4. EARNINGS & PRODUCTION GRAPH WITH RANKING */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
           <div>
@@ -530,7 +585,7 @@ export const WorkerPortalScreen: React.FC = () => {
               <TrendingUp className="w-5 h-5 text-indigo-400" />
               <span>Production Output & Earnings Till Now</span>
             </h2>
-            <p className="text-xs text-slate-400">Overall cumulative piece output & rate pay earnings graph</p>
+            <p className="text-xs text-slate-400">Cumulative piece output & rate pay earnings graph</p>
           </div>
 
           {/* Ranking Badge */}
@@ -702,17 +757,6 @@ export const WorkerPortalScreen: React.FC = () => {
       </div>
 
       {/* MODALS */}
-      {/* Time Clock Modal */}
-      <TimeClockModal
-        isOpen={isTimeClockOpen}
-        onClose={() => setIsTimeClockOpen(false)}
-        worker={currentWorker}
-        attendance={todayAttendance}
-        geoLoc={geoLoc}
-        onConfirmClockIn={handleClockIn}
-        onConfirmClockOut={handleClockOut}
-      />
-
       {/* Rate Bidding Modal */}
       <RateBiddingModal
         isOpen={Boolean(biddingAssignment)}

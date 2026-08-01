@@ -51,7 +51,9 @@ export interface GarmentStyle {
   image_url: string | null;
   order_qty: number;
   target_ship_date: string | null;
-  status: 'active' | 'completed' | 'archived';
+  start_date?: string | null;
+  status: 'upcoming' | 'active' | 'completed' | 'archived';
+  completed_at?: string | null;
   notes: string | null;
   created_at?: string;
   // Computed
@@ -162,12 +164,6 @@ export interface AttendanceRecord {
   break_end_time?: string | null;
   is_on_break?: boolean;
   ot_hours: number;
-  clock_in_lat?: number | null;
-  clock_in_lng?: number | null;
-  clock_in_address?: string | null;
-  clock_out_lat?: number | null;
-  clock_out_lng?: number | null;
-  clock_out_address?: string | null;
   created_at?: string;
 }
 

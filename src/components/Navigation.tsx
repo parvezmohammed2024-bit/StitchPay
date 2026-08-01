@@ -32,11 +32,10 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
   const { t } = useTranslation();
 
   const navItems = [
-    { id: 'workerPortal' as ScreenId, label: 'Worker Portal', icon: UserCheck, roles: ['worker', 'admin', 'supervisor'] },
     { id: 'dashboard' as ScreenId, label: t('navDashboard'), icon: LayoutDashboard, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'dailySetup' as ScreenId, label: 'Daily Line Setup', icon: Workflow, roles: ['admin', 'supervisor'] },
     { id: 'quickEntry' as ScreenId, label: t('navQuickEntry'), icon: Zap, roles: ['admin', 'supervisor'] },
-    { id: 'deliveries' as ScreenId, label: 'Delivery Reports', icon: Truck, roles: ['admin', 'supervisor', 'accounts', 'worker'] },
+    { id: 'deliveries' as ScreenId, label: 'Delivery Reports', icon: Truck, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'rateBids' as ScreenId, label: 'Rate Approvals', icon: BadgePercent, roles: ['admin', 'supervisor'] },
     { id: 'styles' as ScreenId, label: t('navStyles'), icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'workers' as ScreenId, label: t('navWorkers'), icon: Users, roles: ['admin', 'supervisor', 'accounts'] },

@@ -119,57 +119,61 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Role Switcher Pills (Hidden on Worker Portal) */}
           {!hideAdminControls && (
-            <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-[11px]">
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400 ml-1 hidden xs:block" />
-              
-              <button
-                onClick={() => onRoleChange('admin')}
-                className={`px-2 py-1 rounded-lg transition-all font-medium ${
-                  currentRole === 'admin'
-                    ? 'bg-indigo-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Full Admin access"
-              >
-                Admin
-              </button>
+            <div className="flex items-center space-x-1">
+              <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-[11px]">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 ml-1 hidden xs:block" />
+                
+                <button
+                  onClick={() => onRoleChange('admin')}
+                  className={`px-2 py-1 rounded-lg transition-all font-medium ${
+                    currentRole === 'admin'
+                      ? 'bg-indigo-600 text-white shadow-sm font-semibold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Full Admin access"
+                >
+                  Admin
+                </button>
 
-              <button
-                onClick={() => onRoleChange('supervisor')}
-                className={`px-2 py-1 rounded-lg transition-all font-medium ${
-                  currentRole === 'supervisor'
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Supervisor floor setup & entry"
-              >
-                Supervisor
-              </button>
+                <button
+                  onClick={() => onRoleChange('supervisor')}
+                  className={`px-2 py-1 rounded-lg transition-all font-medium ${
+                    currentRole === 'supervisor'
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Supervisor floor setup & entry"
+                >
+                  Supervisor
+                </button>
 
-              <button
-                onClick={() => onRoleChange('accounts')}
-                className={`px-2 py-1 rounded-lg transition-all font-medium ${
-                  currentRole === 'accounts'
-                    ? 'bg-emerald-600 text-white shadow-sm font-semibold'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Accounts & Payroll"
-              >
-                Accounts
-              </button>
+                <button
+                  onClick={() => onRoleChange('accounts')}
+                  className={`px-2 py-1 rounded-lg transition-all font-medium ${
+                    currentRole === 'accounts'
+                      ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Accounts & Payroll"
+                >
+                  Accounts
+                </button>
+              </div>
 
-              <button
-                onClick={() => onRoleChange('worker')}
-                className={`px-2 py-1 rounded-lg transition-all font-medium flex items-center space-x-1 ${
-                  currentRole === 'worker'
-                    ? 'bg-sky-500 text-slate-950 font-bold shadow-sm'
-                    : 'text-sky-400 hover:text-white'
-                }`}
-                title="Worker Portal (Clock-in, Earnings, Assigned Work)"
+              <a
+                href="/worker"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.history.pushState({}, '', '/worker');
+                  window.dispatchEvent(new Event('popstate'));
+                }}
+                className="flex items-center space-x-1 bg-sky-950 hover:bg-sky-900 text-sky-400 border border-sky-500/30 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all"
+                title="Go to Worker Portal (/worker)"
               >
-                <UserCheck className="w-3 h-3" />
-                <span>Worker</span>
-              </button>
+                <UserCheck className="w-3 h-3 text-sky-400" />
+                <span className="hidden sm:inline">Worker Portal</span>
+                <span className="text-[10px] opacity-75">(/worker)</span>
+              </a>
             </div>
           )}
 

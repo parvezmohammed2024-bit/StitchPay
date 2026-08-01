@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { Navigation, ScreenId } from './components/Navigation';
 import { UserRoleManagerModal } from './components/UserRoleManagerModal';
 import { AuthModal } from './components/AuthModal';
+import { ToastContainer } from './components/ToastContainer';
 import { LanguageContext, Language, translations } from './lib/i18n';
 import { dataService } from './lib/dataService';
 import { UserRole, FactorySettings, UserAccount, Worker } from './types';
@@ -31,6 +32,15 @@ export default function App() {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [isRoleManagerOpen, setIsRoleManagerOpen] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [pathname, setPathname] = useState<string>(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPathname(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     dataService.getSettings().then(setSettings);
@@ -38,9 +48,8 @@ export default function App() {
     const user = dataService.getCurrentAuthUser();
     if (user) {
       setCurrentUser(user);
-      setRole(user.role);
-      if (user.role === 'worker') {
-        setActiveScreen('workerPortal');
+      if (user.role !== 'worker') {
+        setRole(user.role);
       }
     }
   }, []);
@@ -50,9 +59,7 @@ export default function App() {
     dataService.setRole(newRole);
 
     // Redirect to permitted screen if current screen is restricted for role
-    if (newRole === 'worker') {
-      setActiveScreen('workerPortal');
-    } else if (newRole === 'supervisor' && (activeScreen === 'payroll' || activeScreen === 'reports' || activeScreen === 'settings')) {
+    if (newRole === 'supervisor' && (activeScreen === 'payroll' || activeScreen === 'reports' || activeScreen === 'settings')) {
       setActiveScreen('quickEntry');
     } else if (newRole === 'accounts' && (activeScreen === 'quickEntry' || activeScreen === 'bulkGrid' || activeScreen === 'settings' || activeScreen === 'dailySetup')) {
       setActiveScreen('payroll');
@@ -61,7 +68,12 @@ export default function App() {
 
   const handleAuthSuccess = (user: UserAccount) => {
     setCurrentUser(user);
-    handleRoleChange(user.role);
+    if (user.role === 'worker') {
+      window.history.pushState({}, '', '/worker');
+      setPathname('/worker');
+    } else {
+      handleRoleChange(user.role);
+    }
   };
 
   const handleLogout = () => {
@@ -73,8 +85,52 @@ export default function App() {
     return translations[lang]?.[key] || translations.en[key] || (key as string);
   };
 
+  const isWorkerRoute = pathname === '/worker' || pathname.startsWith('/worker');
+
+  // DEDICATED WORKER ROUTE (/worker)
+  if (isWorkerRoute) {
+    return (
+      <LanguageContext.Provider value={{ lang, setLang, t }}>
+        <ToastContainer />
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+          <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center font-black text-slate-950 text-sm shadow-md">
+                SP
+              </div>
+              <div>
+                <span className="font-black text-sm text-white tracking-tight">{settings?.factory_name || 'StitchPay Garments Ltd.'}</span>
+                <span className="text-[10px] bg-sky-500/20 text-sky-400 font-bold px-2 py-0.5 rounded-full ml-2 border border-sky-500/30">
+                  Worker Portal (/worker)
+                </span>
+              </div>
+            </div>
+
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState({}, '', '/');
+                setPathname('/');
+              }}
+              className="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 font-medium transition-all"
+            >
+              ← Admin App
+            </a>
+          </header>
+
+          <main className="flex-1 overflow-y-auto">
+            <WorkerPortalScreen />
+          </main>
+        </div>
+      </LanguageContext.Provider>
+    );
+  }
+
+  // ADMIN / SUPERVISOR / ACCOUNTS APP ROUTE
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>
+      <ToastContainer />
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
         {/* Header */}
         <Header
@@ -88,7 +144,7 @@ export default function App() {
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
           onLogout={handleLogout}
           onOpenRoleManager={() => setIsRoleManagerOpen(true)}
-          isWorkerPortal={activeScreen === 'workerPortal'}
+          isWorkerPortal={false}
         />
 
         {/* Master Admin User Role Manager Modal */}
@@ -116,7 +172,6 @@ export default function App() {
 
           {/* Screen Content Container */}
           <main className="flex-1 p-3 sm:p-6 overflow-y-auto">
-            {activeScreen === 'workerPortal' && <WorkerPortalScreen />}
             {activeScreen === 'dashboard' && <DashboardScreen />}
             {activeScreen === 'dailySetup' && <DailySetupScreen role={role} />}
             {activeScreen === 'quickEntry' && <QuickEntryScreen role={role} />}

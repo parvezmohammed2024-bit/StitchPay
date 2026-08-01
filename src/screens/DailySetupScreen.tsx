@@ -73,12 +73,8 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
       setAssignments(dailyList);
       setSettings(setts);
 
-      // Auto-select styles that currently have assignments for this date, or default to ALL active styles
-      const existingStyleIds = Array.from(new Set(dailyList.map(a => a.style_id)));
-      const validExisting = existingStyleIds.filter(id => activeStyles.some(s => s.id === id));
-      if (validExisting.length > 0) {
-        setSelectedStyleIds(validExisting);
-      } else if (activeStyles.length > 0) {
+      // Auto-select all active styles so new styles and all operation lines are immediately visible for assigning workers
+      if (activeStyles.length > 0) {
         setSelectedStyleIds(activeStyles.map(s => s.id));
       }
     } catch (err) {
