@@ -166,22 +166,22 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
   return (
     <div className="space-y-6 pb-20">
       {/* HEADER */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="p-2 bg-amber-500/10 text-amber-400 rounded-xl">
+            <span className="p-2 bg-amber-100 text-amber-800 rounded-xl">
               <BadgePercent className="w-6 h-6" />
             </span>
-            <h1 className="text-2xl font-bold text-white">Rate Approvals & Exception Bidding</h1>
+            <h1 className="text-2xl font-bold text-stone-900">Rate Approvals & Exception Bidding</h1>
           </div>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-stone-600 text-sm mt-1">
             Propose per-worker piece rate exceptions. Approved bids update current and future daily assignments.
           </p>
         </div>
 
         <button
           onClick={() => setShowNewBidModal(true)}
-          className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2.5 rounded-xl transition shadow-lg shadow-amber-500/20 text-sm shrink-0"
+          className="flex items-center space-x-2 bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-xl transition shadow-xs text-sm shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Propose Rate Exception</span>
@@ -190,8 +190,8 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
 
       {/* RLS PERMISSION BANNER FOR SUPERVISORS */}
       {!isAdmin && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center space-x-3 text-amber-300 text-xs font-medium">
-          <ShieldAlert className="w-5 h-5 shrink-0 text-amber-400" />
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-center space-x-3 text-amber-900 text-xs font-medium">
+          <ShieldAlert className="w-5 h-5 shrink-0 text-amber-700" />
           <span>
             You are logged in as a <strong>Supervisor</strong>. You can submit rate exception proposals on behalf of workers, but ONLY Factory Admin can approve, counter, or reject bids.
           </span>
@@ -199,15 +199,15 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
       )}
 
       {/* FILTER TABS */}
-      <div className="flex space-x-2 border-b border-slate-800 pb-2">
+      <div className="flex space-x-2 border-b border-stone-200 pb-2">
         {(['pending', 'approved', 'countered', 'rejected', 'all'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setFilter(tab)}
             className={`px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all ${
               filter === tab
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
             }`}
           >
             {tab} ({bids.filter(b => tab === 'all' ? true : b.status === tab).length})
@@ -217,7 +217,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
 
       {/* BIDS LIST GRID */}
       {filteredBids.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+        <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center text-stone-500">
           No rate bids found under "{filter}" status.
         </div>
       ) : (
@@ -234,7 +234,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
             return (
               <div 
                 key={bid.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between space-y-4"
+                className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between space-y-4"
               >
                 {/* WORKER & PROCESS TOP HEADER */}
                 <div className="flex items-start justify-between">
@@ -246,9 +246,9 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                       className="rounded-full"
                     />
                     <div>
-                      <div className="text-base font-bold text-white">{bid.worker_name}</div>
-                      <div className="text-xs text-amber-400 font-medium">
-                        {bid.process_name} <span className="text-slate-500">({bid.style_code})</span>
+                      <div className="text-base font-bold text-stone-900">{bid.worker_name}</div>
+                      <div className="text-xs text-amber-800 font-bold">
+                        {bid.process_name} <span className="text-stone-500">({bid.style_code})</span>
                       </div>
                     </div>
                   </div>
@@ -256,36 +256,36 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                   {/* STATUS BADGE */}
                   <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border capitalize ${
                     bid.status === 'approved' 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                       : bid.status === 'rejected'
-                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                      ? 'bg-rose-50 text-rose-800 border-rose-200'
                       : bid.status === 'countered'
-                      ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
-                      : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                      : 'bg-amber-50 text-amber-900 border-amber-300'
                   }`}>
                     {bid.status}
                   </span>
                 </div>
 
                 {/* COMPARISON METRICS */}
-                <div className="bg-slate-950/80 rounded-xl p-3.5 border border-slate-800/80 grid grid-cols-3 gap-2 text-center">
+                <div className="bg-stone-50 rounded-xl p-3.5 border border-stone-200 grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Standard Rate</div>
-                    <div className="text-sm font-bold text-slate-300">
+                    <div className="text-[10px] text-stone-500 font-semibold uppercase">Standard Rate</div>
+                    <div className="text-sm font-bold text-stone-800">
                       {settings?.currency_symbol || '৳'}{bid.current_rate.toFixed(2)}
                     </div>
                   </div>
 
                   <div>
-                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Proposed Rate</div>
-                    <div className="text-sm font-bold text-amber-400">
+                    <div className="text-[10px] text-stone-500 font-semibold uppercase">Proposed Rate</div>
+                    <div className="text-sm font-bold text-amber-800">
                       {settings?.currency_symbol || '৳'}{bid.proposed_rate.toFixed(2)}
                     </div>
                   </div>
 
                   <div>
-                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Difference</div>
-                    <div className={`text-sm font-bold flex items-center justify-center ${diffAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <div className="text-[10px] text-stone-500 font-semibold uppercase">Difference</div>
+                    <div className={`text-sm font-bold flex items-center justify-center ${diffAmount >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
                       {diffAmount >= 0 ? '+' : ''}{settings?.currency_symbol || '৳'}{diffAmount.toFixed(2)}
                       <span className="text-[10px] ml-1">({diffPercent >= 0 ? '+' : ''}{diffPercent.toFixed(1)}%)</span>
                     </div>
@@ -294,24 +294,24 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
 
                 {/* COUNTER OFFER IF SET */}
                 {bid.counter_rate && (
-                  <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-3 flex justify-between items-center text-xs">
-                    <span className="text-indigo-300 font-medium">Manager Counter Offer:</span>
-                    <strong className="text-indigo-400 text-sm font-bold">
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex justify-between items-center text-xs">
+                    <span className="text-indigo-900 font-medium">Manager Counter Offer:</span>
+                    <strong className="text-indigo-800 text-sm font-bold">
                       {settings?.currency_symbol || '৳'}{bid.counter_rate.toFixed(2)} / pc
                     </strong>
                   </div>
                 )}
 
                 {/* WORKER OUTPUT & MIN WAGE GUARD RAIL WARNING */}
-                <div className="space-y-1.5 text-xs text-slate-400">
+                <div className="space-y-1.5 text-xs text-stone-600">
                   <div className="flex justify-between">
                     <span>Recent 30-Day Avg Output:</span>
-                    <strong className="text-white">{avgOutput} pcs / day</strong>
+                    <strong className="text-stone-900">{avgOutput} pcs / day</strong>
                   </div>
 
                   {isBelowMinWage && (
-                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-2 flex items-center space-x-2 text-rose-300 text-[11px]">
-                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 flex items-center space-x-2 text-rose-900 text-[11px]">
+                      <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0" />
                       <span>
                         <strong>Min Wage Warning:</strong> At {avgOutput} pcs/day output, proposed rate yields {settings?.currency_symbol || '৳'}{proposedTotalDaily.toFixed(0)}/day (Below min wage {settings?.currency_symbol || '৳'}{minWage}/day).
                       </span>
@@ -319,20 +319,20 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                   )}
 
                   {bid.reason && (
-                    <div className="bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/60 text-slate-300 italic text-[11px]">
+                    <div className="bg-stone-50 p-2.5 rounded-lg border border-stone-200 text-stone-700 italic text-[11px]">
                       "{bid.reason}"
                     </div>
                   )}
 
                   {bid.review_note && (
-                    <div className="text-[11px] text-slate-400">
+                    <div className="text-[11px] text-stone-500">
                       <strong>Review Note:</strong> {bid.review_note}
                     </div>
                   )}
                 </div>
 
                 {/* ACTION BUTTONS */}
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-end space-x-2">
+                <div className="pt-2 border-t border-stone-200 flex items-center justify-end space-x-2">
                   {bid.status === 'pending' && (
                     <>
                       {isAdmin ? (
@@ -346,28 +346,28 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                               counterRate: Number((bid.current_rate + (bid.proposed_rate - bid.current_rate) / 2).toFixed(2)),
                               note: '',
                             })}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition"
+                            className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-semibold rounded-lg border border-stone-200 transition"
                           >
                             Counter Offer
                           </button>
 
                           <button
                             onClick={() => handleReject(bid.id)}
-                            className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold rounded-lg border border-rose-500/30 transition"
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-semibold rounded-lg border border-rose-200 transition"
                           >
                             Reject
                           </button>
 
                           <button
                             onClick={() => handleApprove(bid.id)}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow-md shadow-emerald-600/20 flex items-center space-x-1"
+                            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Approve</span>
                           </button>
                         </>
                       ) : (
-                        <div className="text-xs text-slate-500 italic">
+                        <div className="text-xs text-stone-500 italic">
                           Awaiting Admin Approval
                         </div>
                       )}
@@ -377,7 +377,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                   {bid.status === 'countered' && (
                     <button
                       onClick={() => handleAcceptCounterOnWorkerBehalf(bid.id)}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition shadow-md shadow-indigo-600/30 flex items-center space-x-1"
+                      className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded-lg transition shadow-xs flex items-center space-x-1"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Accept Counter (on behalf of worker)</span>
@@ -385,7 +385,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                   )}
 
                   {(bid.status === 'approved' || bid.status === 'rejected') && (
-                    <div className="text-[11px] text-slate-500 italic">
+                    <div className="text-[11px] text-stone-500 italic">
                       Permanent Audit Record ({bid.reviewed_at ? new Date(bid.reviewed_at).toLocaleDateString() : 'Reviewed'})
                     </div>
                   )}
@@ -398,23 +398,23 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
 
       {/* COUNTER OFFER MODAL */}
       {counterModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-white">Propose Counter Rate</h3>
-              <button onClick={() => setCounterModal(null)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-3">
+              <h3 className="text-lg font-bold text-stone-900">Propose Counter Rate</h3>
+              <button onClick={() => setCounterModal(null)} className="text-stone-500 hover:text-stone-900">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="text-xs text-slate-300 space-y-1">
-              <div>Worker: <strong className="text-white">{counterModal.workerName}</strong></div>
-              <div>Process: <strong className="text-white">{counterModal.processName}</strong></div>
-              <div>Requested Rate: <strong className="text-amber-400">{settings?.currency_symbol || '৳'}{counterModal.proposedRate.toFixed(2)}</strong></div>
+            <div className="text-xs text-stone-600 space-y-1">
+              <div>Worker: <strong className="text-stone-900">{counterModal.workerName}</strong></div>
+              <div>Process: <strong className="text-stone-900">{counterModal.processName}</strong></div>
+              <div>Requested Rate: <strong className="text-amber-800">{settings?.currency_symbol || '৳'}{counterModal.proposedRate.toFixed(2)}</strong></div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">
                 Counter Rate ({settings?.currency_symbol || '৳'})
               </label>
               <input
@@ -422,12 +422,12 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                 step="0.10"
                 value={counterModal.counterRate}
                 onChange={(e) => setCounterModal({ ...counterModal, counterRate: Number(e.target.value) })}
-                className="w-full bg-slate-800 border border-slate-700 text-white font-bold rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full bg-stone-50 border border-stone-200 text-stone-900 font-bold rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-600"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">
                 Note for Supervisor / Worker
               </label>
               <textarea
@@ -435,15 +435,15 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                 onChange={(e) => setCounterModal({ ...counterModal, note: e.target.value })}
                 rows={2}
                 placeholder="Reason for counter offer..."
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs outline-none focus:border-indigo-500"
+                className="w-full bg-stone-50 border border-stone-200 text-stone-900 rounded-xl p-2.5 text-xs outline-none focus:border-indigo-600"
               />
             </div>
 
             <div className="flex justify-end space-x-3 pt-2">
-              <button onClick={() => setCounterModal(null)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-sm font-medium hover:bg-slate-700">
+              <button onClick={() => setCounterModal(null)} className="px-4 py-2 bg-stone-100 text-stone-800 border border-stone-200 rounded-xl text-sm font-medium hover:bg-stone-200">
                 Cancel
               </button>
-              <button onClick={handleSubmitCounter} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition shadow-md shadow-indigo-600/30">
+              <button onClick={handleSubmitCounter} className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl text-sm transition shadow-xs">
                 Submit Counter Offer
               </button>
             </div>
@@ -453,24 +453,24 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
 
       {/* NEW RATE BID MODAL */}
       {showNewBidModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                <BadgePercent className="w-5 h-5 text-amber-400" />
+        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-3">
+              <h3 className="text-lg font-bold text-stone-900 flex items-center space-x-2">
+                <BadgePercent className="w-5 h-5 text-amber-800" />
                 <span>Submit Rate Proposal</span>
               </h3>
-              <button onClick={() => setShowNewBidModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowNewBidModal(false)} className="text-stone-500 hover:text-stone-900">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Worker</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Worker</label>
               <select
                 value={newBidWorkerId}
                 onChange={(e) => setNewBidWorkerId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full bg-stone-50 border border-stone-200 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-600"
               >
                 {workers.map(w => (
                   <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
@@ -479,7 +479,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Process / Operation</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Process / Operation</label>
               <select
                 value={newBidProcessId}
                 onChange={(e) => {
@@ -487,7 +487,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                   const p = processes.find(proc => proc.id === e.target.value);
                   if (p) setNewBidProposedRate(Number((p.rate * 1.1).toFixed(2)));
                 }}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full bg-stone-50 border border-stone-200 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-600"
               >
                 {processes.map(p => (
                   <option key={p.id} value={p.id}>{p.name} — Standard: {settings?.currency_symbol || '৳'}{p.rate.toFixed(2)}</option>
@@ -496,32 +496,32 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Proposed Piece Rate ({settings?.currency_symbol || '৳'})</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Proposed Piece Rate ({settings?.currency_symbol || '৳'})</label>
               <input
                 type="number"
                 step="0.10"
                 value={newBidProposedRate}
                 onChange={(e) => setNewBidProposedRate(Number(e.target.value))}
-                className="w-full bg-slate-800 border border-slate-700 text-white font-bold rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                className="w-full bg-stone-50 border border-stone-200 text-stone-900 font-bold rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-600"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Reason / Technical Justification</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Reason / Technical Justification</label>
               <textarea
                 value={newBidReason}
                 onChange={(e) => setNewBidReason(e.target.value)}
                 rows={3}
                 placeholder="Reason for piece rate bid..."
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-3 text-xs outline-none focus:border-indigo-500"
+                className="w-full bg-stone-50 border border-stone-200 text-stone-900 rounded-xl p-3 text-xs outline-none focus:border-indigo-600"
               />
             </div>
 
             <div className="flex justify-end space-x-3 pt-2">
-              <button onClick={() => setShowNewBidModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-sm font-medium hover:bg-slate-700">
+              <button onClick={() => setShowNewBidModal(false)} className="px-4 py-2 bg-stone-100 text-stone-800 border border-stone-200 rounded-xl text-sm font-medium hover:bg-stone-200">
                 Cancel
               </button>
-              <button onClick={handleCreateBid} className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition shadow-md shadow-amber-500/20">
+              <button onClick={handleCreateBid} className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl text-sm transition shadow-xs">
                 Submit Bid
               </button>
             </div>

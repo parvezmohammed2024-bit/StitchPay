@@ -211,25 +211,25 @@ export const WorkerPortalScreen: React.FC = () => {
   if (!currentWorker) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="w-full max-w-md bg-white border border-stone-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto shadow-inner">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mx-auto shadow-xs">
               <UserCheck className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Worker Portal</h1>
-            <p className="text-xs text-slate-400">Enter your Mobile Number and 4-digit PIN to access your account</p>
+            <h1 className="text-2xl font-black text-stone-900 tracking-tight">Worker Portal</h1>
+            <p className="text-xs text-stone-600">Enter your Mobile Number and 4-digit PIN to access your account</p>
           </div>
 
           {loginError && (
-            <div className="bg-rose-500/15 border border-rose-500/40 rounded-2xl p-3.5 text-xs text-rose-300 font-medium flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 text-xs text-rose-800 font-medium flex items-center space-x-2">
+              <AlertCircle className="w-5 h-5 text-rose-700 shrink-0" />
               <span>{loginError}</span>
             </div>
           )}
 
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-bold text-stone-700 mb-1.5 uppercase tracking-wider">
                 Mobile Number
               </label>
               <div className="relative">
@@ -240,13 +240,13 @@ export const WorkerPortalScreen: React.FC = () => {
                   value={phoneInput}
                   onChange={(e) => setPhoneInput(e.target.value)}
                   placeholder="e.g. 0123456789 or +60123456789"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-stone-900 placeholder-stone-400 focus:outline-none focus:border-indigo-600"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-bold text-stone-700 mb-1.5 uppercase tracking-wider">
                 4-Digit PIN
               </label>
               <div className="relative">
@@ -258,7 +258,7 @@ export const WorkerPortalScreen: React.FC = () => {
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   placeholder="e.g. 1111"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-lg font-mono tracking-widest font-bold text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-lg font-mono tracking-widest font-bold text-stone-900 placeholder-stone-400 focus:outline-none focus:border-indigo-600"
                 />
               </div>
             </div>
@@ -266,7 +266,7 @@ export const WorkerPortalScreen: React.FC = () => {
             <button
               type="submit"
               disabled={loggingIn}
-              className="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all active:scale-98 flex items-center justify-center space-x-2"
+              className="w-full py-3.5 px-6 rounded-2xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-sm shadow-xs transition-all active:scale-98 flex items-center justify-center space-x-2"
             >
               {loggingIn ? (
                 <>
@@ -283,19 +283,19 @@ export const WorkerPortalScreen: React.FC = () => {
           </form>
 
           {/* Test Credentials Box */}
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1.5 text-xs text-slate-400">
-            <div className="font-bold text-slate-300 flex items-center space-x-1.5">
-              <Key className="w-3.5 h-3.5 text-amber-400" />
+          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-1.5 text-xs text-stone-600">
+            <div className="font-bold text-stone-800 flex items-center space-x-1.5">
+              <Key className="w-3.5 h-3.5 text-amber-800" />
               <span>Test Credentials:</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-              <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                <span className="text-slate-400 block">Worker 1:</span>
-                <span className="font-mono text-amber-400 font-bold">W-001</span> / <span className="font-mono text-amber-400 font-bold">1111</span>
+              <div className="bg-white p-2 rounded-xl border border-stone-200">
+                <span className="text-stone-500 block">Worker 1:</span>
+                <span className="font-mono text-amber-800 font-bold">W-001</span> / <span className="font-mono text-amber-800 font-bold">1111</span>
               </div>
-              <div className="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-                <span className="text-slate-400 block">Worker 2:</span>
-                <span className="font-mono text-amber-400 font-bold">W-002</span> / <span className="font-mono text-amber-400 font-bold">2222</span>
+              <div className="bg-white p-2 rounded-xl border border-stone-200">
+                <span className="text-stone-500 block">Worker 2:</span>
+                <span className="font-mono text-amber-800 font-bold">W-002</span> / <span className="font-mono text-amber-800 font-bold">2222</span>
               </div>
             </div>
           </div>
@@ -372,27 +372,27 @@ export const WorkerPortalScreen: React.FC = () => {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-28 animate-fade-in">
       {/* 1. WORKER ACCOUNT HEADER & LOGOUT */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-stone-200 rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
           <WorkerAvatar
             photoUrl={currentWorker.photo_url}
             name={currentWorker.full_name}
             size="2xl"
-            className="rounded-2xl border-2 border-indigo-500/50 shadow-md"
+            className="rounded-2xl border-2 border-indigo-200 shadow-xs"
           />
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-xl sm:text-2xl font-black text-white">{currentWorker.full_name}</h1>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono border border-indigo-500/30 font-bold">
+              <h1 className="text-xl sm:text-2xl font-black text-stone-900">{currentWorker.full_name}</h1>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 font-mono border border-indigo-200 font-bold">
                 {currentWorker.worker_code}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-              <span>Section: <strong className="text-slate-200">{currentWorker.section || 'Sewing'}</strong></span>
+            <p className="text-xs text-stone-600 mt-1 flex flex-wrap items-center gap-2">
+              <span>Section: <strong className="text-stone-800">{currentWorker.section || 'Sewing'}</strong></span>
               <span>•</span>
-              <span>Line: <strong className="text-slate-200">{currentWorker.line_no || 'Line-01'}</strong></span>
+              <span>Line: <strong className="text-stone-800">{currentWorker.line_no || 'Line-01'}</strong></span>
               <span>•</span>
-              <span className="text-amber-400 font-bold flex items-center gap-1">
+              <span className="text-amber-800 font-bold flex items-center gap-1">
                 <Trophy className="w-3.5 h-3.5" /> Rank #{currentRank} of {totalRankedWorkers}
               </span>
             </p>
@@ -402,7 +402,7 @@ export const WorkerPortalScreen: React.FC = () => {
         {/* Sign Out Button */}
         <button
           onClick={handleLogout}
-          className="flex items-center space-x-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all self-start md:self-center"
+          className="flex items-center space-x-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all self-start md:self-center"
         >
           <LogOut className="w-4 h-4" />
           <span>Sign Out</span>
@@ -410,29 +410,29 @@ export const WorkerPortalScreen: React.FC = () => {
       </div>
 
       {/* 2. SHIFT TIME & ATTENDANCE CLOCK (NO GPS / LOCATION) */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+      <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
           <div className="flex items-center space-x-3.5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shadow-inner ${
-              isClockedIn ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shadow-xs ${
+              isClockedIn ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
             }`}>
               <Clock className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-white flex items-center space-x-2">
+              <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
                 <span>Shift Time & Attendance Clock</span>
                 {isClockedIn ? (
-                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-0.5 rounded-full border border-emerald-500/30 font-bold flex items-center space-x-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="text-xs bg-emerald-50 text-emerald-800 px-3 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
                     <span>Clocked In (Active)</span>
                   </span>
                 ) : (
-                  <span className="text-xs bg-slate-800 text-slate-400 px-3 py-0.5 rounded-full border border-slate-700">
+                  <span className="text-xs bg-stone-100 text-stone-600 px-3 py-0.5 rounded-full border border-stone-200">
                     Off Duty / Not Clocked In
                   </span>
                 )}
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-stone-600 mt-0.5">
                 {isClockedIn 
                   ? `Clocked In at: ${todayAttendance?.in_time || '08:00 AM'}` 
                   : 'Click Clock In Now to record your shift start'}
@@ -443,9 +443,9 @@ export const WorkerPortalScreen: React.FC = () => {
 
         {/* Confirmation Banner */}
         {clockMessage && (
-          <div className="bg-emerald-500/15 border border-emerald-500/40 rounded-2xl p-3.5 text-xs font-bold text-emerald-300 flex items-center justify-between animate-fade-in shadow-md">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 text-xs font-bold text-emerald-900 flex items-center justify-between animate-fade-in shadow-xs">
             <span>{clockMessage}</span>
-            <button onClick={() => setClockMessage(null)} className="text-emerald-400 hover:text-white text-xs ml-2">✕</button>
+            <button onClick={() => setClockMessage(null)} className="text-emerald-800 hover:text-emerald-950 text-xs ml-2">✕</button>
           </div>
         )}
 
@@ -455,10 +455,10 @@ export const WorkerPortalScreen: React.FC = () => {
           <button
             onClick={handleClockIn}
             disabled={isClockedIn}
-            className={`py-3.5 px-5 rounded-2xl font-black text-xs sm:text-sm shadow-xl transition-all flex items-center justify-center space-x-2.5 ${
+            className={`py-3.5 px-5 rounded-2xl font-black text-xs sm:text-sm shadow-xs transition-all flex items-center justify-center space-x-2.5 ${
               isClockedIn
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/30 hover:scale-[1.02]'
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
+                : 'bg-emerald-700 hover:bg-emerald-800 text-white'
             }`}
           >
             <Clock className="w-4 h-4" />
@@ -469,12 +469,12 @@ export const WorkerPortalScreen: React.FC = () => {
           <button
             onClick={handleToggleBreak}
             disabled={!isClockedIn}
-            className={`py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm shadow-lg transition-all flex items-center justify-center space-x-2 ${
+            className={`py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm shadow-xs transition-all flex items-center justify-center space-x-2 ${
               !isClockedIn
-                ? 'bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed'
+                ? 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed'
                 : isOnBreak
-                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black animate-pulse'
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                ? 'bg-amber-700 hover:bg-amber-800 text-white font-black animate-pulse'
+                : 'bg-indigo-700 hover:bg-indigo-800 text-white'
             }`}
           >
             <Pause className="w-4 h-4" />
@@ -485,10 +485,10 @@ export const WorkerPortalScreen: React.FC = () => {
           <button
             onClick={handleClockOut}
             disabled={!isClockedIn}
-            className={`py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm shadow-lg transition-all flex items-center justify-center space-x-2 ${
+            className={`py-3.5 px-5 rounded-2xl font-bold text-xs sm:text-sm shadow-xs transition-all flex items-center justify-center space-x-2 ${
               !isClockedIn
-                ? 'bg-slate-800/80 text-slate-500 border border-slate-700/50 cursor-not-allowed'
-                : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
+                ? 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed'
+                : 'bg-rose-700 hover:bg-rose-800 text-white'
             }`}
           >
             <Square className="w-4 h-4 fill-current" />
@@ -498,26 +498,26 @@ export const WorkerPortalScreen: React.FC = () => {
       </div>
 
       {/* 3. ASSIGNED OPERATIONS & PIECE RATES (NO CLOCK-IN GATE REQUIRED) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-0">
-        <div className="p-5 border-b border-slate-800 bg-slate-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="bg-white border border-stone-200 rounded-3xl overflow-hidden shadow-xs space-y-0">
+        <div className="p-5 border-b border-stone-200 bg-stone-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-base font-black text-white flex items-center space-x-2">
-              <Scissors className="w-5 h-5 text-amber-400" />
+            <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
+              <Scissors className="w-5 h-5 text-amber-800" />
               <span>Assigned Operations & Piece Rates ({assignedWorks.length})</span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-stone-600 mt-0.5">
               Operations assigned to you with target quantities and approved piece rates
             </p>
           </div>
         </div>
 
         {assignedWorks.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-xs">
+          <div className="p-8 text-center text-stone-500 text-xs">
             No line operations assigned to you today. Please check with line supervisor.
           </div>
         ) : (
           /* Assigned Works List available directly without clocking in */
-          <div className="divide-y divide-slate-800/80">
+          <div className="divide-y divide-stone-200">
             {assignedWorks.map(work => {
               const myOutputForWork = todayEntries
                 .filter(e => e.process_id === work.process_id)
@@ -527,32 +527,32 @@ export const WorkerPortalScreen: React.FC = () => {
               const progressPct = Math.min(100, Math.round((myOutputForWork / targetQty) * 100));
 
               return (
-                <div key={work.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors">
+                <div key={work.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-stone-50 transition-colors">
                   <div className="space-y-2 flex-1">
                     <div className="flex items-center space-x-2">
-                      <span className="font-black text-base text-white">{work.process_name}</span>
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono font-bold border border-slate-700">
+                      <span className="font-black text-base text-stone-900">{work.process_name}</span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-800 font-mono font-bold border border-stone-200">
                         {work.style_code}
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                      <span>Style: <strong className="text-slate-200">{work.style_name}</strong></span>
-                      <span>Target: <strong className="text-slate-200">{targetQty} pcs</strong></span>
-                      <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
+                      <span>Style: <strong className="text-stone-800">{work.style_name}</strong></span>
+                      <span>Target: <strong className="text-stone-800">{targetQty} pcs</strong></span>
+                      <span className="text-emerald-800 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
                         Approved Rate: ৳{work.agreed_rate}/pc
                       </span>
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="w-full max-w-md bg-slate-800 h-2.5 rounded-full overflow-hidden mt-1">
+                    <div className="w-full max-w-md bg-stone-100 h-2.5 rounded-full overflow-hidden mt-1 border border-stone-200">
                       <div
-                        className="bg-emerald-400 h-full rounded-full transition-all duration-500"
+                        className="bg-emerald-600 h-full rounded-full transition-all duration-500"
                         style={{ width: `${progressPct}%` }}
                       ></div>
                     </div>
-                    <div className="text-[11px] text-slate-400">
-                      Completed: <span className="font-bold text-emerald-400">{myOutputForWork}</span> / {targetQty} pcs ({progressPct}%)
+                    <div className="text-[11px] text-stone-600">
+                      Completed: <span className="font-bold text-emerald-800">{myOutputForWork}</span> / {targetQty} pcs ({progressPct}%)
                     </div>
                   </div>
 
@@ -560,15 +560,15 @@ export const WorkerPortalScreen: React.FC = () => {
                   <div className="flex items-center space-x-2 self-start md:self-center shrink-0">
                     <button
                       onClick={() => setBiddingAssignment(work)}
-                      className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1"
+                      className="bg-stone-100 hover:bg-stone-200 text-amber-900 border border-stone-200 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1"
                     >
-                      <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+                      <DollarSign className="w-3.5 h-3.5 text-amber-800" />
                       <span>Bidding Option</span>
                     </button>
 
                     <button
                       onClick={() => setSelectedWork(work)}
-                      className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-2xl text-xs shadow-md transition-all flex items-center space-x-1.5"
+                      className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-1.5"
                     >
                       <Zap className="w-4 h-4 fill-current" />
                       <span>Log Output</span>
@@ -582,23 +582,23 @@ export const WorkerPortalScreen: React.FC = () => {
       </div>
 
       {/* 4. EARNINGS & PRODUCTION GRAPH WITH RANKING */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
           <div>
-            <h2 className="text-lg font-black text-white flex items-center space-x-2">
-              <TrendingUp className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
+              <TrendingUp className="w-5 h-5 text-indigo-700" />
               <span>Production Output & Earnings Till Now</span>
             </h2>
-            <p className="text-xs text-slate-400">Cumulative piece output & rate pay earnings graph</p>
+            <p className="text-xs text-stone-600">Cumulative piece output & rate pay earnings graph</p>
           </div>
 
           {/* Ranking Badge */}
-          <div className="bg-gradient-to-r from-amber-500/20 via-slate-800 to-indigo-500/20 border border-amber-500/30 px-4 py-2 rounded-2xl flex items-center space-x-3 self-start sm:self-center">
-            <Trophy className="w-6 h-6 text-amber-400" />
+          <div className="bg-amber-50 border border-amber-300 px-4 py-2 rounded-2xl flex items-center space-x-3 self-start sm:self-center">
+            <Trophy className="w-6 h-6 text-amber-800" />
             <div>
-              <div className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Factory Worker Rank</div>
-              <div className="text-sm font-black text-white">
-                Rank #{currentRank} <span className="text-xs text-slate-400 font-normal">of {totalRankedWorkers} Workers</span>
+              <div className="text-[10px] uppercase font-bold text-amber-900 tracking-wider">Factory Worker Rank</div>
+              <div className="text-sm font-black text-stone-900">
+                Rank #{currentRank} <span className="text-xs text-stone-600 font-normal">of {totalRankedWorkers} Workers</span>
               </div>
             </div>
           </div>
@@ -606,30 +606,30 @@ export const WorkerPortalScreen: React.FC = () => {
 
         {/* Metric Cards Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-            <div className="text-xs font-bold text-slate-400 uppercase">Today's Piece Earnings</div>
-            <div className="text-2xl font-black text-amber-400 mt-1 font-mono">৳{todayEarningsBDT.toLocaleString()}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">{todayOutputPcs} pieces completed today</div>
+          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+            <div className="text-xs font-bold text-stone-600 uppercase">Today's Piece Earnings</div>
+            <div className="text-2xl font-black text-amber-800 mt-1 font-mono">৳{todayEarningsBDT.toLocaleString()}</div>
+            <div className="text-[11px] text-stone-500 mt-0.5">{todayOutputPcs} pieces completed today</div>
           </div>
 
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-            <div className="text-xs font-bold text-slate-400 uppercase">Current Period Earnings</div>
-            <div className="text-2xl font-black text-indigo-400 mt-1 font-mono">৳{totalPeriodEarningsBDT.toLocaleString()}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">{totalPeriodOutputPcs} total pieces logged</div>
+          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+            <div className="text-xs font-bold text-stone-600 uppercase">Current Period Earnings</div>
+            <div className="text-2xl font-black text-indigo-700 mt-1 font-mono">৳{totalPeriodEarningsBDT.toLocaleString()}</div>
+            <div className="text-[11px] text-stone-500 mt-0.5">{totalPeriodOutputPcs} total pieces logged</div>
           </div>
 
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-            <div className="text-xs font-bold text-slate-400 uppercase">Net Payable Amount</div>
-            <div className="text-2xl font-black text-emerald-400 mt-1 font-mono">৳{netReceivableBDT.toLocaleString()}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">After advance deductions (৳{outstandingAdvanceBDT})</div>
+          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+            <div className="text-xs font-bold text-stone-600 uppercase">Net Payable Amount</div>
+            <div className="text-2xl font-black text-emerald-800 mt-1 font-mono">৳{netReceivableBDT.toLocaleString()}</div>
+            <div className="text-[11px] text-stone-500 mt-0.5">After advance deductions (৳{outstandingAdvanceBDT})</div>
           </div>
         </div>
 
         {/* Visual Graph: Earnings & Production over last 7 days */}
-        <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80 space-y-2">
-          <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
+        <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
+          <div className="text-xs font-bold text-stone-700 flex items-center justify-between">
             <span>Last 7 Days Production Trend</span>
-            <span className="text-[10px] text-slate-500 font-mono">Output Pieces & Earnings (৳ BDT)</span>
+            <span className="text-[10px] text-stone-500 font-mono">Output Pieces & Earnings (৳ BDT)</span>
           </div>
 
           <div className="h-56 w-full pt-2">
@@ -637,23 +637,23 @@ export const WorkerPortalScreen: React.FC = () => {
               <AreaChart data={last7DaysData}>
                 <defs>
                   <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#047857" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#047857" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorPcs" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#6366F1" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#4338CA" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#4338CA" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                <XAxis dataKey="dateFormatted" stroke="#64748B" fontSize={11} />
-                <YAxis stroke="#64748B" fontSize={11} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                <XAxis dataKey="dateFormatted" stroke="#78716c" fontSize={11} />
+                <YAxis stroke="#78716c" fontSize={11} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', borderRadius: '12px' }}
-                  labelStyle={{ color: '#F8FAFC', fontWeight: 'bold' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e7e5e4', borderRadius: '12px', color: '#1c1917' }}
+                  labelStyle={{ color: '#1c1917', fontWeight: 'bold' }}
                 />
-                <Area type="monotone" dataKey="earnings" name="Earnings (৳)" stroke="#10B981" fillOpacity={1} fill="url(#colorEarnings)" />
-                <Area type="monotone" dataKey="pcs" name="Pieces (Pcs)" stroke="#6366F1" fillOpacity={1} fill="url(#colorPcs)" />
+                <Area type="monotone" dataKey="earnings" name="Earnings (৳)" stroke="#047857" fillOpacity={1} fill="url(#colorEarnings)" />
+                <Area type="monotone" dataKey="pcs" name="Pieces (Pcs)" stroke="#4338CA" fillOpacity={1} fill="url(#colorPcs)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -661,38 +661,38 @@ export const WorkerPortalScreen: React.FC = () => {
       </div>
 
       {/* 5. LAST 7 DAYS PRODUCTION DETAILS BREAKDOWN */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h2 className="text-base font-black text-white flex items-center space-x-2">
-            <Calendar className="w-5 h-5 text-indigo-400" />
+      <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+          <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
+            <Calendar className="w-5 h-5 text-indigo-700" />
             <span>Last 7 Days Production Details</span>
           </h2>
-          <span className="text-xs text-slate-400 font-mono">Daily Breakdown</span>
+          <span className="text-xs text-stone-600 font-mono">Daily Breakdown</span>
         </div>
 
         <div className="w-full max-w-full overflow-x-auto">
           <table className="w-full text-left text-xs min-w-[480px]">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+              <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-2.5 px-3">Date</th>
                 <th className="py-2.5 px-3">Completed Pieces</th>
                 <th className="py-2.5 px-3">Day Earnings</th>
                 <th className="py-2.5 px-3">Logged Operations</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-stone-200 text-stone-700">
               {last7DaysData.map((day, idx) => (
-                <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="py-3 px-3 font-bold text-white">{day.dateFormatted}</td>
-                  <td className="py-3 px-3 font-mono text-indigo-300 font-bold">{day.pcs} pcs</td>
-                  <td className="py-3 px-3 font-mono text-emerald-400 font-bold">৳{day.earnings.toLocaleString()}</td>
-                  <td className="py-3 px-3 text-slate-400">
+                <tr key={idx} className="hover:bg-stone-50 transition-colors">
+                  <td className="py-3 px-3 font-bold text-stone-900">{day.dateFormatted}</td>
+                  <td className="py-3 px-3 font-mono text-indigo-800 font-bold">{day.pcs} pcs</td>
+                  <td className="py-3 px-3 font-mono text-emerald-800 font-bold">৳{day.earnings.toLocaleString()}</td>
+                  <td className="py-3 px-3 text-stone-600">
                     {day.entries.length > 0 ? (
-                      <span className="bg-slate-800 px-2 py-1 rounded text-[11px] text-slate-300">
+                      <span className="bg-stone-100 px-2 py-1 rounded text-[11px] text-stone-800">
                         {day.entries.length} log submissions
                       </span>
                     ) : (
-                      <span className="text-slate-600">No logs / Off day</span>
+                      <span className="text-stone-400">No logs / Off day</span>
                     )}
                   </td>
                 </tr>
@@ -703,13 +703,13 @@ export const WorkerPortalScreen: React.FC = () => {
       </div>
 
       {/* 6. TOP PERFORMANCE LEADERBOARD TILL NOW */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h2 className="text-base font-black text-white flex items-center space-x-2">
-            <Crown className="w-5 h-5 text-amber-400" />
+      <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+          <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
+            <Crown className="w-5 h-5 text-amber-800" />
             <span>Top Performers Till Now (Factory Leaderboard)</span>
           </h2>
-          <span className="text-xs text-amber-400 font-bold bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+          <span className="text-xs text-amber-900 font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
             Top 5 Workers
           </span>
         </div>
@@ -720,17 +720,17 @@ export const WorkerPortalScreen: React.FC = () => {
               key={item.worker.id}
               className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${
                 item.rank === 1
-                  ? 'bg-gradient-to-b from-amber-500/20 to-slate-950 border-amber-500/40 shadow-lg shadow-amber-500/10'
-                  : 'bg-slate-950 border-slate-800'
+                  ? 'bg-amber-50 border-amber-300 shadow-xs'
+                  : 'bg-stone-50 border-stone-200'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
-                  item.rank === 1 ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-300'
+                  item.rank === 1 ? 'bg-amber-700 text-white' : 'bg-stone-200 text-stone-800'
                 }`}>
                   #{item.rank}
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">{item.worker.worker_code}</span>
+                <span className="text-[10px] text-stone-500 font-mono">{item.worker.worker_code}</span>
               </div>
 
               <div className="flex items-center space-x-2.5">
@@ -741,19 +741,19 @@ export const WorkerPortalScreen: React.FC = () => {
                   className="rounded-xl"
                 />
                 <div>
-                  <div className="text-xs font-bold text-white truncate max-w-[100px]">{item.worker.full_name}</div>
-                  <div className="text-[10px] text-slate-400">{item.worker.section || 'Sewing'}</div>
+                  <div className="text-xs font-bold text-stone-900 truncate max-w-[100px]">{item.worker.full_name}</div>
+                  <div className="text-[10px] text-stone-600">{item.worker.section || 'Sewing'}</div>
                 </div>
               </div>
 
-              <div className="border-t border-slate-800/80 pt-2 text-xs space-y-1">
+              <div className="border-t border-stone-200 pt-2 text-xs space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Total Output:</span>
-                  <strong className="text-indigo-300 font-mono">{item.totalPcs} pcs</strong>
+                  <span className="text-stone-600">Total Output:</span>
+                  <strong className="text-indigo-800 font-mono">{item.totalPcs} pcs</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Total Pay:</span>
-                  <strong className="text-emerald-400 font-mono">৳{item.totalAmt.toLocaleString()}</strong>
+                  <span className="text-stone-600">Total Pay:</span>
+                  <strong className="text-emerald-800 font-mono">৳{item.totalAmt.toLocaleString()}</strong>
                 </div>
               </div>
             </div>
@@ -772,23 +772,23 @@ export const WorkerPortalScreen: React.FC = () => {
 
       {/* Production Output Log Modal */}
       {selectedWork && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-white flex items-center space-x-2">
-              <Zap className="w-5 h-5 text-amber-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
+          <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-stone-900 flex items-center space-x-2">
+              <Zap className="w-5 h-5 text-amber-800" />
               <span>Log Production Output</span>
             </h3>
 
-            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-xs space-y-1">
-              <div className="text-amber-400 font-bold">{selectedWork.process_name}</div>
-              <div className="text-slate-300">Style: {selectedWork.style_name}</div>
-              <div className="text-slate-400">Approved Rate: ৳{selectedWork.agreed_rate} per piece</div>
+            <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 text-xs space-y-1">
+              <div className="text-amber-800 font-bold">{selectedWork.process_name}</div>
+              <div className="text-stone-800">Style: {selectedWork.style_name}</div>
+              <div className="text-stone-600">Approved Rate: ৳{selectedWork.agreed_rate} per piece</div>
             </div>
 
             <form onSubmit={handleQuickEntrySubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Quantity OK Pieces Completed <span className="text-rose-400">*</span>
+                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                  Quantity OK Pieces Completed <span className="text-rose-700">*</span>
                 </label>
                 <input
                   type="number"
@@ -797,7 +797,7 @@ export const WorkerPortalScreen: React.FC = () => {
                   placeholder="e.g. 50"
                   value={entryQty}
                   onChange={(e) => setEntryQty(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-xl font-black text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-xl font-black text-stone-900 focus:outline-none focus:border-amber-700"
                 />
               </div>
 
@@ -805,14 +805,14 @@ export const WorkerPortalScreen: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedWork(null)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold"
+                  className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-2xl text-xs font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingEntry}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl text-xs shadow-lg"
+                  className="px-5 py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-2xl text-xs shadow-xs"
                 >
                   {submittingEntry ? 'Submitting...' : 'Confirm & Save Output'}
                 </button>

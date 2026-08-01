@@ -103,15 +103,15 @@ export default function App() {
     return (
       <LanguageContext.Provider value={{ lang, setLang, t }}>
         <ToastContainer />
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-          <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+        <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
+          <header className="bg-white/95 backdrop-blur-md border-b border-stone-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center font-black text-slate-950 text-sm shadow-md">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-indigo-700 flex items-center justify-center font-black text-white text-sm shadow-sm">
                 SP
               </div>
               <div>
-                <span className="font-black text-sm text-white tracking-tight">{settings?.factory_name || 'StitchPay Garments Ltd.'}</span>
-                <span className="text-[10px] bg-sky-500/20 text-sky-400 font-bold px-2 py-0.5 rounded-full ml-2 border border-sky-500/30">
+                <span className="font-black text-sm text-stone-900 tracking-tight">{settings?.factory_name || 'StitchPay Garments Ltd.'}</span>
+                <span className="text-[10px] bg-sky-50 text-sky-800 font-bold px-2 py-0.5 rounded-full ml-2 border border-sky-200">
                   Worker Portal
                 </span>
               </div>
@@ -143,7 +143,7 @@ export default function App() {
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>
       <ToastContainer />
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white max-w-full overflow-x-hidden">
+      <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans selection:bg-indigo-600 selection:text-white max-w-full overflow-x-hidden">
         {/* Header */}
         <Header
           currentRole={role}

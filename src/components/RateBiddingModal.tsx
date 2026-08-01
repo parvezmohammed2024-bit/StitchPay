@@ -48,56 +48,56 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-5">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-xs animate-fade-in">
+      <div className="bg-white border border-stone-200 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-stone-200 pb-4">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-300 flex items-center justify-center text-amber-700 font-bold">
               <DollarSign className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Price Rate & Bidding Option</h2>
-              <p className="text-xs text-slate-400">Review approved piece rate or submit bid</p>
+              <h2 className="text-base font-bold text-stone-900">Price Rate & Bidding Option</h2>
+              <p className="text-xs text-stone-600">Review approved piece rate or submit bid</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+            className="p-2 rounded-xl text-stone-500 hover:text-stone-900 hover:bg-stone-100"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Work Summary Box */}
-        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+        <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
           <div className="flex justify-between items-start">
             <div>
-              <div className="text-xs font-bold text-white">{assignment.process_name}</div>
-              <div className="text-[11px] text-slate-400">Style: {assignment.style_name} ({assignment.style_code})</div>
+              <div className="text-xs font-bold text-stone-900">{assignment.process_name}</div>
+              <div className="text-[11px] text-stone-600">Style: {assignment.style_name} ({assignment.style_code})</div>
             </div>
-            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2.5 py-1 rounded-full border border-emerald-500/30">
+            <span className="text-[10px] bg-emerald-50 text-emerald-800 font-mono font-bold px-2.5 py-1 rounded-full border border-emerald-200">
               Approved: ৳{assignment.agreed_rate}/pc
             </span>
           </div>
-          <div className="text-xs text-slate-400 flex justify-between pt-1">
-            <span>Target Volume: <strong>{assignment.target_qty || 250} pcs</strong></span>
-            <span>Target Earning: <strong className="text-emerald-400 font-bold">৳{((assignment.target_qty || 250) * assignment.agreed_rate).toFixed(0)}</strong></span>
+          <div className="text-xs text-stone-600 flex justify-between pt-1">
+            <span>Target Volume: <strong className="text-stone-900">{assignment.target_qty || 250} pcs</strong></span>
+            <span>Target Earning: <strong className="text-amber-700 font-bold">৳{((assignment.target_qty || 250) * assignment.agreed_rate).toFixed(0)}</strong></span>
           </div>
         </div>
 
         {successMsg ? (
-          <div className="p-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl text-emerald-300 text-xs font-bold flex items-center space-x-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs font-bold flex items-center space-x-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
             <span>{successMsg}</span>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-stone-700 mb-1.5">
                 Proposed Bid Rate per Piece (৳ BDT)
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-amber-400 font-black text-sm">৳</span>
+                <span className="absolute left-3.5 top-2.5 text-amber-700 font-black text-sm">৳</span>
                 <input
                   type="number"
                   step="0.1"
@@ -105,23 +105,23 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
                   value={proposedRate}
                   onChange={e => setProposedRate(e.target.value)}
                   placeholder="e.g. 5.50"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl pl-8 pr-4 py-2.5 text-base font-bold text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-white border border-stone-300 rounded-2xl pl-8 pr-4 py-2.5 text-base font-bold text-stone-900 focus:outline-none focus:border-amber-600"
                 />
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">
+              <p className="text-[10px] text-stone-500 mt-1">
                 Current factory standard rate is ৳{assignment.agreed_rate}/pc.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-stone-700 mb-1.5">
                 Reason / Note for Bidding (Optional)
               </label>
               <textarea
                 value={reason}
                 onChange={e => setReason(e.target.value)}
                 placeholder="e.g. Complex fabric handling, extra seam trimming required"
-                className="w-full bg-slate-950 border border-slate-700 rounded-2xl p-3 text-xs text-white focus:outline-none focus:border-amber-500 h-20"
+                className="w-full bg-white border border-stone-300 rounded-2xl p-3 text-xs text-stone-900 focus:outline-none focus:border-amber-600 h-20"
               />
             </div>
 
@@ -129,14 +129,14 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold"
+                className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-2xl text-xs font-bold"
               >
                 Accept Approved Rate
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl text-xs shadow-lg flex items-center space-x-1.5"
+                className="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-2xl text-xs shadow-xs flex items-center space-x-1.5"
               >
                 <Send className="w-4 h-4" />
                 <span>{submitting ? 'Submitting...' : 'Submit Rate Bid'}</span>

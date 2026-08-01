@@ -79,20 +79,20 @@ export const ReportsScreen: React.FC = () => {
   return (
     <div className="space-y-6 pb-24 max-w-6xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 p-5 rounded-3xl shadow-xs">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-indigo-400" />
+          <h1 className="text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 text-indigo-700" />
             <span>Factory Production Analytics & Audit Reports</span>
           </h1>
-          <p className="text-xs text-slate-400">Bottlenecks, style costings, defect rates & worker rankings</p>
+          <p className="text-xs text-stone-600">Bottlenecks, style costings, defect rates & worker rankings</p>
         </div>
 
         <button
           onClick={handleExportCSV}
-          className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-4 py-2.5 rounded-xl transition-all text-xs shrink-0"
+          className="flex items-center space-x-2 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 font-bold px-4 py-2.5 rounded-xl transition-all text-xs shrink-0"
         >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+          <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
           <span>Export Production CSV</span>
         </button>
       </div>
@@ -100,42 +100,42 @@ export const ReportsScreen: React.FC = () => {
       {/* Grid: Worker Earnings Ranking & Process Bottleneck */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Worker Earnings Ranking Chart */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <h3 className="text-base font-bold text-stone-900 mb-1 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-700" />
             <span>Top Worker Piece Earnings</span>
           </h3>
-          <p className="text-xs text-slate-400 mb-4">Cumulative earnings across current period</p>
+          <p className="text-xs text-stone-600 mb-4">Cumulative earnings across current period</p>
 
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={workerRankData} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis type="number" stroke="#64748b" fontSize={10} />
-                <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} width={90} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff' }} />
-                <Bar dataKey="amount" fill="#10b981" radius={[0, 6, 6, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                <XAxis type="number" stroke="#78716c" fontSize={10} />
+                <YAxis dataKey="name" type="category" stroke="#1c1917" fontSize={11} width={90} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e7e5e4', color: '#1c1917' }} />
+                <Bar dataKey="amount" fill="#047857" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Process Defect / Rejection Bottlenecks */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+          <h3 className="text-base font-bold text-stone-900 mb-1 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-700" />
             <span>Process Rejection Bottlenecks</span>
           </h3>
-          <p className="text-xs text-slate-400 mb-4">Operations with highest defective piece counts</p>
+          <p className="text-xs text-stone-600 mb-4">Operations with highest defective piece counts</p>
 
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={bottleneckData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
-                <YAxis stroke="#64748b" fontSize={10} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff' }} />
-                <Bar dataKey="rejects" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                <XAxis dataKey="name" stroke="#78716c" fontSize={10} />
+                <YAxis stroke="#78716c" fontSize={10} />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e7e5e4', color: '#1c1917' }} />
+                <Bar dataKey="rejects" fill="#be123c" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -251,8 +251,8 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
     <div className="space-y-6 pb-32 max-w-4xl mx-auto">
       {/* Toast Confirmation */}
       {toastMessage && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white font-bold px-6 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 border border-emerald-400 animate-bounce">
-          <CheckCircle className="w-5 h-5 text-emerald-200" />
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-emerald-700 text-white font-bold px-6 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 border border-emerald-500 animate-bounce">
+          <CheckCircle className="w-5 h-5 text-emerald-100" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -260,29 +260,29 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
       {/* Screen Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <Zap className="w-6 h-6 text-amber-400 fill-amber-400" />
+          <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
+            <Zap className="w-6 h-6 text-amber-700 fill-amber-700" />
             <span>Plan-Driven Quick Entry</span>
           </h1>
-          <p className="text-xs text-slate-400">Direct recording against today's assigned line plan</p>
+          <p className="text-xs text-stone-600">Direct recording against today's assigned line plan</p>
         </div>
 
         <div className="flex items-center space-x-3">
           {/* Unplanned Entry Button */}
           <button
             onClick={() => setShowUnplannedModal(true)}
-            className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-750 text-amber-400 border border-amber-500/30 px-3.5 py-2 rounded-xl font-semibold text-xs transition shrink-0"
+            className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl font-semibold text-xs transition shrink-0"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Unplanned Entry</span>
           </button>
 
           {/* Shift selector */}
-          <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 text-xs shrink-0">
+          <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs shrink-0">
             <button
               onClick={() => setShift('day')}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                shift === 'day' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-400'
+                shift === 'day' ? 'bg-amber-800 text-white shadow-xs' : 'text-stone-600'
               }`}
             >
               Day
@@ -290,7 +290,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
             <button
               onClick={() => setShift('night')}
               className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                shift === 'night' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400'
+                shift === 'night' ? 'bg-indigo-700 text-white shadow-xs' : 'text-stone-600'
               }`}
             >
               Night
@@ -300,41 +300,41 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
       </div>
 
       {/* RUNNING TOTALS BAR */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+            <div className="text-[10px] font-bold text-stone-600 uppercase tracking-wider mb-1">
               Pieces Entered Today
             </div>
-            <div className="text-2xl font-black text-white font-mono">
-              {totalPiecesEnteredToday.toLocaleString()} <span className="text-xs font-normal text-slate-400">pcs</span>
+            <div className="text-2xl font-black text-stone-900 font-mono">
+              {totalPiecesEnteredToday.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
             </div>
           </div>
 
           <div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+            <div className="text-[10px] font-bold text-stone-600 uppercase tracking-wider mb-1">
               Total Accrued Wage Value
             </div>
-            <div className="text-2xl font-black text-amber-400 font-mono">
+            <div className="text-2xl font-black text-amber-800 font-mono">
               {currencySymbol}{totalWageValueAccrued.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
           </div>
 
           <div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+            <div className="text-[10px] font-bold text-stone-600 uppercase tracking-wider mb-1">
               Line Target Completion
             </div>
             <div className="flex items-center space-x-2">
-              <span className="text-2xl font-black text-emerald-400 font-mono">{targetPercent}%</span>
-              <span className="text-xs text-slate-400">({totalPiecesEnteredToday} / {totalTargetPiecesToday} pcs)</span>
+              <span className="text-2xl font-black text-emerald-700 font-mono">{targetPercent}%</span>
+              <span className="text-xs text-stone-500">({totalPiecesEnteredToday} / {totalTargetPiecesToday} pcs)</span>
             </div>
           </div>
         </div>
 
         {/* Global Progress Bar */}
-        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+        <div className="w-full bg-stone-100 h-2 rounded-full overflow-hidden">
           <div 
-            className="bg-emerald-500 h-full transition-all duration-500 rounded-full"
+            className="bg-emerald-600 h-full transition-all duration-500 rounded-full"
             style={{ width: `${targetPercent}%` }}
           />
         </div>
@@ -342,32 +342,32 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
       {/* ASSIGNMENTS GROUPED BY STYLE & PROCESS */}
       {assignments.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400 space-y-3">
-          <p className="text-base font-semibold text-white">No line assignments planned for today yet.</p>
-          <p className="text-xs text-slate-500">
+        <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center text-stone-500 space-y-3 shadow-xs">
+          <p className="text-base font-semibold text-stone-900">No line assignments planned for today yet.</p>
+          <p className="text-xs text-stone-600">
             Use the "Daily Line Setup" screen to plan worker assignments or tap "Unplanned Entry" above to add an assignment on the fly.
           </p>
         </div>
       ) : (
         groupedAssignments.map((group, gIdx) => (
-          <div key={gIdx} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+          <div key={gIdx} className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4">
             {/* STYLE HEADER */}
-            <div className="border-b border-slate-800 pb-2.5 flex justify-between items-center">
+            <div className="border-b border-stone-200 pb-2.5 flex justify-between items-center">
               <div className="flex items-center space-x-2">
-                <Shirt className="w-5 h-5 text-amber-400" />
-                <h2 className="text-lg font-bold text-white">{group.style?.style_code}</h2>
-                <span className="text-xs text-slate-400">— {group.style?.name}</span>
+                <Shirt className="w-5 h-5 text-amber-700" />
+                <h2 className="text-lg font-bold text-stone-900">{group.style?.style_code}</h2>
+                <span className="text-xs text-stone-600">— {group.style?.name}</span>
               </div>
             </div>
 
             {/* PROCESSES SEQUENCE */}
             <div className="space-y-4">
               {group.processes.map((procGroup, pIdx) => (
-                <div key={pIdx} className="border border-slate-800 bg-slate-950/60 rounded-xl p-4 space-y-3">
+                <div key={pIdx} className="border border-stone-200 bg-stone-50 rounded-xl p-4 space-y-3">
                   {/* PROCESS TITLE */}
-                  <div className="flex justify-between items-center text-xs font-semibold text-slate-400">
-                    <span className="text-white font-bold text-sm flex items-center space-x-2">
-                      <span className="w-6 h-6 rounded-md bg-slate-800 text-amber-400 text-xs flex items-center justify-center">
+                  <div className="flex justify-between items-center text-xs font-semibold text-stone-600">
+                    <span className="text-stone-900 font-bold text-sm flex items-center space-x-2">
+                      <span className="w-6 h-6 rounded-md bg-stone-200 text-amber-800 text-xs flex items-center justify-center font-mono">
                         #{procGroup.process?.seq_no}
                       </span>
                       <span>{procGroup.process?.name}</span>
@@ -386,7 +386,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
                       return (
                         <div 
                           key={assign.id}
-                          className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-3"
+                          className="bg-white border border-stone-200 rounded-xl p-3.5 space-y-3 shadow-xs"
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             {/* WORKER PHOTO & INFO */}
@@ -399,11 +399,11 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
                               />
 
                               <div>
-                                <div className="text-sm font-bold text-white flex items-center space-x-2">
+                                <div className="text-sm font-bold text-stone-900 flex items-center space-x-2">
                                   <span>{worker?.full_name}</span>
-                                  <span className="text-xs text-slate-400 font-mono">({worker?.worker_code})</span>
+                                  <span className="text-xs text-stone-500 font-mono">({worker?.worker_code})</span>
                                 </div>
-                                <div className="text-xs text-amber-400 font-semibold mt-0.5">
+                                <div className="text-xs text-amber-800 font-semibold mt-0.5">
                                   Agreed Rate: {currencySymbol}{assign.agreed_rate.toFixed(2)} / pc
                                 </div>
                               </div>
@@ -413,7 +413,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
                             <div className="flex items-center space-x-2 shrink-0 justify-end">
                               <button
                                 onClick={() => updateDraftQty(assign.id, 'qty_ok', -10)}
-                                className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-400 font-bold flex items-center justify-center transition active:scale-95"
+                                className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 hover:bg-stone-200 text-rose-700 font-bold flex items-center justify-center transition active:scale-95"
                                 title="-10 pcs"
                               >
                                 -10
@@ -421,7 +421,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
                               <button
                                 onClick={() => updateDraftQty(assign.id, 'qty_ok', -1)}
-                                className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center transition active:scale-95"
+                                className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 hover:bg-stone-200 text-stone-800 font-bold flex items-center justify-center transition active:scale-95"
                               >
                                 <Minus className="w-4 h-4" />
                               </button>
@@ -431,21 +431,21 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
                                   type="number"
                                   value={draft.qty_ok}
                                   onChange={(e) => setDraftQtyDirect(assign.id, 'qty_ok', parseInt(e.target.value) || 0)}
-                                  className="w-full text-center bg-slate-950 border border-amber-400 rounded-xl py-1.5 text-base font-black font-mono text-amber-400 outline-none"
+                                  className="w-full text-center bg-stone-50 border border-amber-500 rounded-xl py-1.5 text-base font-black font-mono text-amber-800 outline-none"
                                 />
-                                <span className="text-[10px] text-slate-400 font-mono block">pcs OK</span>
+                                <span className="text-[10px] text-stone-500 font-mono block">pcs OK</span>
                               </div>
 
                               <button
                                 onClick={() => updateDraftQty(assign.id, 'qty_ok', 1)}
-                                className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 hover:bg-indigo-600/50 text-indigo-300 font-bold flex items-center justify-center transition active:scale-95"
+                                className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center transition active:scale-95"
                               >
                                 <Plus className="w-4 h-4" />
                               </button>
 
                               <button
                                 onClick={() => updateDraftQty(assign.id, 'qty_ok', 10)}
-                                className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center transition active:scale-95 shadow-md shadow-indigo-600/20"
+                                className="w-10 h-10 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold flex items-center justify-center transition active:scale-95 shadow-xs"
                                 title="+10 pcs"
                               >
                                 +10
@@ -453,7 +453,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
                               <button
                                 onClick={() => toggleExpand(assign.id)}
-                                className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-lg transition"
+                                className="p-2 text-stone-500 hover:text-stone-900 bg-stone-100 rounded-lg transition"
                                 title="Expand rework & reject"
                               >
                                 {draft.expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -463,13 +463,13 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
                           {/* TARGET PROGRESS BAR */}
                           <div className="space-y-1">
-                            <div className="flex justify-between items-center text-[11px] text-slate-400">
-                              <span>Target Progress: <strong className="text-white">{draft.qty_ok} / {targetQty} pcs</strong></span>
-                              <span className="font-bold text-emerald-400">{progressPct}%</span>
+                            <div className="flex justify-between items-center text-[11px] text-stone-600">
+                              <span>Target Progress: <strong className="text-stone-900">{draft.qty_ok} / {targetQty} pcs</strong></span>
+                              <span className="font-bold text-emerald-700">{progressPct}%</span>
                             </div>
-                            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div className="w-full bg-stone-100 h-2 rounded-full overflow-hidden">
                               <div 
-                                className={`h-full transition-all duration-300 rounded-full ${progressPct >= 100 ? 'bg-emerald-400' : 'bg-indigo-500'}`}
+                                className={`h-full transition-all duration-300 rounded-full ${progressPct >= 100 ? 'bg-emerald-600' : 'bg-indigo-700'}`}
                                 style={{ width: `${progressPct}%` }}
                               />
                             </div>
@@ -477,24 +477,24 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
                           {/* COLLAPSIBLE REWORK & REJECT */}
                           {draft.expanded && (
-                            <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-3 text-xs bg-slate-950/50 p-2.5 rounded-lg">
+                            <div className="pt-2 border-t border-stone-200 grid grid-cols-2 gap-3 text-xs bg-stone-50 p-2.5 rounded-lg">
                               <div>
-                                <label className="text-slate-400 block text-[10px] font-semibold mb-1">Rework Qty (10% Pay)</label>
+                                <label className="text-stone-600 block text-[10px] font-semibold mb-1">Rework Qty (10% Pay)</label>
                                 <input
                                   type="number"
                                   value={draft.qty_rework}
                                   onChange={e => setDraftQtyDirect(assign.id, 'qty_rework', parseInt(e.target.value) || 0)}
-                                  className="w-20 text-center bg-slate-900 border border-slate-700 rounded-lg py-1 text-white font-mono"
+                                  className="w-20 text-center bg-white border border-stone-300 rounded-lg py-1 text-stone-900 font-mono"
                                 />
                               </div>
 
                               <div>
-                                <label className="text-slate-400 block text-[10px] font-semibold mb-1">Reject Qty (0% Pay)</label>
+                                <label className="text-stone-600 block text-[10px] font-semibold mb-1">Reject Qty (0% Pay)</label>
                                 <input
                                   type="number"
                                   value={draft.qty_reject}
                                   onChange={e => setDraftQtyDirect(assign.id, 'qty_reject', parseInt(e.target.value) || 0)}
-                                  className="w-20 text-center bg-slate-900 border border-slate-700 rounded-lg py-1 text-white font-mono"
+                                  className="w-20 text-center bg-white border border-stone-300 rounded-lg py-1 text-stone-900 font-mono"
                                 />
                               </div>
                             </div>
@@ -512,19 +512,19 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
       {/* STICKY BOTTOM SAVE BAR */}
       <div className="fixed bottom-16 lg:bottom-4 left-0 right-0 z-30 px-4 max-w-4xl mx-auto">
-        <div className="bg-slate-950/95 border border-indigo-500/50 p-4 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-4">
+        <div className="bg-white/95 border border-stone-200 p-4 rounded-2xl shadow-xl backdrop-blur-md flex items-center justify-between gap-4">
           <div>
-            <div className="text-xs text-slate-400 font-semibold uppercase">{t('runningTotal')}</div>
-            <div className="text-xl sm:text-2xl font-black text-white font-mono">
-              {totalPiecesEnteredToday.toLocaleString()} pcs • <span className="text-amber-400">{currencySymbol}{totalWageValueAccrued.toFixed(0)}</span>
+            <div className="text-xs text-stone-600 font-semibold uppercase">{t('runningTotal')}</div>
+            <div className="text-xl sm:text-2xl font-black text-stone-900 font-mono">
+              {totalPiecesEnteredToday.toLocaleString()} pcs • <span className="text-amber-800">{currencySymbol}{totalWageValueAccrued.toFixed(0)}</span>
             </div>
           </div>
 
           <button
             onClick={handleSaveAll}
-            className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm py-3 px-6 rounded-xl shadow-xl transition-all shrink-0 active:scale-95"
+            className="flex items-center space-x-2 bg-indigo-700 hover:bg-indigo-800 text-white font-black text-sm py-3 px-6 rounded-xl shadow-xs transition-all shrink-0 active:scale-95"
           >
-            <Check className="w-5 h-5 text-amber-400" />
+            <Check className="w-5 h-5 text-amber-300" />
             <span>Save Production Log</span>
           </button>
         </div>
@@ -532,25 +532,25 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
       {/* UNPLANNED ENTRY MODAL */}
       {showUnplannedModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                <PlusCircle className="w-5 h-5 text-amber-400" />
+        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-3">
+              <h3 className="text-lg font-bold text-stone-900 flex items-center space-x-2">
+                <PlusCircle className="w-5 h-5 text-amber-700" />
                 <span>Add Unplanned Line Entry</span>
               </h3>
             </div>
 
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-stone-600">
               Assign a worker on the fly to an operation not originally planned today.
             </p>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Style</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Style</label>
               <select
                 value={unplannedStyleId}
                 onChange={(e) => setUnplannedStyleId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm outline-none"
+                className="w-full bg-white border border-stone-300 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none"
               >
                 {styles.map(s => (
                   <option key={s.id} value={s.id}>{s.style_code} — {s.name}</option>
@@ -559,11 +559,11 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Process</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Process</label>
               <select
                 value={unplannedProcessId}
                 onChange={(e) => setUnplannedProcessId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm outline-none"
+                className="w-full bg-white border border-stone-300 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none"
               >
                 {processes.filter(p => p.style_id === unplannedStyleId).map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({currencySymbol}{p.rate})</option>
@@ -572,11 +572,11 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Worker</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Worker</label>
               <select
                 value={unplannedWorkerId}
                 onChange={(e) => setUnplannedWorkerId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm outline-none"
+                className="w-full bg-white border border-stone-300 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none"
               >
                 {workers.map(w => (
                   <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
@@ -585,25 +585,25 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Target Qty</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Target Qty</label>
               <input
                 type="number"
                 value={unplannedTargetQty}
                 onChange={(e) => setUnplannedTargetQty(Number(e.target.value))}
-                className="w-full bg-slate-800 border border-slate-700 text-white font-bold rounded-xl px-3 py-2 text-sm outline-none"
+                className="w-full bg-white border border-stone-300 text-stone-900 font-bold rounded-xl px-3 py-2 text-sm outline-none"
               />
             </div>
 
             <div className="flex justify-end space-x-3 pt-2">
               <button
                 onClick={() => setShowUnplannedModal(false)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-sm font-medium hover:bg-slate-700"
+                className="px-4 py-2 bg-stone-100 text-stone-800 rounded-xl text-sm font-medium hover:bg-stone-200"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateUnplannedEntry}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition shadow-md shadow-amber-500/20"
+                className="px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl text-sm transition shadow-xs"
               >
                 Add Assignment to Today's Plan
               </button>

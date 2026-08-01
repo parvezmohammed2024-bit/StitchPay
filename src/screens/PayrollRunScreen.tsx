@@ -84,21 +84,21 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
   return (
     <div className="space-y-6 pb-24 max-w-6xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 p-5 rounded-3xl shadow-xs">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <Banknote className="w-6 h-6 text-emerald-400" />
+          <h1 className="text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
+            <Banknote className="w-6 h-6 text-emerald-700" />
             <span>Payroll Run & Wage Disbursements</span>
           </h1>
-          <p className="text-xs text-slate-400">Automatic piece-rate calculation with minimum wage top-up protection</p>
+          <p className="text-xs text-stone-600">Automatic piece-rate calculation with minimum wage top-up protection</p>
         </div>
 
         {period && (
           <div className="flex items-center space-x-2">
             <span className={`text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider font-mono ${
-              period.status === 'paid' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-              period.status === 'locked' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-              'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+              period.status === 'paid' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+              period.status === 'locked' ? 'bg-amber-50 text-amber-900 border border-amber-300' :
+              'bg-indigo-50 text-indigo-800 border border-indigo-200'
             }`}>
               Status: {period.status}
             </span>
@@ -108,30 +108,30 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
 
       {/* Period Banner & RPC Trigger */}
       {period && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
-            <div className="text-xs text-slate-400 font-mono">ACTIVE PAYROLL PERIOD</div>
-            <div className="text-lg font-bold text-white mt-0.5">
-              {period.start_date} <span className="text-slate-500">to</span> {period.end_date}
+            <div className="text-xs text-stone-500 font-mono font-semibold">ACTIVE PAYROLL PERIOD</div>
+            <div className="text-lg font-bold text-stone-900 mt-0.5">
+              {period.start_date} <span className="text-stone-400">to</span> {period.end_date}
             </div>
-            <div className="text-xs text-slate-400 mt-1">
-              Top-up Threshold: <span className="text-amber-400 font-bold">{currencySymbol}{settings?.minimum_wage_per_day}/day</span>
+            <div className="text-xs text-stone-600 mt-1">
+              Top-up Threshold: <span className="text-amber-800 font-bold">{currencySymbol}{settings?.minimum_wage_per_day}/day</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowAdjModal(true)}
-              className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold px-3 py-2.5 rounded-xl transition-all"
+              className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-xs font-bold px-3 py-2.5 rounded-xl transition-all"
             >
-              <Plus className="w-4 h-4 text-amber-400" />
+              <Plus className="w-4 h-4 text-amber-800" />
               <span>Add Adjustment / Bonus</span>
             </button>
 
             <button
               onClick={handleRunRPC}
               disabled={loading}
-              className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all"
+              className="flex items-center space-x-1.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all"
             >
               <Calculator className="w-4 h-4" />
               <span>{t('calculatePayroll')}</span>
@@ -140,7 +140,7 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
             {period.status === 'open' && (
               <button
                 onClick={handleLockPeriod}
-                className="flex items-center space-x-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all"
+                className="flex items-center space-x-1.5 bg-amber-700 hover:bg-amber-800 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all"
               >
                 <Lock className="w-4 h-4" />
                 <span>Lock Period</span>
@@ -150,7 +150,7 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
             {period.status === 'locked' && (
               <button
                 onClick={handleMarkPaid}
-                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all"
+                className="flex items-center space-x-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all"
               >
                 <CheckCircle className="w-4 h-4" />
                 <span>Mark Period as Paid</span>
@@ -162,34 +162,34 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
 
       {/* Summary KPI Strip */}
       <div className="grid grid-cols-1 min-[480px]:grid-cols-3 gap-3">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-          <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Net Liability</span>
-          <div className="text-2xl font-black text-emerald-400 font-mono tracking-tight mt-1 tabular-nums">
+        <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between">
+          <span className="text-xs text-stone-600 uppercase font-bold tracking-wider">Total Net Liability</span>
+          <div className="text-2xl font-black text-emerald-800 font-mono tracking-tight mt-1 tabular-nums">
             {currencySymbol}{totalPayrollCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-          <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Garment Pieces</span>
-          <div className="text-2xl font-black text-white font-mono tracking-tight mt-1 tabular-nums">
-            {totalPiecesDone.toLocaleString()} <span className="text-xs text-slate-400 font-normal">pcs</span>
+        <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between">
+          <span className="text-xs text-stone-600 uppercase font-bold tracking-wider">Total Garment Pieces</span>
+          <div className="text-2xl font-black text-stone-900 font-mono tracking-tight mt-1 tabular-nums">
+            {totalPiecesDone.toLocaleString()} <span className="text-xs text-stone-500 font-normal">pcs</span>
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
-          <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Min Wage Top-up Total</span>
-          <div className="text-2xl font-black text-amber-400 font-mono tracking-tight mt-1 tabular-nums">
+        <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between">
+          <span className="text-xs text-stone-600 uppercase font-bold tracking-wider">Min Wage Top-up Total</span>
+          <div className="text-2xl font-black text-amber-800 font-mono tracking-tight mt-1 tabular-nums">
             {currencySymbol}{totalTopup.toFixed(2)}
           </div>
         </div>
       </div>
 
       {/* Payroll Lines Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xl w-full max-w-full overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs w-full max-w-full overflow-hidden">
         {/* Mobile View: Stacked Cards */}
         <div className="space-y-3 md:hidden">
           {payrollLines.map(line => (
-            <div key={line.id} className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+            <div key={line.id} className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <WorkerAvatar
@@ -199,37 +199,37 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
                     className="rounded-full shrink-0"
                   />
                   <div>
-                    <div className="font-bold text-white text-sm">{line.worker?.full_name}</div>
-                    <div className="text-xs text-slate-400 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
+                    <div className="font-bold text-stone-900 text-sm">{line.worker?.full_name}</div>
+                    <div className="text-xs text-stone-600 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedLine(line)}
-                  className="px-2.5 py-1.5 rounded-lg bg-indigo-600/30 text-indigo-300 font-bold text-xs hover:bg-indigo-600/50 flex items-center space-x-1"
+                  className="px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 font-bold text-xs hover:bg-indigo-100 flex items-center space-x-1"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>Payslip</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-800/80">
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-stone-200">
                 <div>
-                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Pieces Logged</span>
-                  <span className="font-mono font-bold text-slate-200">{line.pieces_total} pcs</span>
+                  <span className="text-stone-500 uppercase text-[10px] block font-bold">Pieces Logged</span>
+                  <span className="font-mono font-bold text-stone-900">{line.pieces_total} pcs</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Piece Gross</span>
-                  <span className="font-mono font-bold text-emerald-400">{currencySymbol}{line.piece_earnings.toFixed(2)}</span>
+                  <span className="text-stone-500 uppercase text-[10px] block font-bold">Piece Gross</span>
+                  <span className="font-mono font-bold text-emerald-800">{currencySymbol}{line.piece_earnings.toFixed(2)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Min Wage Top-up</span>
-                  <span className="font-mono font-bold text-amber-400">
+                  <span className="text-stone-500 uppercase text-[10px] block font-bold">Min Wage Top-up</span>
+                  <span className="font-mono font-bold text-amber-800">
                     {line.minimum_wage_topup > 0 ? `+${currencySymbol}${line.minimum_wage_topup.toFixed(2)}` : '-'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 uppercase text-[10px] block font-bold">Net Payable</span>
-                  <span className="font-mono font-black text-amber-400 text-sm">{currencySymbol}{line.net_payable.toFixed(2)}</span>
+                  <span className="text-stone-500 uppercase text-[10px] block font-bold">Net Payable</span>
+                  <span className="font-mono font-black text-amber-800 text-sm">{currencySymbol}{line.net_payable.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -240,7 +240,7 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
         <div className="hidden md:block w-full overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse min-w-[700px]">
             <thead>
-              <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-400 font-mono uppercase">
+              <tr className="bg-stone-50 border-b border-stone-200 text-stone-600 font-mono uppercase">
                 <th className="p-3">Worker</th>
                 <th className="p-3 text-right">Pieces</th>
                 <th className="p-3 text-right">Piece Gross</th>
@@ -250,10 +250,10 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
                 <th className="p-3 text-center">Payslip</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-stone-200">
               {payrollLines.map(line => (
-                <tr key={line.id} className="hover:bg-slate-800/40">
-                  <td className="p-3 font-medium text-white flex items-center space-x-3">
+                <tr key={line.id} className="hover:bg-stone-50">
+                  <td className="p-3 font-medium text-stone-900 flex items-center space-x-3">
                     <WorkerAvatar
                       photoUrl={line.worker?.photo_url}
                       name={line.worker?.full_name || 'Worker'}
@@ -262,40 +262,40 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
                     />
                     <div>
                       <div className="font-bold">{line.worker?.full_name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
+                      <div className="text-[10px] text-stone-500 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
                     </div>
                   </td>
 
-                  <td className="p-3 text-right font-mono text-slate-300 font-bold">
+                  <td className="p-3 text-right font-mono text-stone-900 font-bold">
                     {line.pieces_total} pcs
                   </td>
 
-                  <td className="p-3 text-right font-mono text-emerald-400 font-bold">
+                  <td className="p-3 text-right font-mono text-emerald-800 font-bold">
                     {currencySymbol}{line.piece_earnings.toFixed(2)}
                   </td>
 
                   <td className="p-3 text-right font-mono">
                     {line.minimum_wage_topup > 0 ? (
-                      <span className="px-2 py-0.5 rounded bg-amber-400/10 text-amber-400 font-bold border border-amber-400/30">
+                      <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
                         +{currencySymbol}{line.minimum_wage_topup.toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-slate-600">-</span>
+                      <span className="text-stone-400">-</span>
                     )}
                   </td>
 
-                  <td className="p-3 text-right font-mono text-rose-400">
+                  <td className="p-3 text-right font-mono text-rose-700">
                     -{currencySymbol}{line.deductions.toFixed(2)}
                   </td>
 
-                  <td className="p-3 text-right font-mono font-black text-amber-400 text-sm">
+                  <td className="p-3 text-right font-mono font-black text-amber-800 text-sm">
                     {currencySymbol}{line.net_payable.toFixed(2)}
                   </td>
 
                   <td className="p-3 text-center">
                     <button
                       onClick={() => setSelectedLine(line)}
-                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg border border-slate-700 transition-colors"
+                      className="p-1.5 bg-stone-100 hover:bg-stone-200 text-indigo-700 rounded-lg border border-stone-200 transition-colors"
                       title="View Printable Payslip"
                     >
                       <FileText className="w-4 h-4" />
@@ -320,17 +320,17 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
 
       {/* Adjustment Modal */}
       {showAdjModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">Add Worker Payroll Adjustment</h3>
+        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-stone-900 mb-4">Add Worker Payroll Adjustment</h3>
             <form onSubmit={handleAddAdjustment} className="space-y-3">
               <div>
-                <label className="text-xs text-slate-400">Select Worker</label>
+                <label className="text-xs text-stone-700 font-medium">Select Worker</label>
                 <select
                   required
                   value={adjWorkerId}
                   onChange={e => setAdjWorkerId(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mt-1"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1"
                 >
                   <option value="">-- Choose Worker --</option>
                   {payrollLines.map(l => (
@@ -342,11 +342,11 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Adjustment Type</label>
+                <label className="text-xs text-stone-700 font-medium">Adjustment Type</label>
                 <select
                   value={adjType}
                   onChange={e => setAdjType(e.target.value as any)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mt-1"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1"
                 >
                   <option value="bonus">Bonus / Incentive (+)</option>
                   <option value="allowance">Attendance Allowance (+)</option>
@@ -356,13 +356,13 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
               </div>
 
               <div>
-                <label className="text-xs text-slate-400">Amount ({currencySymbol})</label>
+                <label className="text-xs text-stone-700 font-medium">Amount ({currencySymbol})</label>
                 <input
                   type="number"
                   required
                   value={adjAmount}
                   onChange={e => setAdjAmount(parseFloat(e.target.value))}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mt-1 font-mono font-bold"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1 font-mono font-bold"
                 />
               </div>
 
@@ -370,13 +370,13 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
                 <button
                   type="button"
                   onClick={() => setShowAdjModal(false)}
-                  className="flex-1 bg-slate-800 text-slate-300 font-semibold py-2 rounded-xl text-sm"
+                  className="flex-1 bg-stone-100 text-stone-800 font-semibold py-2 rounded-xl text-sm border border-stone-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-indigo-600 text-white font-semibold py-2 rounded-xl text-sm"
+                  className="flex-1 bg-indigo-700 text-white font-semibold py-2 rounded-xl text-sm shadow-xs"
                 >
                   Save Adjustment
                 </button>

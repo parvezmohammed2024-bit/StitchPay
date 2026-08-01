@@ -97,18 +97,18 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
   return (
     <div className="space-y-6 pb-24">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 p-5 rounded-3xl shadow-xs">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <Table className="w-6 h-6 text-emerald-400" />
+          <h1 className="text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
+            <Table className="w-6 h-6 text-emerald-700" />
             <span>Spreadsheet Bulk Grid Entry</span>
           </h1>
-          <p className="text-xs text-slate-400">Desktop matrix entry — enter piece counts across multiple operations at once</p>
+          <p className="text-xs text-stone-600">Desktop matrix entry — enter piece counts across multiple operations at once</p>
         </div>
 
         <button
           onClick={handleSaveGrid}
-          className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg transition-all text-sm shrink-0"
+          className="flex items-center space-x-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-5 py-2.5 rounded-xl shadow-xs transition-all text-sm shrink-0"
         >
           {savedSuccess ? <CheckCircle className="w-4 h-4 text-emerald-200" /> : <Save className="w-4 h-4" />}
           <span>{savedSuccess ? 'Grid Saved!' : 'Save Grid Entries'}</span>
@@ -116,23 +116,23 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
       </div>
 
       {/* Selectors Bar */}
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Entry Date</label>
+          <label className="text-[11px] font-bold text-stone-600 uppercase tracking-wider block mb-1">Entry Date</label>
           <input
             type="date"
             value={entryDate}
             onChange={e => setEntryDate(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono"
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 font-mono"
           />
         </div>
 
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Select Garment Style</label>
+          <label className="text-[11px] font-bold text-stone-600 uppercase tracking-wider block mb-1">Select Garment Style</label>
           <select
             value={selectedStyleId}
             onChange={e => handleStyleChange(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-semibold"
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 font-semibold"
           >
             {styles.map(s => (
               <option key={s.id} value={s.id}>
@@ -143,11 +143,11 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
         </div>
 
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Shift</label>
+          <label className="text-[11px] font-bold text-stone-600 uppercase tracking-wider block mb-1">Shift</label>
           <select
             value={shift}
             onChange={e => setShift(e.target.value as any)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-semibold"
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 font-semibold"
           >
             <option value="day">Day Shift</option>
             <option value="night">Night Shift</option>
@@ -156,22 +156,22 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
       </div>
 
       {/* Spreadsheet Matrix Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl w-full max-w-full overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs w-full max-w-full overflow-hidden">
         <div className="w-full overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse min-w-[800px]">
           <thead>
-            <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-300 font-mono">
-              <th className="p-3 sticky left-0 z-10 bg-slate-800 min-w-[160px]">Worker Name</th>
+            <tr className="bg-stone-50 border-b border-stone-200 text-stone-600 font-mono">
+              <th className="p-3 sticky left-0 z-10 bg-stone-50 min-w-[160px]">Worker Name</th>
               {processes.map(proc => (
                 <th key={proc.id} className="p-2 text-center min-w-[100px]">
-                  <div className="font-bold text-white truncate max-w-[90px]">{proc.name}</div>
-                  <div className="text-[10px] text-amber-400">{currencySymbol}{proc.rate}</div>
+                  <div className="font-bold text-stone-900 truncate max-w-[90px]">{proc.name}</div>
+                  <div className="text-[10px] text-amber-800 font-bold">{currencySymbol}{proc.rate}</div>
                 </th>
               ))}
-              <th className="p-3 text-right bg-slate-800 sticky right-0 z-10 min-w-[100px]">Row Total</th>
+              <th className="p-3 text-right bg-stone-50 sticky right-0 z-10 min-w-[100px]">Row Total</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800">
+          <tbody className="divide-y divide-stone-200">
             {workers.map(worker => {
               const workerRow = matrix[worker.id] || {};
               let rowPieces = 0;
@@ -184,8 +184,8 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
               });
 
               return (
-                <tr key={worker.id} className="hover:bg-slate-800/40">
-                  <td className="p-3 sticky left-0 z-10 bg-slate-900 font-medium text-white flex items-center space-x-2">
+                <tr key={worker.id} className="hover:bg-stone-50">
+                  <td className="p-3 sticky left-0 z-10 bg-white font-medium text-stone-900 flex items-center space-x-2">
                     <WorkerAvatar
                       photoUrl={worker.photo_url}
                       name={worker.full_name}
@@ -194,7 +194,7 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
                     />
                     <div className="truncate">
                       <div className="font-bold">{worker.full_name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{worker.worker_code}</div>
+                      <div className="text-[10px] text-stone-500 font-mono">{worker.worker_code}</div>
                     </div>
                   </td>
 
@@ -208,15 +208,15 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
                           value={val}
                           onChange={e => handleCellChange(worker.id, proc.id, e.target.value)}
                           placeholder="0"
-                          className="w-full text-center bg-slate-950 border border-slate-700/80 focus:border-indigo-500 rounded-lg py-1.5 text-sm text-white font-mono font-bold"
+                          className="w-full text-center bg-stone-50 border border-stone-200 focus:border-indigo-600 rounded-lg py-1.5 text-sm text-stone-900 font-mono font-bold"
                         />
                       </td>
                     );
                   })}
 
-                  <td className="p-3 text-right sticky right-0 z-10 bg-slate-900 font-mono font-bold text-amber-400">
+                  <td className="p-3 text-right sticky right-0 z-10 bg-white font-mono font-bold text-amber-800">
                     {rowPieces} pcs
-                    <div className="text-[10px] text-slate-400">{currencySymbol}{rowMoney.toFixed(0)}</div>
+                    <div className="text-[10px] text-stone-500">{currencySymbol}{rowMoney.toFixed(0)}</div>
                   </td>
                 </tr>
               );

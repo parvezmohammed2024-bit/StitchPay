@@ -41,14 +41,14 @@ export const WorkerAvatar: React.FC<WorkerAvatarProps> = ({
         alt={alt || name}
         loading="lazy"
         onError={() => setImageError(true)}
-        className={`${sizeClass} rounded-full object-cover border border-slate-700/60 shadow-sm shrink-0 ${className}`}
+        className={`${sizeClass} rounded-full object-cover border border-stone-200 shadow-xs shrink-0 ${className}`}
       />
     );
   }
 
   return (
     <div
-      className={`${sizeClass} rounded-full flex items-center justify-center font-bold font-mono tracking-wider shadow-sm border border-white/10 shrink-0 select-none ${colorClass} ${className}`}
+      className={`${sizeClass} rounded-full flex items-center justify-center font-bold font-mono tracking-wider shadow-xs border border-stone-200 shrink-0 select-none ${colorClass} ${className}`}
       title={name}
     >
       {initials}

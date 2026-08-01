@@ -72,7 +72,7 @@ export const WorkerPhotoUploader: React.FC<WorkerPhotoUploaderProps> = ({
 
   return (
     <div className={`flex flex-col items-center space-y-3 ${className}`}>
-      <label className="block text-xs font-mono uppercase tracking-wider text-slate-400 text-center">
+      <label className="block text-xs font-mono uppercase tracking-wider text-stone-600 text-center">
         <span>Worker Profile Photo</span>
       </label>
 
@@ -95,9 +95,9 @@ export const WorkerPhotoUploader: React.FC<WorkerPhotoUploaderProps> = ({
 
       {/* Circular Avatar / Photo Container */}
       <div className="relative group">
-        <div className="w-28 h-28 rounded-full border-2 border-slate-700 p-1 bg-slate-900 shadow-xl overflow-hidden flex items-center justify-center">
+        <div className="w-28 h-28 rounded-full border-2 border-stone-200 p-1 bg-white shadow-xs overflow-hidden flex items-center justify-center">
           {isUploading ? (
-            <div className="flex flex-col items-center justify-center text-indigo-400">
+            <div className="flex flex-col items-center justify-center text-indigo-700">
               <Loader2 className="w-7 h-7 animate-spin" />
               <span className="text-[10px] font-semibold mt-1">Uploading...</span>
             </div>
@@ -122,7 +122,7 @@ export const WorkerPhotoUploader: React.FC<WorkerPhotoUploaderProps> = ({
           <button
             type="button"
             onClick={handleRemove}
-            className="absolute -top-1 -right-1 bg-rose-600 hover:bg-rose-500 text-white p-1.5 rounded-full shadow-lg border border-slate-900 transition-transform hover:scale-110"
+            className="absolute -top-1 -right-1 bg-rose-700 hover:bg-rose-800 text-white p-1.5 rounded-full shadow-xs border border-white transition-transform hover:scale-110"
             title="Remove photo"
           >
             <X className="w-3.5 h-3.5" />
@@ -136,9 +136,9 @@ export const WorkerPhotoUploader: React.FC<WorkerPhotoUploaderProps> = ({
           type="button"
           disabled={isUploading}
           onClick={() => cameraInputRef.current?.click()}
-          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 text-xs font-semibold rounded-xl border border-indigo-500/40 transition-colors disabled:opacity-50"
+          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-semibold rounded-xl border border-indigo-200 transition-colors disabled:opacity-50"
         >
-          <Camera className="w-3.5 h-3.5" />
+          <Camera className="w-3.5 h-3.5 text-indigo-700" />
           <span>Take Photo</span>
         </button>
 
@@ -146,14 +146,14 @@ export const WorkerPhotoUploader: React.FC<WorkerPhotoUploaderProps> = ({
           type="button"
           disabled={isUploading}
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition-colors disabled:opacity-50"
+          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-semibold rounded-xl border border-stone-200 transition-colors disabled:opacity-50"
         >
-          <Upload className="w-3.5 h-3.5" />
+          <Upload className="w-3.5 h-3.5 text-stone-600" />
           <span>Upload File</span>
         </button>
       </div>
 
-      <p className="text-[10px] text-slate-500 text-center max-w-[200px]">
+      <p className="text-[10px] text-stone-500 text-center max-w-[200px]">
         JPG, PNG or WebP under 5MB. Auto-resized to 1200px max.
       </p>
     </div>

@@ -177,37 +177,37 @@ export const DashboardScreen: React.FC = () => {
       {/* Page Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
             <span>Production Overview</span>
-            <span className="text-xs font-normal text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">
+            <span className="text-xs font-normal text-stone-600 bg-stone-100 px-2.5 py-1 rounded-full border border-stone-200">
               {todayStr}
             </span>
           </h1>
-          <p className="text-xs text-slate-400">Live floor line setup, bottleneck operations & payroll metrics</p>
+          <p className="text-xs text-stone-600">Live floor line setup, bottleneck operations & payroll metrics</p>
         </div>
       </div>
 
       {/* TODAY'S PRODUCTION KPI CARD & BOTTLENECK SUMMARY */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4 w-full max-w-full">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-3 gap-2">
-          <h2 className="text-sm sm:text-lg font-bold text-white flex items-center space-x-2 truncate">
-            <Flame className="w-5 h-5 text-amber-400 fill-amber-400 shrink-0" />
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4 w-full max-w-full">
+        <div className="flex justify-between items-center border-b border-stone-200 pb-3 gap-2">
+          <h2 className="text-sm sm:text-lg font-bold text-stone-900 flex items-center space-x-2 truncate">
+            <Flame className="w-5 h-5 text-amber-700 shrink-0" />
             <span className="truncate">Today's Line Setup & Production</span>
           </h2>
-          <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20 shrink-0">
+          <span className="text-[11px] font-mono font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 shrink-0">
             {todayTargetCompletionPct}% Target Met
           </span>
         </div>
 
         {/* Global Line Target Completion Progress Bar */}
         <div className="space-y-1.5">
-          <div className="flex justify-between text-xs text-slate-400 font-semibold gap-2">
-            <span className="truncate">Overall Floor Progress: <strong className="text-white">{todayPieces.toLocaleString()} / {todayTargetTotal.toLocaleString()} pcs</strong></span>
-            <span className="text-emerald-400 font-bold shrink-0">{todayTargetCompletionPct}%</span>
+          <div className="flex justify-between text-xs text-stone-600 font-semibold gap-2">
+            <span className="truncate">Overall Floor Progress: <strong className="text-stone-900">{todayPieces.toLocaleString()} / {todayTargetTotal.toLocaleString()} pcs</strong></span>
+            <span className="text-emerald-800 font-bold shrink-0">{todayTargetCompletionPct}%</span>
           </div>
-          <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
+          <div className="w-full bg-stone-200 h-3 rounded-full overflow-hidden">
             <div 
-              className="bg-gradient-to-r from-amber-500 to-emerald-400 h-full rounded-full transition-all duration-500"
+              className="bg-gradient-to-r from-amber-600 to-emerald-600 h-full rounded-full transition-all duration-500"
               style={{ width: `${todayTargetCompletionPct}%` }}
             />
           </div>
@@ -215,36 +215,36 @@ export const DashboardScreen: React.FC = () => {
 
         {/* METRICS ROW: Stack 1 column on mobile, 2 on 480px+, 4 on desktop */}
         <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
-            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Completed Garments</div>
-            <div className="text-2xl font-black text-emerald-400 font-mono tracking-tight mt-1 tabular-nums">
+          <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 flex flex-col justify-between">
+            <div className="text-xs text-stone-600 font-bold uppercase tracking-wider truncate">Completed Garments</div>
+            <div className="text-2xl font-black text-emerald-800 font-mono tracking-tight mt-1 tabular-nums">
               {completedGarments.toLocaleString()}
             </div>
-            <div className="text-[10px] text-slate-500 mt-1 truncate">Slowest bottleneck capacity</div>
+            <div className="text-[10px] text-stone-500 mt-1 truncate">Slowest bottleneck capacity</div>
           </div>
 
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
-            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Total Operations Logged</div>
-            <div className="text-2xl font-black text-indigo-400 font-mono tracking-tight mt-1 tabular-nums">
+          <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 flex flex-col justify-between">
+            <div className="text-xs text-stone-600 font-bold uppercase tracking-wider truncate">Total Operations Logged</div>
+            <div className="text-2xl font-black text-indigo-700 font-mono tracking-tight mt-1 tabular-nums">
               {todayPieces.toLocaleString()}
             </div>
-            <div className="text-[10px] text-slate-500 mt-1 truncate">Sum across all processes</div>
+            <div className="text-[10px] text-stone-500 mt-1 truncate">Sum across all processes</div>
           </div>
 
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
-            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Today's Piece Wage Cost</div>
-            <div className="text-2xl font-black text-amber-400 font-mono tracking-tight mt-1 tabular-nums">
+          <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 flex flex-col justify-between">
+            <div className="text-xs text-stone-600 font-bold uppercase tracking-wider truncate">Today's Piece Wage Cost</div>
+            <div className="text-2xl font-black text-amber-800 font-mono tracking-tight mt-1 tabular-nums">
               {currencySymbol}{todayWageCost.toLocaleString(undefined, { minimumFractionDigits: 0 })}
             </div>
-            <div className="text-[10px] text-slate-500 mt-1 truncate">Accrued piece rate pay</div>
+            <div className="text-[10px] text-stone-500 mt-1 truncate">Accrued piece rate pay</div>
           </div>
 
-          <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-col justify-between">
-            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider truncate">Active Floor Workers</div>
-            <div className="text-2xl font-black text-white font-mono tracking-tight mt-1 tabular-nums">
-              {activeWorkersCount} <span className="text-xs font-normal text-slate-400">/ {workers.length}</span>
+          <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200 flex flex-col justify-between">
+            <div className="text-xs text-stone-600 font-bold uppercase tracking-wider truncate">Active Floor Workers</div>
+            <div className="text-2xl font-black text-stone-900 font-mono tracking-tight mt-1 tabular-nums">
+              {activeWorkersCount} <span className="text-xs font-normal text-stone-500">/ {workers.length}</span>
             </div>
-            <div className="text-[10px] text-slate-500 mt-1 truncate">Logged pieces today</div>
+            <div className="text-[10px] text-stone-500 mt-1 truncate">Logged pieces today</div>
           </div>
         </div>
       </div>
@@ -252,31 +252,31 @@ export const DashboardScreen: React.FC = () => {
       {/* BOTTLENECK ANALYSIS & NOT STARTED WORKERS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Process Completion % Chart (Lowest Completion First) */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white flex items-center space-x-2">
-              <BarChart3 className="w-4 h-4 text-rose-400" />
+            <h3 className="text-base font-bold text-stone-900 flex items-center space-x-2">
+              <BarChart3 className="w-4 h-4 text-rose-700" />
               <span>Process Line Completion (Bottlenecks First)</span>
             </h3>
-            <span className="text-[10px] bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded font-mono">Lowest % Top</span>
+            <span className="text-[10px] bg-rose-50 text-rose-800 px-2 py-0.5 rounded font-mono border border-rose-200">Lowest % Top</span>
           </div>
 
           {processCompletionChart.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 text-xs">No process assignments planned today.</div>
+            <div className="text-center py-8 text-stone-500 text-xs">No process assignments planned today.</div>
           ) : (
             <div className="space-y-3">
               {processCompletionChart.slice(0, 6).map((item, idx) => (
                 <div key={idx} className="space-y-1">
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-white truncate max-w-[220px]">{item.label}</span>
-                    <span className={`font-mono font-bold ${item.pct < 30 ? 'text-rose-400' : item.pct < 70 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    <span className="text-stone-900 truncate max-w-[220px]">{item.label}</span>
+                    <span className={`font-mono font-bold ${item.pct < 30 ? 'text-rose-800' : item.pct < 70 ? 'text-amber-800' : 'text-emerald-800'}`}>
                       {item.done} / {item.target} pcs ({item.pct}%)
                     </span>
                   </div>
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
                     <div 
                       className={`h-full rounded-full transition-all duration-300 ${
-                        item.pct < 30 ? 'bg-rose-500' : item.pct < 70 ? 'bg-amber-400' : 'bg-emerald-400'
+                        item.pct < 30 ? 'bg-rose-600' : item.pct < 70 ? 'bg-amber-600' : 'bg-emerald-600'
                       }`}
                       style={{ width: `${item.pct}%` }}
                     />
@@ -288,24 +288,24 @@ export const DashboardScreen: React.FC = () => {
         </div>
 
         {/* Not Started List */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4 flex flex-col justify-between">
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
+              <h3 className="text-base font-bold text-stone-900 flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-700" />
                 <span>Not Started Today ({notStartedList.length})</span>
               </h3>
-              <span className="text-[10px] bg-amber-400/10 text-amber-400 px-2 py-0.5 rounded font-mono">0 Output Logged</span>
+              <span className="text-[10px] bg-amber-50 text-amber-900 px-2 py-0.5 rounded font-mono border border-amber-200">0 Output Logged</span>
             </div>
 
             {notStartedList.length === 0 ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6 text-center text-emerald-300 text-xs font-medium">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 text-center text-emerald-900 text-xs font-medium">
                 All planned line workers have logged output today! Excellent line activation.
               </div>
             ) : (
               <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                 {notStartedList.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
+                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-stone-50 border border-stone-200">
                     <div className="flex items-center space-x-3">
                       <WorkerAvatar
                         photoUrl={item.worker?.photo_url}
@@ -314,14 +314,14 @@ export const DashboardScreen: React.FC = () => {
                         className="rounded-full"
                       />
                       <div>
-                        <div className="text-xs font-bold text-white">{item.worker?.full_name}</div>
-                        <div className="text-[11px] text-amber-400 font-medium">
-                          {item.process?.name} <span className="text-slate-500">({item.style?.style_code})</span>
+                        <div className="text-xs font-bold text-stone-900">{item.worker?.full_name}</div>
+                        <div className="text-[11px] text-amber-800 font-medium">
+                          {item.process?.name} <span className="text-stone-500">({item.style?.style_code})</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-right text-[11px] font-mono text-slate-400">
+                    <div className="text-right text-[11px] font-mono text-stone-600">
                       Target: {item.assignment.target_qty || 250} pcs
                     </div>
                   </div>
@@ -335,24 +335,24 @@ export const DashboardScreen: React.FC = () => {
       {/* Main Grid: 14-Day Chart & Top Earners */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 14-Day Production Output Line Chart */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-indigo-700" />
                 <span>{t('outputTrend')}</span>
               </h3>
-              <p className="text-xs text-slate-400">Total pieces completed per day over the last two weeks</p>
+              <p className="text-xs text-stone-600">Total pieces completed per day over the last two weeks</p>
             </div>
           </div>
 
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E7E5E4" />
                 <XAxis 
                   dataKey="date" 
-                  stroke="#64748b" 
+                  stroke="#78716C" 
                   fontSize={10} 
                   tickLine={false} 
                   interval={isMobile ? 0 : 'preserveEnd'} 
@@ -360,17 +360,17 @@ export const DashboardScreen: React.FC = () => {
                   textAnchor={isMobile ? 'end' : 'middle'} 
                   height={isMobile ? 40 : 30} 
                 />
-                <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis stroke="#78716C" fontSize={11} tickLine={false} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E7E5E4', borderRadius: '12px', color: '#1C1917' }}
                   formatter={(val: any) => [`${val} pcs`, 'Pieces']}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="pieces" 
-                  stroke="#6366f1" 
+                  stroke="#4338CA" 
                   strokeWidth={3} 
-                  dot={{ fill: '#fbbf24', r: 4 }} 
+                  dot={{ fill: '#B45309', r: 4 }} 
                   activeDot={{ r: 6 }} 
                 />
               </LineChart>
@@ -379,26 +379,26 @@ export const DashboardScreen: React.FC = () => {
         </div>
 
         {/* Top 5 Earners Today */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Award className="w-4 h-4 text-amber-400" />
+              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-700" />
                 <span>{t('topEarners')}</span>
               </h3>
-              <span className="text-[10px] bg-amber-400/10 text-amber-400 px-2 py-0.5 rounded font-mono">Today</span>
+              <span className="text-[10px] bg-amber-50 text-amber-900 px-2 py-0.5 rounded font-mono border border-amber-200">Today</span>
             </div>
 
             <div className="space-y-3">
               {topEarnerList.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-xs">
+                <div className="text-center py-8 text-stone-500 text-xs">
                   No production entries logged yet today.
                 </div>
               ) : (
                 topEarnerList.map((item, idx) => (
                   <div 
                     key={item.worker?.id || idx}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-800 transition-colors"
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-stone-50 border border-stone-200 hover:bg-stone-100 transition-colors"
                   >
                     <div className="flex items-center space-x-3">
                       <div className="relative">
@@ -408,27 +408,27 @@ export const DashboardScreen: React.FC = () => {
                           size="lg"
                           className="rounded-full"
                         />
-                        <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-950 ${
-                          idx === 0 ? 'bg-amber-400' : idx === 1 ? 'bg-slate-300' : idx === 2 ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300'
+                        <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          idx === 0 ? 'bg-amber-400 text-stone-900' : idx === 1 ? 'bg-stone-300 text-stone-900' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-stone-200 text-stone-700'
                         }`}>
                           {idx + 1}
                         </span>
                       </div>
                       <div>
-                        <div className="font-semibold text-sm text-white truncate max-w-[130px]">
+                        <div className="font-semibold text-sm text-stone-900 truncate max-w-[130px]">
                           {item.worker?.full_name}
                         </div>
-                        <div className="text-xs text-slate-400 font-mono">
+                        <div className="text-xs text-stone-600 font-mono">
                           {item.worker?.worker_code} • {item.worker?.line_no}
                         </div>
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-sm font-bold text-amber-400 font-mono">
+                      <div className="text-sm font-bold text-amber-800 font-mono">
                         {currencySymbol}{item.amount.toFixed(0)}
                       </div>
-                      <div className="text-[10px] text-slate-500">Earned</div>
+                      <div className="text-[10px] text-stone-500">Earned</div>
                     </div>
                   </div>
                 ))
@@ -439,12 +439,12 @@ export const DashboardScreen: React.FC = () => {
       </div>
 
       {/* Per-Style Progress Bars */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-        <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+      <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs">
+        <h3 className="text-base font-bold text-stone-900 mb-1 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700" />
           <span>{t('styleProgress')}</span>
         </h3>
-        <p className="text-xs text-slate-400 mb-4">Completed order garments vs buyer target</p>
+        <p className="text-xs text-stone-600 mb-4">Completed order garments vs buyer target</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {styles.map(style => {
@@ -453,7 +453,7 @@ export const DashboardScreen: React.FC = () => {
             const percent = Math.min(100, Math.round((completed / target) * 100));
 
             return (
-              <div key={style.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4">
+              <div key={style.id} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center space-x-3">
                     <StyleImage
@@ -462,23 +462,23 @@ export const DashboardScreen: React.FC = () => {
                       className="w-12 h-12 rounded-lg object-cover"
                     />
                     <div>
-                      <h4 className="font-bold text-sm text-white">{style.name}</h4>
-                      <p className="text-xs text-slate-400 font-mono">{style.style_code} • {style.buyer_name}</p>
+                      <h4 className="font-bold text-sm text-stone-900">{style.name}</h4>
+                      <p className="text-xs text-stone-600 font-mono">{style.style_code} • {style.buyer_name}</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded-lg border border-indigo-500/30">
+                  <span className="text-xs font-bold px-2 py-1 bg-indigo-50 text-indigo-800 rounded-lg border border-indigo-200">
                     {percent}% Done
                   </span>
                 </div>
 
-                <div className="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden mt-3">
+                <div className="w-full bg-stone-200 h-2.5 rounded-full overflow-hidden mt-3">
                   <div 
-                    className="bg-gradient-to-r from-indigo-500 to-amber-400 h-full rounded-full transition-all duration-500" 
+                    className="bg-gradient-to-r from-indigo-600 to-amber-600 h-full rounded-full transition-all duration-500" 
                     style={{ width: `${percent}%` }}
                   ></div>
                 </div>
 
-                <div className="flex justify-between text-xs font-mono text-slate-400 mt-2">
+                <div className="flex justify-between text-xs font-mono text-stone-600 mt-2">
                   <span>{completed.toLocaleString()} completed</span>
                   <span>Target: {target.toLocaleString()} pcs</span>
                 </div>
