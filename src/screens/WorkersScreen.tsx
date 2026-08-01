@@ -63,6 +63,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
   const [credentialsModal, setCredentialsModal] = useState<{
     show: boolean;
     workerCode: string;
+    phone: string;
     pin: string;
     workerName: string;
   } | null>(null);
@@ -172,6 +173,21 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       return;
     }
 
+    const cleanPhone = workerForm.phone.trim();
+    if (!cleanPhone) {
+      setFormError('Mobile / Phone Number is required. A worker with no phone number cannot log in.');
+      return;
+    }
+
+    // Validate phone uniqueness locally
+    const dupPhone = workers.find(
+      w => w.id !== editingWorker?.id && w.phone && w.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '')
+    );
+    if (dupPhone) {
+      setFormError('This phone number is already registered to another worker.');
+      return;
+    }
+
     if (!workerForm.section) {
       setFormError('Section is required (Sewing, Finishing, Cutting).');
       return;
@@ -193,7 +209,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
         id: editingWorker?.id,
         worker_code: cleanCode,
         full_name: workerForm.full_name.trim(),
-        phone: workerForm.phone.trim() || null,
+        phone: cleanPhone,
         section: workerForm.section,
         line_no: workerForm.line_no.trim() || 'Line-01',
         payment_method: workerForm.payment_method,
@@ -204,14 +220,15 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
       // If creating a new worker and Admin specified a PIN
       if (isNewWorker && isAdmin && pin) {
-        await dataService.setWorkerPin(cleanCode, pin);
+        await dataService.setWorkerPinByPhone(cleanPhone, pin);
         setShowModal(false);
         await loadData();
 
-        // Show confirmation dialog with code & PIN once
+        // Show confirmation dialog with phone & PIN once
         setCredentialsModal({
           show: true,
           workerCode: cleanCode,
+          phone: cleanPhone,
           pin: pin,
           workerName: saved.full_name,
         });
@@ -225,7 +242,11 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       await loadData();
     } catch (err: any) {
       console.error('Error saving worker:', err);
-      setFormError(err.message || 'Failed to save worker.');
+      if (err.message && (err.message.includes('phone') || err.message.includes('duplicate') || err.message.includes('unique'))) {
+        setFormError('This phone number is already registered to another worker.');
+      } else {
+        setFormError(err.message || 'Failed to save worker.');
+      }
     } finally {
       setSavingWorker(false);
     }
@@ -241,6 +262,11 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     e.preventDefault();
     if (!resetPinWorker) return;
 
+    if (!resetPinWorker.phone) {
+      setResetPinError('This worker does not have a registered mobile number.');
+      return;
+    }
+
     const pin = resetPinInput.trim();
     if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
       setResetPinError('PIN must be a 4-digit number (e.g. 1234).');
@@ -249,8 +275,9 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
     setSavingPin(true);
     try {
-      await dataService.setWorkerPin(resetPinWorker.worker_code, pin);
+      await dataService.setWorkerPinByPhone(resetPinWorker.phone, pin);
       const wCode = resetPinWorker.worker_code;
+      const wPhone = resetPinWorker.phone;
       const wName = resetPinWorker.full_name;
 
       setResetPinWorker(null);
@@ -259,6 +286,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       setCredentialsModal({
         show: true,
         workerCode: wCode,
+        phone: wPhone,
         pin: pin,
         workerName: wName,
       });
@@ -400,7 +428,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                       {hasPin ? (
                         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                           <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
-                          <span>PIN Set</span>
+                          <span>Can log in</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
@@ -715,15 +743,18 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
               {/* Phone Number */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Phone Number
+                  Mobile / Phone Number <span className="text-rose-400">*</span>
                 </label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  required
                   value={workerForm.phone}
                   onChange={e => setWorkerForm({ ...workerForm, phone: e.target.value })}
-                  placeholder="+88017..."
+                  placeholder="e.g. 0123456789 or +60123456789"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">Required for worker portal login</p>
               </div>
 
               {/* Payment Method */}
@@ -904,8 +935,14 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                 <span className="font-bold text-white font-sans">{credentialsModal.workerName}</span>
               </div>
               <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-                <span className="text-xs font-sans text-slate-400">Worker Code (Username):</span>
+                <span className="text-xs font-sans text-slate-400">Mobile Number (Login ID):</span>
                 <span className="font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-1 rounded-lg text-base">
+                  {credentialsModal.phone}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                <span className="text-xs font-sans text-slate-400">Worker Code:</span>
+                <span className="font-bold text-slate-300 font-sans text-xs">
                   {credentialsModal.workerCode}
                 </span>
               </div>
@@ -928,7 +965,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
               <button
                 type="button"
                 onClick={() => {
-                  const textToCopy = `StitchPay Worker Credentials:\nWorker Name: ${credentialsModal.workerName}\nWorker Code: ${credentialsModal.workerCode}\nPIN: ${credentialsModal.pin}`;
+                  const textToCopy = `StitchPay Worker Credentials:\nWorker Name: ${credentialsModal.workerName}\nMobile Number: ${credentialsModal.phone}\nPIN: ${credentialsModal.pin}`;
                   navigator.clipboard.writeText(textToCopy);
                   setCopiedCredentials(true);
                   showSuccessToast('Credentials copied to clipboard!');

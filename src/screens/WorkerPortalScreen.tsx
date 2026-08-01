@@ -14,8 +14,8 @@ export const WorkerPortalScreen: React.FC = () => {
   const [currentWorker, setCurrentWorker] = useState<Worker | null>(null);
 
   // Login Form State
-  const [workerCodeInput, setWorkerCodeInput] = useState<string>('W-001');
-  const [pinInput, setPinInput] = useState<string>('1111');
+  const [phoneInput, setPhoneInput] = useState<string>('');
+  const [pinInput, setPinInput] = useState<string>('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState<boolean>(false);
 
@@ -60,8 +60,8 @@ export const WorkerPortalScreen: React.FC = () => {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!workerCodeInput.trim() || !pinInput.trim()) {
-      setLoginError('Please enter both Worker Code and 4-digit PIN');
+    if (!phoneInput.trim() || !pinInput.trim()) {
+      setLoginError('Please enter both Mobile Number and 4-digit PIN');
       return;
     }
 
@@ -69,13 +69,13 @@ export const WorkerPortalScreen: React.FC = () => {
     setLoginError(null);
 
     try {
-      const verified = await dataService.verifyWorkerPin(workerCodeInput, pinInput);
+      const verified = await dataService.verifyWorkerPinByPhone(phoneInput, pinInput);
       if (verified) {
         sessionStorage.setItem('stitchpay_worker_id', verified.id);
         setCurrentWorker(verified);
         await loadWorkerData(verified.id);
       } else {
-        setLoginError('Invalid Worker Code or PIN. Please try again.');
+        setLoginError('Invalid Mobile Number or PIN. Please try again.');
       }
     } catch (err: any) {
       setLoginError(err?.message || 'Login failed. Please check credentials.');
@@ -216,7 +216,7 @@ export const WorkerPortalScreen: React.FC = () => {
               <UserCheck className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-black text-white tracking-tight">Worker Portal</h1>
-            <p className="text-xs text-slate-400">Enter your Worker Code and 4-digit PIN to access your account</p>
+            <p className="text-xs text-slate-400">Enter your Mobile Number and 4-digit PIN to access your account</p>
           </div>
 
           {loginError && (
@@ -229,16 +229,17 @@ export const WorkerPortalScreen: React.FC = () => {
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
-                Worker Code
+                Mobile Number
               </label>
               <div className="relative">
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   required
-                  value={workerCodeInput}
-                  onChange={(e) => setWorkerCodeInput(e.target.value.toUpperCase())}
-                  placeholder="e.g. W-001"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-white focus:outline-none focus:border-indigo-500 uppercase"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  placeholder="e.g. 0123456789 or +60123456789"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -250,6 +251,7 @@ export const WorkerPortalScreen: React.FC = () => {
               <div className="relative">
                 <input
                   type="password"
+                  inputMode="numeric"
                   required
                   maxLength={4}
                   value={pinInput}

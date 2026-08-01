@@ -141,9 +141,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
 
         {/* Footer info */}
-        <p className="text-center text-xs text-slate-500">
-          Protected System. Unauthorized access is strictly logged & audited.
-        </p>
+        <div className="text-center">
+          <a
+            href="/worker"
+            className="inline-flex items-center space-x-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+          >
+            <span>Are you a factory worker? Sign in here</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </a>
+        </div>
       </div>
     </div>
   );

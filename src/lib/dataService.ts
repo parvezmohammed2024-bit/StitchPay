@@ -931,6 +931,84 @@ class DataService {
     return this.attendance;
   }
 
+  public async verifyWorkerPinByPhone(phone: string, pin: string): Promise<Worker | null> {
+    const cleanPhone = phone.trim();
+    const cleanPin = pin.trim();
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('verify_worker_pin_phone', {
+          p_phone: cleanPhone,
+          p_pin: cleanPin,
+        });
+
+        if (error) {
+          console.error('RPC verify_worker_pin_phone error:', error);
+          this.handleError(error, 'Error verifying worker PIN');
+          return null;
+        }
+
+        if (data && Array.isArray(data) && data.length > 0) {
+          return data[0] as Worker;
+        }
+        if (data && typeof data === 'object' && !Array.isArray(data) && (data as any).id) {
+          return data as Worker;
+        }
+        return null;
+      } catch (err) {
+        console.error('Failed to invoke verify_worker_pin_phone:', err);
+        return null;
+      }
+    } else {
+      const workers = await this.getWorkers();
+      const normalize = (p: string) => p.replace(/\D/g, '');
+      const normInput = normalize(cleanPhone);
+      const w = workers.find(w => w.phone && normalize(w.phone) === normInput);
+      if (!w) return null;
+      if (cleanPin === '1111' || cleanPin === '1234') {
+        return w;
+      }
+      return null;
+    }
+  }
+
+  public async setWorkerPinByPhone(phone: string, pin: string): Promise<boolean> {
+    const cleanPhone = phone.trim();
+    const cleanPin = pin.trim();
+
+    if (!cleanPhone || !cleanPin) {
+      throw new Error('Mobile number and PIN are required');
+    }
+    if (cleanPin.length !== 4 || !/^\d{4}$/.test(cleanPin)) {
+      throw new Error('PIN must be a 4-digit number');
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.rpc('set_worker_pin_by_phone', {
+        p_phone: cleanPhone,
+        p_pin: cleanPin,
+      });
+
+      if (error) {
+        console.error('RPC set_worker_pin_by_phone error:', error);
+        throw new Error(error.message || 'Failed to set worker PIN');
+      }
+      return true;
+    } else {
+      const workers = await this.getWorkers();
+      const normalize = (p: string) => p.replace(/\D/g, '');
+      const normInput = normalize(cleanPhone);
+      const idx = this.workers.findIndex(w => w.phone && normalize(w.phone) === normInput);
+      if (idx >= 0) {
+        this.workers[idx] = {
+          ...this.workers[idx],
+          pin_hash: 'mock_pin_hash',
+        };
+      }
+      return true;
+    }
+  }
+
   public async verifyWorkerPin(workerCode: string, pin: string): Promise<Worker | null> {
     const cleanCode = workerCode.trim().toUpperCase();
     const cleanPin = pin.trim();
@@ -963,7 +1041,6 @@ class DataService {
       const workers = await this.getWorkers();
       const w = workers.find(w => w.worker_code.toUpperCase() === cleanCode);
       if (!w) return null;
-      // Demo PIN verification for mock mode
       if ((w.worker_code === 'W-001' && cleanPin === '1111') || 
           (w.worker_code === 'W-002' && cleanPin === '2222') || 
           cleanPin === '1111') {

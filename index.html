@@ -4,6 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StitchPay Garments</title>
+    <script>
+      (function() {
+        function makeWritable(obj, prop) {
+          try {
+            if (!obj) return;
+            var currentVal = obj[prop];
+            var desc = Object.getOwnPropertyDescriptor(obj, prop);
+            var proto = obj;
+            while (!desc && (proto = Object.getPrototypeOf(proto))) {
+              desc = Object.getOwnPropertyDescriptor(proto, prop);
+            }
+            if (!desc || !desc.set) {
+              var val = currentVal;
+              Object.defineProperty(obj, prop, {
+                get: function() { return val; },
+                set: function(v) { val = v; },
+                configurable: true,
+                enumerable: true
+              });
+            }
+          } catch (e) {
+            console.warn('Failed to make ' + prop + ' writable:', e);
+          }
+        }
+        if (typeof window !== 'undefined') makeWritable(window, 'fetch');
+        if (typeof globalThis !== 'undefined' && globalThis !== window) makeWritable(globalThis, 'fetch');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
