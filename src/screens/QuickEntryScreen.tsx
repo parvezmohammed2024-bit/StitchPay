@@ -153,6 +153,8 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
   const targetPercent = totalTargetPiecesToday > 0 ? Math.min(100, Math.round((Number(totalPiecesEnteredToday) / Number(totalTargetPiecesToday)) * 100)) : 0;
 
   const totalWageValueAccrued = assignments.reduce((sum, a) => {
+    const w = workers.find(work => work.id === a.worker_id);
+    if (w?.pay_type === 'monthly_salary') return sum; // Exclude salaried workers from piece-rate wage calculation
     const draft = drafts.get(a.id);
     const qty = draft ? draft.qty_ok : 0;
     return sum + (qty * a.agreed_rate);
@@ -372,7 +374,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
                       </span>
                       <span>{procGroup.process?.name}</span>
                     </span>
-                    <span>Standard Rate: {currencySymbol}{procGroup.process?.rate.toFixed(2)}</span>
+                    <span>Standard Rate: {currencySymbol}{(procGroup.process?.rate || 0).toFixed(2)}</span>
                   </div>
 
                   {/* ASSIGNED WORKERS ROWS */}
@@ -404,7 +406,13 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
                                   <span className="text-xs text-stone-500 font-mono">({worker?.worker_code})</span>
                                 </div>
                                 <div className="text-xs text-amber-800 font-semibold mt-0.5">
-                                  Agreed Rate: {currencySymbol}{assign.agreed_rate.toFixed(2)} / pc
+                                  {worker?.pay_type === 'monthly_salary' ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300">
+                                      Monthly Salaried ({currencySymbol}{(worker.monthly_salary || 0).toLocaleString()}/mo)
+                                    </span>
+                                  ) : (
+                                    <span>Agreed Rate: {currencySymbol}{(assign.agreed_rate || 0).toFixed(2)} / pc</span>
+                                  )}
                                 </div>
                               </div>
                             </div>

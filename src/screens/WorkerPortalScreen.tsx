@@ -539,9 +539,15 @@ export const WorkerPortalScreen: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
                       <span>Style: <strong className="text-stone-800">{work.style_name}</strong></span>
                       <span>Target: <strong className="text-stone-800">{targetQty} pcs</strong></span>
-                      <span className="text-emerald-800 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                        Approved Rate: ৳{work.agreed_rate}/pc
-                      </span>
+                      {currentWorker.pay_type === 'monthly_salary' ? (
+                        <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-300">
+                          Monthly Salaried (Fixed)
+                        </span>
+                      ) : (
+                        <span className="text-emerald-800 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                          Approved Rate: ৳{work.agreed_rate}/pc
+                        </span>
+                      )}
                     </div>
 
                     {/* Progress Bar */}
@@ -556,15 +562,17 @@ export const WorkerPortalScreen: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Actions: Bidding Option + Log Production */}
+                  {/* Actions: Bidding Option (for piece-rate only) + Log Production */}
                   <div className="flex items-center space-x-2 self-start md:self-center shrink-0">
-                    <button
-                      onClick={() => setBiddingAssignment(work)}
-                      className="bg-stone-100 hover:bg-stone-200 text-amber-900 border border-stone-200 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1"
-                    >
-                      <DollarSign className="w-3.5 h-3.5 text-amber-800" />
-                      <span>Bidding Option</span>
-                    </button>
+                    {currentWorker.pay_type !== 'monthly_salary' && (
+                      <button
+                        onClick={() => setBiddingAssignment(work)}
+                        className="bg-stone-100 hover:bg-stone-200 text-amber-900 border border-stone-200 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1"
+                      >
+                        <DollarSign className="w-3.5 h-3.5 text-amber-800" />
+                        <span>Bidding Option</span>
+                      </button>
+                    )}
 
                     <button
                       onClick={() => setSelectedWork(work)}
@@ -606,23 +614,47 @@ export const WorkerPortalScreen: React.FC = () => {
 
         {/* Metric Cards Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
-            <div className="text-xs font-bold text-stone-600 uppercase">Today's Piece Earnings</div>
-            <div className="text-2xl font-black text-amber-800 mt-1 font-mono">৳{todayEarningsBDT.toLocaleString()}</div>
-            <div className="text-[11px] text-stone-500 mt-0.5">{todayOutputPcs} pieces completed today</div>
-          </div>
+          {currentWorker.pay_type === 'monthly_salary' ? (
+            <>
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <div className="text-xs font-bold text-stone-600 uppercase">Fixed Base Salary</div>
+                <div className="text-2xl font-black text-amber-800 mt-1 font-mono">৳{(currentWorker.monthly_salary || 0).toLocaleString()}</div>
+                <div className="text-[11px] text-stone-500 mt-0.5">Fixed Monthly Pay</div>
+              </div>
 
-          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
-            <div className="text-xs font-bold text-stone-600 uppercase">Current Period Earnings</div>
-            <div className="text-2xl font-black text-indigo-700 mt-1 font-mono">৳{totalPeriodEarningsBDT.toLocaleString()}</div>
-            <div className="text-[11px] text-stone-500 mt-0.5">{totalPeriodOutputPcs} total pieces logged</div>
-          </div>
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <div className="text-xs font-bold text-stone-600 uppercase">Today's Piece Output</div>
+                <div className="text-2xl font-black text-indigo-700 mt-1 font-mono">{todayOutputPcs.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span></div>
+                <div className="text-[11px] text-stone-500 mt-0.5">{totalPeriodOutputPcs} total pieces logged this period</div>
+              </div>
 
-          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
-            <div className="text-xs font-bold text-stone-600 uppercase">Net Payable Amount</div>
-            <div className="text-2xl font-black text-emerald-800 mt-1 font-mono">৳{netReceivableBDT.toLocaleString()}</div>
-            <div className="text-[11px] text-stone-500 mt-0.5">After advance deductions (৳{outstandingAdvanceBDT})</div>
-          </div>
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <div className="text-xs font-bold text-stone-600 uppercase">Net Payable Salary</div>
+                <div className="text-2xl font-black text-emerald-800 mt-1 font-mono">৳{Math.max(0, (currentWorker.monthly_salary || 0) - outstandingAdvanceBDT).toLocaleString()}</div>
+                <div className="text-[11px] text-stone-500 mt-0.5">After advance deductions (৳{outstandingAdvanceBDT})</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <div className="text-xs font-bold text-stone-600 uppercase">Today's Piece Earnings</div>
+                <div className="text-2xl font-black text-amber-800 mt-1 font-mono">৳{todayEarningsBDT.toLocaleString()}</div>
+                <div className="text-[11px] text-stone-500 mt-0.5">{todayOutputPcs} pieces completed today</div>
+              </div>
+
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <div className="text-xs font-bold text-stone-600 uppercase">Current Period Earnings</div>
+                <div className="text-2xl font-black text-indigo-700 mt-1 font-mono">৳{totalPeriodEarningsBDT.toLocaleString()}</div>
+                <div className="text-[11px] text-stone-500 mt-0.5">{totalPeriodOutputPcs} total pieces logged</div>
+              </div>
+
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200">
+                <div className="text-xs font-bold text-stone-600 uppercase">Net Payable Amount</div>
+                <div className="text-2xl font-black text-emerald-800 mt-1 font-mono">৳{netReceivableBDT.toLocaleString()}</div>
+                <div className="text-[11px] text-stone-500 mt-0.5">After advance deductions (৳{outstandingAdvanceBDT})</div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Visual Graph: Earnings & Production over last 7 days */}

@@ -81,7 +81,7 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
           </div>
           <div className="text-xs text-stone-600 flex justify-between pt-1">
             <span>Target Volume: <strong className="text-stone-900">{assignment.target_qty || 250} pcs</strong></span>
-            <span>Target Earning: <strong className="text-amber-700 font-bold">৳{((assignment.target_qty || 250) * assignment.agreed_rate).toFixed(0)}</strong></span>
+            <span>Target Earning: <strong className="text-amber-700 font-bold">৳{(((assignment.target_qty || 250) * (assignment.agreed_rate || 0)) || 0).toFixed(0)}</strong></span>
           </div>
         </div>
 

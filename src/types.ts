@@ -39,6 +39,8 @@ export interface Worker {
   payment_details: Record<string, any>;
   status: 'active' | 'inactive';
   pin_hash?: string | null;
+  pay_type?: 'piece_rate' | 'monthly_salary';
+  monthly_salary?: number;
   created_at?: string;
   // Computed / UI helper fields
   outstanding_advance?: number;

@@ -902,7 +902,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                             className="bg-stone-50 border border-amber-500 rounded-lg px-2 py-1 text-sm text-amber-800 font-bold w-24 text-right"
                           />
                         ) : (
-                          `${currencySymbol}${Number(proc.rate).toFixed(2)}`
+                          `${currencySymbol}${Number(proc.rate || 0).toFixed(2)}`
                         )}
                       </td>
 
@@ -1172,21 +1172,21 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
                     <span className="text-[11px] text-stone-600 block font-medium">Total Wages Paid</span>
                     <span className="text-base font-black text-emerald-700 font-mono mt-0.5 block">
-                      {currencySymbol}{completionDetails.totalWagesPaid.toFixed(2)}
+                      {currencySymbol}{(completionDetails.totalWagesPaid || 0).toFixed(2)}
                     </span>
                   </div>
 
                   <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
                     <span className="text-[11px] text-stone-600 block font-medium">Target Cost / Garment</span>
                     <span className="text-base font-black text-indigo-800 font-mono mt-0.5 block">
-                      {currencySymbol}{completionDetails.targetLabourCost.toFixed(2)}
+                      {currencySymbol}{(completionDetails.targetLabourCost || 0).toFixed(2)}
                     </span>
                   </div>
 
                   <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
                     <span className="text-[11px] text-stone-600 block font-medium">Actual Cost / Garment</span>
                     <span className="text-base font-black text-amber-800 font-mono mt-0.5 block">
-                      {currencySymbol}{completionDetails.actualLabourCostPerGarment.toFixed(2)}
+                      {currencySymbol}{(completionDetails.actualLabourCostPerGarment || 0).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -1205,9 +1205,9 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   </div>
                   <div className="text-right font-mono font-bold text-sm">
                     {completionDetails.variancePerGarment > 0
-                      ? `+${currencySymbol}${completionDetails.variancePerGarment.toFixed(2)} / pc`
+                      ? `+${currencySymbol}${(completionDetails.variancePerGarment || 0).toFixed(2)} / pc`
                       : completionDetails.variancePerGarment < 0
-                      ? `-${currencySymbol}${Math.abs(completionDetails.variancePerGarment).toFixed(2)} / pc`
+                      ? `-${currencySymbol}${Math.abs(completionDetails.variancePerGarment || 0).toFixed(2)} / pc`
                       : `${currencySymbol}0.00 (On Target)`}
                   </div>
                 </div>

@@ -45,14 +45,16 @@ export const ReportsScreen: React.FC = () => {
     .sort((a, b) => b.rejects - a.rejects)
     .slice(0, 6);
 
-  // Worker Earnings Ranking
+  // Worker Piece Earnings Ranking (Exclude salaried workers)
+  const workersMap = new Map<string, Worker>(workers.map(w => [w.id, w]));
   const workerEarnMap = new Map<string, number>();
   entries.forEach(e => {
+    const w = workersMap.get(e.worker_id);
+    if (w?.pay_type === 'monthly_salary') return; // Exclude monthly salaried workers from piece earnings ranking
     const cur = workerEarnMap.get(e.worker_id) || 0;
     workerEarnMap.set(e.worker_id, cur + e.amount);
   });
 
-  const workersMap = new Map<string, Worker>(workers.map(w => [w.id, w]));
   const workerRankData = Array.from(workerEarnMap.entries())
     .map(([wId, amt]) => ({
       name: workersMap.get(wId)?.full_name || 'Worker',

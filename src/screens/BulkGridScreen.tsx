@@ -193,7 +193,14 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
                       className="rounded-full"
                     />
                     <div className="truncate">
-                      <div className="font-bold">{worker.full_name}</div>
+                      <div className="font-bold flex items-center space-x-1">
+                        <span>{worker.full_name}</span>
+                        {worker.pay_type === 'monthly_salary' && (
+                          <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1 rounded">
+                            Monthly
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-stone-500 font-mono">{worker.worker_code}</div>
                     </div>
                   </td>
@@ -216,7 +223,11 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role }) => {
 
                   <td className="p-3 text-right sticky right-0 z-10 bg-white font-mono font-bold text-amber-800">
                     {rowPieces} pcs
-                    <div className="text-[10px] text-stone-500">{currencySymbol}{rowMoney.toFixed(0)}</div>
+                    {worker.pay_type === 'monthly_salary' ? (
+                      <div className="text-[10px] text-stone-500 font-sans font-medium">(Fixed Monthly)</div>
+                    ) : (
+                      <div className="text-[10px] text-stone-500">{currencySymbol}{(rowMoney || 0).toFixed(0)}</div>
+                    )}
                   </td>
                 </tr>
               );

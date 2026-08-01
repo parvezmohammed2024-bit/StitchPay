@@ -272,22 +272,22 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                   <div>
                     <div className="text-[10px] text-stone-500 font-semibold uppercase">Standard Rate</div>
                     <div className="text-sm font-bold text-stone-800">
-                      {settings?.currency_symbol || '৳'}{bid.current_rate.toFixed(2)}
+                      {settings?.currency_symbol || '৳'}{(bid.current_rate || 0).toFixed(2)}
                     </div>
                   </div>
 
                   <div>
                     <div className="text-[10px] text-stone-500 font-semibold uppercase">Proposed Rate</div>
                     <div className="text-sm font-bold text-amber-800">
-                      {settings?.currency_symbol || '৳'}{bid.proposed_rate.toFixed(2)}
+                      {settings?.currency_symbol || '৳'}{(bid.proposed_rate || 0).toFixed(2)}
                     </div>
                   </div>
 
                   <div>
                     <div className="text-[10px] text-stone-500 font-semibold uppercase">Difference</div>
                     <div className={`text-sm font-bold flex items-center justify-center ${diffAmount >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
-                      {diffAmount >= 0 ? '+' : ''}{settings?.currency_symbol || '৳'}{diffAmount.toFixed(2)}
-                      <span className="text-[10px] ml-1">({diffPercent >= 0 ? '+' : ''}{diffPercent.toFixed(1)}%)</span>
+                      {diffAmount >= 0 ? '+' : ''}{settings?.currency_symbol || '৳'}{(diffAmount || 0).toFixed(2)}
+                      <span className="text-[10px] ml-1">({diffPercent >= 0 ? '+' : ''}{(diffPercent || 0).toFixed(1)}%)</span>
                     </div>
                   </div>
                 </div>
@@ -297,7 +297,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                   <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex justify-between items-center text-xs">
                     <span className="text-indigo-900 font-medium">Manager Counter Offer:</span>
                     <strong className="text-indigo-800 text-sm font-bold">
-                      {settings?.currency_symbol || '৳'}{bid.counter_rate.toFixed(2)} / pc
+                      {settings?.currency_symbol || '৳'}{(bid.counter_rate || 0).toFixed(2)} / pc
                     </strong>
                   </div>
                 )}
@@ -313,7 +313,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                     <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 flex items-center space-x-2 text-rose-900 text-[11px]">
                       <AlertTriangle className="w-4 h-4 text-rose-700 shrink-0" />
                       <span>
-                        <strong>Min Wage Warning:</strong> At {avgOutput} pcs/day output, proposed rate yields {settings?.currency_symbol || '৳'}{proposedTotalDaily.toFixed(0)}/day (Below min wage {settings?.currency_symbol || '৳'}{minWage}/day).
+                        <strong>Min Wage Warning:</strong> At {avgOutput} pcs/day output, proposed rate yields {settings?.currency_symbol || '৳'}{(proposedTotalDaily || 0).toFixed(0)}/day (Below min wage {settings?.currency_symbol || '৳'}{minWage}/day).
                       </span>
                     </div>
                   )}
@@ -410,7 +410,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
             <div className="text-xs text-stone-600 space-y-1">
               <div>Worker: <strong className="text-stone-900">{counterModal.workerName}</strong></div>
               <div>Process: <strong className="text-stone-900">{counterModal.processName}</strong></div>
-              <div>Requested Rate: <strong className="text-amber-800">{settings?.currency_symbol || '৳'}{counterModal.proposedRate.toFixed(2)}</strong></div>
+              <div>Requested Rate: <strong className="text-amber-800">{settings?.currency_symbol || '৳'}{(counterModal.proposedRate || 0).toFixed(2)}</strong></div>
             </div>
 
             <div>
@@ -490,7 +490,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                 className="w-full bg-stone-50 border border-stone-200 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-600"
               >
                 {processes.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} — Standard: {settings?.currency_symbol || '৳'}{p.rate.toFixed(2)}</option>
+                  <option key={p.id} value={p.id}>{p.name} — Standard: {settings?.currency_symbol || '৳'}{(p.rate || 0).toFixed(2)}</option>
                 ))}
               </select>
             </div>

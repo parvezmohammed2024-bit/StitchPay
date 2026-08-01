@@ -439,6 +439,8 @@ class DataService {
       section: worker.section || 'Sewing',
       line_no: worker.line_no || 'Line-01',
       joined_at: worker.joined_at || new Date().toISOString().split('T')[0],
+      pay_type: worker.pay_type || 'piece_rate',
+      monthly_salary: Number(worker.monthly_salary || 0),
       payment_method: worker.payment_method || 'cash',
       payment_details: worker.payment_details || {},
       status: worker.status || 'active',
@@ -1652,6 +1654,10 @@ class DataService {
     const minWagePerDay = settings.minimum_wage_per_day;
     const enableTopup = settings.enable_minimum_wage_topup;
 
+    const startDate = new Date(period.start_date);
+    const endDate = new Date(period.end_date);
+    const totalDaysInPeriod = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
     const lines: PayrollLine[] = workers.map(worker => {
       const workerEntries = entries.filter(e => 
         e.worker_id === worker.id && 
@@ -1659,7 +1665,7 @@ class DataService {
         e.entry_date <= period.end_date
       );
       const piecesTotal = workerEntries.reduce((sum, e) => sum + (e.qty_ok || 0), 0);
-      const pieceEarnings = workerEntries.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const pieceEarningsRaw = workerEntries.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       const workerAtt = attendance.filter(a => 
         a.worker_id === worker.id && 
@@ -1668,6 +1674,7 @@ class DataService {
       );
       const presentDays = workerAtt.filter(a => a.status === 'present').length;
       const halfDays = workerAtt.filter(a => a.status === 'half_day').length;
+      const leaveDays = workerAtt.filter(a => a.status === 'leave' || a.status === 'holiday').length;
       const otHrs = workerAtt.reduce((sum, a) => sum + (a.ot_hours || 0), 0);
       const otAmount = otHrs * 50;
 
@@ -1682,11 +1689,21 @@ class DataService {
       const advRepay = workerAdj.filter(a => a.type === 'advance_repay').reduce((sum, a) => sum + Number(a.amount), 0);
       const deductions = fines + advRepay;
 
+      let pieceEarnings = pieceEarningsRaw;
       let minimumWageTopup = 0;
-      if (enableTopup && (presentDays + halfDays > 0)) {
-        const requiredWage = (presentDays + 0.5 * halfDays) * minWagePerDay;
-        if (pieceEarnings < requiredWage) {
-          minimumWageTopup = requiredWage - pieceEarnings;
+
+      if (worker.pay_type === 'monthly_salary') {
+        const attendedDays = workerAtt.length > 0 
+          ? (presentDays + 0.5 * halfDays + leaveDays)
+          : totalDaysInPeriod;
+        pieceEarnings = Math.round(((worker.monthly_salary || 0) / totalDaysInPeriod) * Math.min(totalDaysInPeriod, attendedDays) * 100) / 100;
+        minimumWageTopup = 0; // Skip minimum wage top-up for salaried workers
+      } else {
+        if (enableTopup && (presentDays + halfDays > 0)) {
+          const requiredWage = (presentDays + 0.5 * halfDays) * minWagePerDay;
+          if (pieceEarnings < requiredWage) {
+            minimumWageTopup = requiredWage - pieceEarnings;
+          }
         }
       }
 

@@ -38,6 +38,8 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     phone: string;
     section: string;
     line_no: string;
+    pay_type: 'piece_rate' | 'monthly_salary';
+    monthly_salary: number;
     payment_method: 'cash' | 'bank' | 'mobile_wallet';
     payment_details: Record<string, any>;
     photo_url: string | null;
@@ -48,6 +50,8 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     phone: '',
     section: 'Sewing',
     line_no: 'Line-01',
+    pay_type: 'piece_rate',
+    monthly_salary: 15000,
     payment_method: 'mobile_wallet',
     payment_details: { provider: 'bKash', account: '' },
     photo_url: null,
@@ -126,6 +130,8 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       phone: '',
       section: 'Sewing',
       line_no: 'Line-01',
+      pay_type: 'piece_rate',
+      monthly_salary: 15000,
       payment_method: 'mobile_wallet',
       payment_details: { provider: 'bKash', account: '' },
       photo_url: null,
@@ -143,6 +149,8 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       phone: worker.phone || '',
       section: worker.section || 'Sewing',
       line_no: worker.line_no || 'Line-01',
+      pay_type: worker.pay_type || 'piece_rate',
+      monthly_salary: worker.monthly_salary || 15000,
       payment_method: worker.payment_method || 'mobile_wallet',
       payment_details: worker.payment_details || { provider: 'bKash', account: '' },
       photo_url: worker.photo_url || null,
@@ -196,6 +204,11 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       return;
     }
 
+    if (workerForm.pay_type === 'monthly_salary' && (!workerForm.monthly_salary || workerForm.monthly_salary <= 0)) {
+      setFormError('Monthly Salary amount is required for monthly-salary workers.');
+      return;
+    }
+
     const pin = (workerForm.pin || '').trim();
     const isNewWorker = !editingWorker;
 
@@ -215,6 +228,8 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
         phone: cleanPhone,
         section: workerForm.section,
         line_no: workerForm.line_no.trim() || 'Line-01',
+        pay_type: workerForm.pay_type,
+        monthly_salary: workerForm.pay_type === 'monthly_salary' ? Number(workerForm.monthly_salary || 0) : 0,
         payment_method: workerForm.payment_method,
         payment_details: workerForm.payment_details,
         photo_url: workerForm.photo_url || null,
@@ -444,10 +459,20 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
                     <h3 className="font-bold text-stone-900 text-base truncate mt-1.5">{worker.full_name}</h3>
                     
-                    <div className="flex items-center space-x-2 text-xs text-stone-600 mt-0.5">
+                    <div className="flex items-center space-x-2 text-xs text-stone-600 mt-0.5 flex-wrap gap-y-1">
                       <span className="font-semibold text-stone-800">{worker.section || 'Sewing'}</span>
                       <span>•</span>
                       <span className="font-mono">{worker.line_no || 'Line-01'}</span>
+                      <span>•</span>
+                      {worker.pay_type === 'monthly_salary' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300">
+                          Monthly ({currencySymbol}{(worker.monthly_salary || 0).toLocaleString()})
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-900 border border-indigo-200">
+                          Piece Rate
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -589,7 +614,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                 <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
                   <span className="text-xs text-stone-600 block">{t('monthlyEarnings')}</span>
                   <span className="text-xl font-black text-amber-800 font-mono mt-0.5 block">
-                    {currencySymbol}{metrics.monthlyEarnings.toFixed(0)}
+                    {currencySymbol}{(metrics?.monthlyEarnings || 0).toFixed(0)}
                   </span>
                 </div>
 
@@ -772,6 +797,42 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                 />
                 <p className="text-[11px] text-stone-500 mt-1">Required for worker portal login</p>
               </div>
+
+              {/* Pay Type Selector */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Pay Type <span className="text-rose-700">*</span>
+                </label>
+                <select
+                  value={workerForm.pay_type}
+                  onChange={e => setWorkerForm({ ...workerForm, pay_type: e.target.value as any })}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-900 font-bold focus:outline-none focus:border-indigo-600"
+                >
+                  <option value="piece_rate">Piece Rate (Paid per finished garment piece)</option>
+                  <option value="monthly_salary">Monthly Salary (Fixed monthly wage)</option>
+                </select>
+              </div>
+
+              {/* Monthly Salary Amount (When monthly_salary is chosen) */}
+              {workerForm.pay_type === 'monthly_salary' && (
+                <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl space-y-1">
+                  <label className="block text-xs font-bold text-amber-900">
+                    Monthly Salary Amount ({currencySymbol}) <span className="text-rose-700">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={workerForm.monthly_salary}
+                    onChange={e => setWorkerForm({ ...workerForm, monthly_salary: parseFloat(e.target.value) || 0 })}
+                    placeholder="e.g. 15000"
+                    className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-base font-mono font-bold text-amber-900 focus:outline-none focus:border-amber-700"
+                  />
+                  <p className="text-[11px] text-stone-600">
+                    Fixed monthly remuneration for helpers, cutters, ironers, supervisors, etc.
+                  </p>
+                </div>
+              )}
 
               {/* Payment Method */}
               <div>

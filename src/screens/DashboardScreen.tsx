@@ -426,7 +426,7 @@ export const DashboardScreen: React.FC = () => {
 
                     <div className="text-right">
                       <div className="text-sm font-bold text-amber-800 font-mono">
-                        {currencySymbol}{item.amount.toFixed(0)}
+                        {currencySymbol}{(item.amount || 0).toFixed(0)}
                       </div>
                       <div className="text-[10px] text-stone-500">Earned</div>
                     </div>

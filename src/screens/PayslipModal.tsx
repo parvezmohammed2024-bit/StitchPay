@@ -86,21 +86,36 @@ Deductions: ${currency}${line.deductions}
 
         {/* Breakdown Items */}
         <div className="space-y-2 text-xs font-mono mb-6">
-          <div className="flex justify-between py-1 border-b border-stone-200">
-            <span className="text-stone-600">Total Completed Pieces:</span>
-            <span className="font-bold text-stone-900">{line.pieces_total} pcs</span>
-          </div>
+          {worker?.pay_type === 'monthly_salary' ? (
+            <>
+              <div className="flex justify-between py-1 border-b border-stone-200">
+                <span className="text-stone-600">Pay Type:</span>
+                <span className="font-bold text-amber-800">Monthly Fixed Salary ({currency}{(worker.monthly_salary || 0).toLocaleString()}/mo)</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-stone-200">
+                <span className="text-stone-600">Prorated Basic Salary:</span>
+                <span className="font-bold text-emerald-800">{currency}{(line.gross_wage || 0).toFixed(2)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between py-1 border-b border-stone-200">
+                <span className="text-stone-600">Total Completed Pieces:</span>
+                <span className="font-bold text-stone-900">{line.pieces_total || 0} pcs</span>
+              </div>
 
-          <div className="flex justify-between py-1 border-b border-stone-200">
-            <span className="text-stone-600">Piece Earnings (Gross):</span>
-            <span className="font-bold text-emerald-800">{currency}{line.piece_earnings.toFixed(2)}</span>
-          </div>
+              <div className="flex justify-between py-1 border-b border-stone-200">
+                <span className="text-stone-600">Piece Earnings (Gross):</span>
+                <span className="font-bold text-emerald-800">{currency}{(line.piece_earnings || 0).toFixed(2)}</span>
+              </div>
 
-          {line.minimum_wage_topup > 0 && (
-            <div className="flex justify-between py-1 border-b border-stone-200 text-amber-900 bg-amber-50 px-2 rounded">
-              <span>Min Wage Daily Top-up:</span>
-              <span className="font-bold">+{currency}{line.minimum_wage_topup.toFixed(2)}</span>
-            </div>
+              {(line.minimum_wage_topup || 0) > 0 && (
+                <div className="flex justify-between py-1 border-b border-stone-200 text-amber-900 bg-amber-50 px-2 rounded">
+                  <span>Min Wage Daily Top-up:</span>
+                  <span className="font-bold">+{currency}{(line.minimum_wage_topup || 0).toFixed(2)}</span>
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex justify-between py-1 border-b border-stone-200">
@@ -115,12 +130,12 @@ Deductions: ${currency}${line.deductions}
 
           <div className="flex justify-between py-1 border-b border-stone-200 text-rose-800">
             <span>Deductions (Advance/Fines):</span>
-            <span className="font-bold">-{currency}{line.deductions.toFixed(2)}</span>
+            <span className="font-bold">-{currency}{(line.deductions || 0).toFixed(2)}</span>
           </div>
 
           <div className="flex justify-between py-3 text-base font-black text-amber-900 border-t-2 border-stone-300 mt-3">
             <span>NET PAYABLE AMOUNT:</span>
-            <span className="text-xl font-mono">{currency}{line.net_payable.toFixed(2)}</span>
+            <span className="text-xl font-mono">{currency}{(line.net_payable || 0).toFixed(2)}</span>
           </div>
         </div>
 

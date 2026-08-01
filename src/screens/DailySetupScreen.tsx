@@ -256,7 +256,17 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   // Calculate Summary metrics
   const totalAssignedWorkersCount = new Set(assignments.map(a => a.worker_id)).size;
   const totalProcessesCovered = new Set(assignments.map(a => a.process_id)).size;
-  const estimatedWageCost = assignments.reduce((sum, a) => sum + ((a.target_qty || 0) * a.agreed_rate), 0);
+  
+  const pieceRateAssignments = assignments.filter(a => {
+    const w = workers.find(work => work.id === a.worker_id);
+    return !w || w.pay_type !== 'monthly_salary';
+  });
+  const salariedAssignmentsCount = new Set(assignments.filter(a => {
+    const w = workers.find(work => work.id === a.worker_id);
+    return w?.pay_type === 'monthly_salary';
+  }).map(a => a.worker_id)).size;
+
+  const estimatedPieceWageCost = pieceRateAssignments.reduce((sum, a) => sum + ((a.target_qty || 0) * a.agreed_rate), 0);
 
   return (
     <div className="space-y-6 pb-20">
@@ -421,9 +431,14 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
             <DollarSign className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs text-stone-600 font-medium">Est. Target Wage Cost</div>
-            <div className="text-2xl font-bold text-amber-800">
-              {settings?.currency_symbol || '৳'}{estimatedWageCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            <div className="text-xs text-stone-600 font-medium">Est. Piece Target Wage Cost</div>
+            <div className="text-xl font-bold text-amber-800">
+              {settings?.currency_symbol || '৳'}{estimatedPieceWageCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {salariedAssignmentsCount > 0 && (
+                <span className="text-[11px] font-normal text-stone-500 block">
+                  ({salariedAssignmentsCount} salaried worker{salariedAssignmentsCount > 1 ? 's' : ''} assigned)
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -487,7 +502,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                             <div className="text-base font-semibold text-stone-900 flex items-center space-x-2">
                               <span>{proc.name}</span>
                               <span className="text-xs text-stone-600 bg-stone-200 px-2 py-0.5 rounded-md font-mono">
-                                Standard Rate: {settings?.currency_symbol || '৳'}{proc.rate.toFixed(2)}
+                                Standard Rate: {settings?.currency_symbol || '৳'}{(proc.rate || 0).toFixed(2)}
                               </span>
                             </div>
                             <div className="text-xs text-stone-500">
@@ -551,17 +566,25 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
 
                                     {/* AGREED RATE BADGE */}
                                     <div className="text-xs text-stone-600 mt-0.5 flex items-center space-x-2">
-                                      <span>Agreed Rate:</span>
-                                      <span className={`font-semibold ${isRateBidded ? 'text-amber-800' : 'text-stone-900'}`}>
-                                        {settings?.currency_symbol || '৳'}{assign.agreed_rate.toFixed(2)}
-                                      </span>
-                                      {isRateBidded && (
-                                        <span 
-                                          className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded"
-                                          title={`Standard process rate is ${settings?.currency_symbol || '৳'}${proc.rate.toFixed(2)}`}
-                                        >
-                                          Rate Bidded
+                                      {worker?.pay_type === 'monthly_salary' ? (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300">
+                                          Monthly Salaried ({settings?.currency_symbol || '৳'}{(worker.monthly_salary || 0).toLocaleString()}/mo)
                                         </span>
+                                      ) : (
+                                        <>
+                                          <span>Agreed Rate:</span>
+                                          <span className={`font-semibold ${isRateBidded ? 'text-amber-800' : 'text-stone-900'}`}>
+                                            {settings?.currency_symbol || '৳'}{(assign.agreed_rate || 0).toFixed(2)}
+                                          </span>
+                                          {isRateBidded && (
+                                            <span 
+                                              className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded"
+                                              title={`Standard process rate is ${settings?.currency_symbol || '৳'}${(proc.rate || 0).toFixed(2)}`}
+                                            >
+                                              Rate Bidded
+                                            </span>
+                                          )}
+                                        </>
                                       )}
                                     </div>
                                   </div>
@@ -818,7 +841,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                         {p?.name} → <span className="text-amber-800">{w?.full_name}</span>
                       </div>
                       <div className="text-stone-600 font-mono">
-                        {settings?.currency_symbol || '৳'}{item.agreed_rate.toFixed(2)}/pc
+                        {settings?.currency_symbol || '৳'}{(item.agreed_rate || 0).toFixed(2)}/pc
                       </div>
                     </div>
                   );
@@ -865,7 +888,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
             <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-xs space-y-1">
               <div className="text-stone-600">Worker: <strong className="text-stone-900">{proposeRateModal.workerName}</strong></div>
               <div className="text-stone-600">Operation: <strong className="text-stone-900">{proposeRateModal.processName}</strong></div>
-              <div className="text-stone-600">Standard Rate: <strong className="text-emerald-800">{settings?.currency_symbol || '৳'}{proposeRateModal.currentRate.toFixed(2)}</strong></div>
+              <div className="text-stone-600">Standard Rate: <strong className="text-emerald-800">{settings?.currency_symbol || '৳'}{(proposeRateModal.currentRate || 0).toFixed(2)}</strong></div>
             </div>
 
             <div>

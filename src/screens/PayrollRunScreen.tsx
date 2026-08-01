@@ -219,17 +219,17 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
                 </div>
                 <div>
                   <span className="text-stone-500 uppercase text-[10px] block font-bold">Piece Gross</span>
-                  <span className="font-mono font-bold text-emerald-800">{currencySymbol}{line.piece_earnings.toFixed(2)}</span>
+                  <span className="font-mono font-bold text-emerald-800">{currencySymbol}{(line.piece_earnings || 0).toFixed(2)}</span>
                 </div>
                 <div>
                   <span className="text-stone-500 uppercase text-[10px] block font-bold">Min Wage Top-up</span>
                   <span className="font-mono font-bold text-amber-800">
-                    {line.minimum_wage_topup > 0 ? `+${currencySymbol}${line.minimum_wage_topup.toFixed(2)}` : '-'}
+                    {(line.minimum_wage_topup || 0) > 0 ? `+${currencySymbol}${(line.minimum_wage_topup || 0).toFixed(2)}` : '-'}
                   </span>
                 </div>
                 <div>
                   <span className="text-stone-500 uppercase text-[10px] block font-bold">Net Payable</span>
-                  <span className="font-mono font-black text-amber-800 text-sm">{currencySymbol}{line.net_payable.toFixed(2)}</span>
+                  <span className="font-mono font-black text-amber-800 text-sm">{currencySymbol}{(line.net_payable || 0).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -251,58 +251,72 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
-              {payrollLines.map(line => (
-                <tr key={line.id} className="hover:bg-stone-50">
-                  <td className="p-3 font-medium text-stone-900 flex items-center space-x-3">
-                    <WorkerAvatar
-                      photoUrl={line.worker?.photo_url}
-                      name={line.worker?.full_name || 'Worker'}
-                      size="sm"
-                      className="rounded-full"
-                    />
-                    <div>
-                      <div className="font-bold">{line.worker?.full_name}</div>
-                      <div className="text-[10px] text-stone-500 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
-                    </div>
-                  </td>
+              {payrollLines.map(line => {
+                const isSalaried = line.worker?.pay_type === 'monthly_salary';
+                return (
+                  <tr key={line.id} className="hover:bg-stone-50">
+                    <td className="p-3 font-medium text-stone-900 flex items-center space-x-3">
+                      <WorkerAvatar
+                        photoUrl={line.worker?.photo_url}
+                        name={line.worker?.full_name || 'Worker'}
+                        size="sm"
+                        className="rounded-full shrink-0"
+                      />
+                      <div>
+                        <div className="font-bold flex items-center space-x-1.5">
+                          <span>{line.worker?.full_name}</span>
+                          {isSalaried && (
+                            <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded">
+                              Monthly
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-stone-500 font-mono">{line.worker?.worker_code} • {line.worker?.line_no}</div>
+                      </div>
+                    </td>
 
-                  <td className="p-3 text-right font-mono text-stone-900 font-bold">
-                    {line.pieces_total} pcs
-                  </td>
+                    <td className="p-3 text-right font-mono text-stone-900 font-bold">
+                      {line.pieces_total} pcs
+                    </td>
 
-                  <td className="p-3 text-right font-mono text-emerald-800 font-bold">
-                    {currencySymbol}{line.piece_earnings.toFixed(2)}
-                  </td>
+                    <td className="p-3 text-right font-mono text-emerald-800 font-bold">
+                      {isSalaried ? (
+                        <span className="text-stone-700 font-sans text-xs">Prorated Salary: {currencySymbol}{(line.gross_wage || 0).toFixed(2)}</span>
+                      ) : (
+                        <span>{currencySymbol}{(line.piece_earnings || 0).toFixed(2)}</span>
+                      )}
+                    </td>
 
-                  <td className="p-3 text-right font-mono">
-                    {line.minimum_wage_topup > 0 ? (
-                      <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
-                        +{currencySymbol}{line.minimum_wage_topup.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-stone-400">-</span>
-                    )}
-                  </td>
+                    <td className="p-3 text-right font-mono">
+                      {!isSalaried && (line.minimum_wage_topup || 0) > 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold border border-amber-300">
+                          +{currencySymbol}{(line.minimum_wage_topup || 0).toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-stone-400">-</span>
+                      )}
+                    </td>
 
-                  <td className="p-3 text-right font-mono text-rose-700">
-                    -{currencySymbol}{line.deductions.toFixed(2)}
-                  </td>
+                    <td className="p-3 text-right font-mono text-rose-700">
+                      -{currencySymbol}{(line.deductions || 0).toFixed(2)}
+                    </td>
 
-                  <td className="p-3 text-right font-mono font-black text-amber-800 text-sm">
-                    {currencySymbol}{line.net_payable.toFixed(2)}
-                  </td>
+                    <td className="p-3 text-right font-mono font-black text-amber-800 text-sm">
+                      {currencySymbol}{(line.net_payable || 0).toFixed(2)}
+                    </td>
 
-                  <td className="p-3 text-center">
-                    <button
-                      onClick={() => setSelectedLine(line)}
-                      className="p-1.5 bg-stone-100 hover:bg-stone-200 text-indigo-700 rounded-lg border border-stone-200 transition-colors"
-                      title="View Printable Payslip"
-                    >
-                      <FileText className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    <td className="p-3 text-center">
+                      <button
+                        onClick={() => setSelectedLine(line)}
+                        className="p-1.5 bg-stone-100 hover:bg-stone-200 text-indigo-700 rounded-lg border border-stone-200 transition-colors"
+                        title="View Printable Payslip"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
