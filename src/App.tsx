@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Navigation, ScreenId } from './components/Navigation';
 import { UserRoleManagerModal } from './components/UserRoleManagerModal';
-import { AuthModal } from './components/AuthModal';
 import { ToastContainer } from './components/ToastContainer';
 import { LanguageContext, Language, translations } from './lib/i18n';
 import { dataService } from './lib/dataService';
 import { UserRole, FactorySettings, UserAccount, Worker } from './types';
 
 // Screens
+import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { WorkerPortalScreen } from './screens/WorkerPortalScreen';
 import { DailySetupScreen } from './screens/DailySetupScreen';
@@ -31,7 +31,6 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [isRoleManagerOpen, setIsRoleManagerOpen] = useState<boolean>(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [pathname, setPathname] = useState<string>(window.location.pathname);
 
   useEffect(() => {
@@ -45,13 +44,15 @@ export default function App() {
   useEffect(() => {
     dataService.getSettings().then(setSettings);
     dataService.getWorkers().then(setWorkers);
-    const user = dataService.getCurrentAuthUser();
-    if (user) {
-      setCurrentUser(user);
-      if (user.role !== 'worker') {
-        setRole(user.role);
+    
+    dataService.initSupabaseAuthSession().then(user => {
+      if (user) {
+        setCurrentUser(user);
+        if (user.role !== 'worker') {
+          setRole(user.role);
+        }
       }
-    }
+    });
   }, []);
 
   const handleRoleChange = (newRole: UserRole) => {
@@ -72,12 +73,13 @@ export default function App() {
       window.history.pushState({}, '', '/worker');
       setPathname('/worker');
     } else {
-      handleRoleChange(user.role);
+      setRole(user.role);
+      dataService.setRole(user.role);
     }
   };
 
-  const handleLogout = () => {
-    dataService.logoutUser();
+  const handleLogout = async () => {
+    await dataService.logoutUser();
     setCurrentUser(null);
   };
 
@@ -127,7 +129,20 @@ export default function App() {
     );
   }
 
-  // ADMIN / SUPERVISOR / ACCOUNTS APP ROUTE
+  // IF NOT AUTHENTICATED -> SHOW FULL-PAGE LOGIN SCREEN
+  if (!currentUser) {
+    return (
+      <LanguageContext.Provider value={{ lang, setLang, t }}>
+        <ToastContainer />
+        <LoginScreen
+          onAuthSuccess={handleAuthSuccess}
+          factoryName={settings?.factory_name || 'StitchPay Garments Ltd.'}
+        />
+      </LanguageContext.Provider>
+    );
+  }
+
+  // ADMIN / SUPERVISOR / ACCOUNTS APP ROUTE (AUTHENTICATED)
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>
       <ToastContainer />
@@ -141,7 +156,6 @@ export default function App() {
           factoryName={settings?.factory_name || 'StitchPay Garments Ltd.'}
           logoUrl={settings?.logo_url}
           currentUser={currentUser}
-          onOpenAuthModal={() => setIsAuthModalOpen(true)}
           onLogout={handleLogout}
           onOpenRoleManager={() => setIsRoleManagerOpen(true)}
           isWorkerPortal={false}
@@ -151,14 +165,6 @@ export default function App() {
         <UserRoleManagerModal
           isOpen={isRoleManagerOpen}
           onClose={() => setIsRoleManagerOpen(false)}
-        />
-
-        {/* Authentication Modal */}
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-          onAuthSuccess={handleAuthSuccess}
-          workers={workers}
         />
 
         {/* Main Body */}

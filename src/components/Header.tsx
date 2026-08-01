@@ -82,105 +82,54 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* Right Controls: Auth User, Role Switcher & Language Toggle */}
+        {/* Right Controls: Auth User, Database Role Badge & Language Toggle */}
         <div className="flex items-center space-x-2">
-          {/* Auth User Profile / Log In / Log Out */}
-          {currentUser ? (
-            <div className="flex items-center space-x-1.5 bg-slate-800/80 pl-2 pr-1 py-1 rounded-xl border border-slate-700/70 text-xs">
-              <div className="w-6 h-6 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 flex items-center justify-center font-black text-[10px] shrink-0">
+          {currentUser && (
+            <div className="flex items-center space-x-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700/80 text-xs">
+              <div className="w-7 h-7 rounded-lg bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 flex items-center justify-center font-black text-xs shrink-0">
                 {currentUser.full_name.charAt(0).toUpperCase()}
               </div>
-              <div className="hidden lg:block text-left pr-1">
-                <div className="text-[11px] font-bold text-white truncate max-w-[110px]">
+              <div className="text-left pr-1">
+                <div className="text-[11px] font-bold text-white truncate max-w-[120px]">
                   {currentUser.full_name}
                 </div>
-                <div className="text-[9px] text-amber-400 font-mono uppercase tracking-wider">
-                  {currentUser.role}
+                <div className="text-[9px] text-amber-400 font-mono uppercase tracking-wider font-bold">
+                  {currentUser.role === 'admin' ? 'Master Admin' : currentUser.role}
                 </div>
               </div>
 
               <button
                 onClick={onLogout}
-                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors"
-                title="Log Out of account"
+                className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold transition-all ml-1"
+                title="Sign Out of Supabase Account"
               >
                 <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign Out</span>
               </button>
             </div>
-          ) : (
-            <button
-              onClick={onOpenAuthModal}
-              className="flex items-center space-x-1 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition-all"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Log In / Sign Up</span>
-            </button>
           )}
 
-          {/* Role Switcher Pills (Hidden on Worker Portal) */}
           {!hideAdminControls && (
-            <div className="flex items-center space-x-1">
-              <div className="flex items-center bg-slate-800 p-0.5 rounded-xl border border-slate-700 text-[11px]">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 ml-1 hidden xs:block" />
-                
-                <button
-                  onClick={() => onRoleChange('admin')}
-                  className={`px-2 py-1 rounded-lg transition-all font-medium ${
-                    currentRole === 'admin'
-                      ? 'bg-indigo-600 text-white shadow-sm font-semibold'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Full Admin access"
-                >
-                  Admin
-                </button>
-
-                <button
-                  onClick={() => onRoleChange('supervisor')}
-                  className={`px-2 py-1 rounded-lg transition-all font-medium ${
-                    currentRole === 'supervisor'
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Supervisor floor setup & entry"
-                >
-                  Supervisor
-                </button>
-
-                <button
-                  onClick={() => onRoleChange('accounts')}
-                  className={`px-2 py-1 rounded-lg transition-all font-medium ${
-                    currentRole === 'accounts'
-                      ? 'bg-emerald-600 text-white shadow-sm font-semibold'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Accounts & Payroll"
-                >
-                  Accounts
-                </button>
-              </div>
-
-              <a
-                href="/worker"
-                onClick={(e) => {
-                  e.preventDefault();
-                  window.history.pushState({}, '', '/worker');
-                  window.dispatchEvent(new Event('popstate'));
-                }}
-                className="flex items-center space-x-1 bg-sky-950 hover:bg-sky-900 text-sky-400 border border-sky-500/30 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all"
-                title="Go to Worker Portal (/worker)"
-              >
-                <UserCheck className="w-3 h-3 text-sky-400" />
-                <span className="hidden sm:inline">Worker Portal</span>
-                <span className="text-[10px] opacity-75">(/worker)</span>
-              </a>
-            </div>
+            <a
+              href="/worker"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState({}, '', '/worker');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="flex items-center space-x-1 bg-sky-950 hover:bg-sky-900 text-sky-400 border border-sky-500/30 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all"
+              title="Go to Worker Portal (/worker)"
+            >
+              <UserCheck className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden sm:inline">Worker Portal</span>
+              <span className="text-[10px] opacity-75">(/worker)</span>
+            </a>
           )}
 
           {/* Language Switcher */}
           <button
             onClick={() => onLangChange(lang === 'en' ? 'bn' : 'en')}
-            className="flex items-center space-x-1 px-2 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition-colors"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition-colors"
           >
             <Globe className="w-3.5 h-3.5 text-indigo-400" />
             <span className="font-semibold uppercase text-[11px]">{lang}</span>

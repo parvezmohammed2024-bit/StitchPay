@@ -352,7 +352,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       e => e.style_id === styleId && e.entry_date && e.entry_date >= startDateStr
     );
 
-    const totalPieces7d = styleEntries.reduce((sum, e) => sum + Number(e.qty_ok || e.count || 0), 0);
+    const totalPieces7d = styleEntries.reduce((sum, e) => sum + Number(e.qty_ok || 0), 0);
     return Math.round(totalPieces7d / 7);
   };
 

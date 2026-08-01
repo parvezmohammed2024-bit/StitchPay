@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Search, Plus, Phone, CreditCard, Calendar, Wallet, 
-  BarChart, X, Check, Award, ArrowUpRight 
+  BarChart, X, Check, Award, ArrowUpRight, ShieldCheck, AlertCircle, 
+  KeyRound, Copy, Edit3, Lock, RefreshCw 
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
-import { showErrorToast } from '../lib/toast';
+import { showErrorToast, showSuccessToast } from '../lib/toast';
 import { Worker, ProductionEntry, AttendanceRecord, Adjustment, FactorySettings, UserRole } from '../types';
 
 interface WorkersScreenProps {
@@ -25,9 +26,21 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
   const [selectedSection, setSelectedSection] = useState<string>('all');
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
 
-  // Add / Edit Modal
+  // Add / Edit Modal State
   const [showModal, setShowModal] = useState(false);
-  const [workerForm, setWorkerForm] = useState<Partial<Worker>>({
+  const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
+  const [workerForm, setWorkerForm] = useState<{
+    worker_code: string;
+    full_name: string;
+    phone: string;
+    section: string;
+    line_no: string;
+    payment_method: 'cash' | 'bank' | 'mobile_wallet';
+    payment_details: Record<string, any>;
+    photo_url: string;
+    pin?: string;
+  }>({
+    worker_code: '',
     full_name: '',
     phone: '',
     section: 'Sewing',
@@ -35,8 +48,27 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     payment_method: 'mobile_wallet',
     payment_details: { provider: 'bKash', account: '' },
     photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    pin: '',
   });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [savingWorker, setSavingWorker] = useState(false);
 
+  // Reset PIN Modal State
+  const [resetPinWorker, setResetPinWorker] = useState<Worker | null>(null);
+  const [resetPinInput, setResetPinInput] = useState('');
+  const [resetPinError, setResetPinError] = useState<string | null>(null);
+  const [savingPin, setSavingPin] = useState(false);
+
+  // Credentials Confirmation Modal State
+  const [credentialsModal, setCredentialsModal] = useState<{
+    show: boolean;
+    workerCode: string;
+    pin: string;
+    workerName: string;
+  } | null>(null);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
+
+  const isAdmin = role === 'admin';
   const isAccountsOrAdmin = role === 'admin' || role === 'accounts';
 
   useEffect(() => {
@@ -62,11 +94,30 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     }
   };
 
-  const handleSaveWorker = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await dataService.saveWorker(workerForm);
-    setShowModal(false);
+  // Helper to auto-suggest next worker code in sequence (e.g. W-001, W-002 -> W-003)
+  const generateNextWorkerCode = (wList: Worker[]): string => {
+    let maxNum = 0;
+    let padLen = 3;
+    for (const w of wList) {
+      if (!w.worker_code) continue;
+      const match = w.worker_code.match(/^W-(\d+)$/i) || w.worker_code.match(/(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+          padLen = Math.max(padLen, match[1].length);
+        }
+      }
+    }
+    const nextNum = maxNum + 1;
+    return `W-${String(nextNum).padStart(padLen, '0')}`;
+  };
+
+  const handleOpenAddModal = () => {
+    const nextCode = generateNextWorkerCode(workers);
+    setEditingWorker(null);
     setWorkerForm({
+      worker_code: nextCode,
       full_name: '',
       phone: '',
       section: 'Sewing',
@@ -74,11 +125,153 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
       payment_method: 'mobile_wallet',
       payment_details: { provider: 'bKash', account: '' },
       photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      pin: '',
     });
-    await loadData();
+    setFormError(null);
+    setShowModal(true);
   };
 
-  // Filter workers
+  const handleOpenEditModal = (worker: Worker) => {
+    setEditingWorker(worker);
+    setWorkerForm({
+      worker_code: worker.worker_code || '',
+      full_name: worker.full_name || '',
+      phone: worker.phone || '',
+      section: worker.section || 'Sewing',
+      line_no: worker.line_no || 'Line-01',
+      payment_method: worker.payment_method || 'mobile_wallet',
+      payment_details: worker.payment_details || { provider: 'bKash', account: '' },
+      photo_url: worker.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      pin: '',
+    });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const handleSaveWorker = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+
+    const cleanCode = workerForm.worker_code.trim().toUpperCase();
+    if (!cleanCode) {
+      setFormError('Worker Code is required (e.g. W-001).');
+      return;
+    }
+
+    // Validate uniqueness of worker code
+    const duplicate = workers.find(
+      w => w.id !== editingWorker?.id && w.worker_code.trim().toUpperCase() === cleanCode
+    );
+    if (duplicate) {
+      setFormError(`Worker Code "${cleanCode}" is already taken by ${duplicate.full_name}. Please enter a unique code.`);
+      return;
+    }
+
+    if (!workerForm.full_name.trim()) {
+      setFormError('Full Name is required.');
+      return;
+    }
+
+    if (!workerForm.section) {
+      setFormError('Section is required (Sewing, Finishing, Cutting).');
+      return;
+    }
+
+    const pin = (workerForm.pin || '').trim();
+    const isNewWorker = !editingWorker;
+
+    if (isNewWorker && isAdmin && pin) {
+      if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+        setFormError('PIN must be exactly 4 numeric digits (e.g. 1234).');
+        return;
+      }
+    }
+
+    setSavingWorker(true);
+    try {
+      const saved = await dataService.saveWorker({
+        id: editingWorker?.id,
+        worker_code: cleanCode,
+        full_name: workerForm.full_name.trim(),
+        phone: workerForm.phone.trim() || null,
+        section: workerForm.section,
+        line_no: workerForm.line_no.trim() || 'Line-01',
+        payment_method: workerForm.payment_method,
+        payment_details: workerForm.payment_details,
+        photo_url: workerForm.photo_url || null,
+        status: 'active',
+      });
+
+      // If creating a new worker and Admin specified a PIN
+      if (isNewWorker && isAdmin && pin) {
+        await dataService.setWorkerPin(cleanCode, pin);
+        setShowModal(false);
+        await loadData();
+
+        // Show confirmation dialog with code & PIN once
+        setCredentialsModal({
+          show: true,
+          workerCode: cleanCode,
+          pin: pin,
+          workerName: saved.full_name,
+        });
+        setCopiedCredentials(false);
+        setSavingWorker(false);
+        return;
+      }
+
+      setShowModal(false);
+      showSuccessToast(editingWorker ? 'Worker updated successfully' : 'Worker created successfully');
+      await loadData();
+    } catch (err: any) {
+      console.error('Error saving worker:', err);
+      setFormError(err.message || 'Failed to save worker.');
+    } finally {
+      setSavingWorker(false);
+    }
+  };
+
+  const handleOpenResetPin = (worker: Worker) => {
+    setResetPinWorker(worker);
+    setResetPinInput('');
+    setResetPinError(null);
+  };
+
+  const handleSaveResetPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPinWorker) return;
+
+    const pin = resetPinInput.trim();
+    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      setResetPinError('PIN must be a 4-digit number (e.g. 1234).');
+      return;
+    }
+
+    setSavingPin(true);
+    try {
+      await dataService.setWorkerPin(resetPinWorker.worker_code, pin);
+      const wCode = resetPinWorker.worker_code;
+      const wName = resetPinWorker.full_name;
+
+      setResetPinWorker(null);
+      await loadData();
+
+      setCredentialsModal({
+        show: true,
+        workerCode: wCode,
+        pin: pin,
+        workerName: wName,
+      });
+      setCopiedCredentials(false);
+    } catch (err: any) {
+      console.error('Error resetting PIN:', err);
+      setResetPinError(err.message || 'Failed to set worker PIN.');
+    } finally {
+      setSavingPin(false);
+    }
+  };
+
+  // Filter workers by search and section
   const filteredWorkers = workers.filter(w => {
     const matchesSearch = 
       w.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -88,7 +281,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     return matchesSearch && matchesSection;
   });
 
-  // Calculate worker detailed profile metrics when drawer is open
+  // Calculate worker detailed profile metrics
   const getWorkerMetrics = (wId: string) => {
     const wEntries = entries.filter(e => e.worker_id === wId);
     const wAtt = attendance.filter(a => a.worker_id === wId);
@@ -97,16 +290,13 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     const piecesDone = wEntries.reduce((sum, e) => sum + e.qty_ok, 0);
     const monthlyEarnings = wEntries.reduce((sum, e) => sum + e.amount, 0);
 
-    // Attendance summary
     const presentCount = wAtt.filter(a => a.status === 'present').length;
     const absentCount = wAtt.filter(a => a.status === 'absent').length;
 
-    // Advances calculation
     const advancesTaken = wAdj.filter(a => a.type === 'advance').reduce((sum, a) => sum + Number(a.amount), 0);
     const advancesRepaid = wAdj.filter(a => a.type === 'advance_repay').reduce((sum, a) => sum + Number(a.amount), 0);
     const outstandingAdvance = Math.max(0, advancesTaken - advancesRepaid);
 
-    // Process breakdown chart
     const procMap = new Map<string, number>();
     wEntries.forEach(e => {
       const name = e.process_name || 'Process';
@@ -144,7 +334,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
         {isAccountsOrAdmin && (
           <button
-            onClick={() => setShowModal(true)}
+            onClick={handleOpenAddModal}
             className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2.5 rounded-xl shadow-lg transition-all text-sm shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -161,7 +351,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search worker by name, code (W-101) or phone..."
+            placeholder="Search worker by name, code (W-001) or phone..."
             className="w-full bg-slate-800 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
           />
         </div>
@@ -171,9 +361,9 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
             <button
               key={sec}
               onClick={() => setSelectedSection(sec)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all ${
                 selectedSection === sec
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-indigo-600 text-white shadow-md'
                   : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
@@ -185,106 +375,208 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
       {/* Workers Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredWorkers.map(worker => (
-          <div
-            key={worker.id}
-            onClick={() => setSelectedWorker(worker)}
-            className="bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-indigo-500/50 hover:bg-slate-850 cursor-pointer transition-all shadow-lg flex flex-col justify-between"
-          >
-            <div className="flex items-start space-x-3.5">
-              <img
-                src={worker.photo_url || ''}
-                alt={worker.full_name}
-                className="w-14 h-14 rounded-2xl object-cover border-2 border-slate-700 shrink-0 shadow-md"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded">
-                    {worker.worker_code}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {worker.line_no}
-                  </span>
+        {filteredWorkers.map(worker => {
+          const hasPin = Boolean(worker.pin_hash);
+          return (
+            <div
+              key={worker.id}
+              onClick={() => setSelectedWorker(worker)}
+              className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 hover:bg-slate-850 cursor-pointer transition-all shadow-lg flex flex-col justify-between group"
+            >
+              <div>
+                <div className="flex items-start space-x-3.5">
+                  <img
+                    src={worker.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
+                    alt={worker.full_name}
+                    className="w-14 h-14 rounded-2xl object-cover border-2 border-slate-700 shrink-0 shadow-md"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+                        {worker.worker_code}
+                      </span>
+
+                      {/* PIN Status Badge */}
+                      {hasPin ? (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                          <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+                          <span>PIN Set</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                          <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                          <span>No PIN</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="font-bold text-white text-base truncate mt-1.5">{worker.full_name}</h3>
+                    
+                    <div className="flex items-center space-x-2 text-xs text-slate-400 mt-0.5">
+                      <span className="font-semibold text-slate-300">{worker.section || 'Sewing'}</span>
+                      <span>•</span>
+                      <span className="font-mono">{worker.line_no || 'Line-01'}</span>
+                    </div>
+                  </div>
                 </div>
-                <h3 className="font-bold text-white text-base truncate mt-1">{worker.full_name}</h3>
-                <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                  <Phone className="w-3 h-3 text-slate-500" /> {worker.phone || 'N/A'}
+
+                <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-3">
+                  <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span>{worker.phone || 'No phone registered'}</span>
                 </p>
               </div>
-            </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs font-mono">
-              <div className="bg-slate-800/60 p-2 rounded-xl">
-                <span className="text-slate-400 text-[10px] block">PAYMENT</span>
-                <span className="font-bold text-slate-200 capitalize">{worker.payment_method.replace('_', ' ')}</span>
-              </div>
-              <div className="bg-slate-800/60 p-2 rounded-xl text-right">
-                <span className="text-slate-400 text-[10px] block">ADVANCE BAL</span>
-                <span className="font-bold text-rose-400">{currencySymbol}{worker.outstanding_advance || 0}</span>
+              {/* Bottom Card Footer with Actions */}
+              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <div className="text-xs font-mono">
+                  <span className="text-slate-500 text-[10px] block font-sans">ADVANCE BAL</span>
+                  <span className="font-bold text-rose-400">{currencySymbol}{worker.outstanding_advance || 0}</span>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="flex items-center space-x-1.5">
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenResetPin(worker);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
+                      title="Reset 4-digit PIN for Worker Portal"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Reset PIN</span>
+                    </button>
+                  )}
+
+                  {isAccountsOrAdmin && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEditModal(worker);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all flex items-center space-x-1"
+                      title="Edit Worker Profile"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* WORKER PROFILE DRAWER / MODAL */}
       {selectedWorker && (() => {
         const metrics = getWorkerMetrics(selectedWorker.id);
+        const hasPin = Boolean(selectedWorker.pin_hash);
+
         return (
-          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto space-y-5">
               <button
                 onClick={() => setSelectedWorker(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
 
               {/* Profile Header */}
-              <div className="flex items-center space-x-4 border-b border-slate-800 pb-4">
+              <div className="flex items-start space-x-4 border-b border-slate-800 pb-5">
                 <img
-                  src={selectedWorker.photo_url || ''}
+                  src={selectedWorker.photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                   alt={selectedWorker.full_name}
-                  className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500 shadow-md"
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500 shadow-md shrink-0"
                 />
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-mono text-xs text-amber-400 font-bold bg-slate-800 px-2 py-0.5 rounded">
+                <div className="flex-1 min-w-0 pr-6">
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                    <span className="font-mono text-xs text-amber-400 font-bold bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">
                       {selectedWorker.worker_code}
                     </span>
-                    <span className="text-xs text-slate-400">{selectedWorker.section} • {selectedWorker.line_no}</span>
+                    <span className="text-xs text-slate-400">
+                      {selectedWorker.section || 'Sewing'} • {selectedWorker.line_no || 'Line-01'}
+                    </span>
+                    {hasPin ? (
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                        <span>PIN Set</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                        <AlertCircle className="w-3 h-3 text-rose-400" />
+                        <span>No PIN</span>
+                      </span>
+                    )}
                   </div>
-                  <h2 className="text-xl font-bold text-white mt-1">{selectedWorker.full_name}</h2>
-                  <p className="text-xs text-slate-400">{selectedWorker.phone || 'No phone registered'}</p>
+                  <h2 className="text-xl font-black text-white mt-1.5">{selectedWorker.full_name}</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">{selectedWorker.phone || 'No phone registered'}</p>
                 </div>
               </div>
 
+              {/* Action Buttons in Drawer */}
+              <div className="flex items-center space-x-2">
+                {isAccountsOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const w = selectedWorker;
+                      setSelectedWorker(null);
+                      handleOpenEditModal(w);
+                    }}
+                    className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition-all"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>Edit Profile</span>
+                  </button>
+                )}
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const w = selectedWorker;
+                      setSelectedWorker(null);
+                      handleOpenResetPin(w);
+                    }}
+                    className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition-all"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    <span>Reset Portal PIN</span>
+                  </button>
+                )}
+              </div>
+
               {/* Metrics Summary Grid */}
-              <div className="grid grid-cols-2 gap-3 my-4">
-                <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60">
                   <span className="text-xs text-slate-400 block">{t('monthlyEarnings')}</span>
-                  <span className="text-xl font-black text-amber-400 font-mono">
+                  <span className="text-xl font-black text-amber-400 font-mono mt-0.5 block">
                     {currencySymbol}{metrics.monthlyEarnings.toFixed(0)}
                   </span>
                 </div>
 
-                <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
+                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60">
                   <span className="text-xs text-slate-400 block">{t('pieces')} Completed</span>
-                  <span className="text-xl font-black text-emerald-400 font-mono">
+                  <span className="text-xl font-black text-emerald-400 font-mono mt-0.5 block">
                     {metrics.piecesDone.toLocaleString()} pcs
                   </span>
                 </div>
 
-                <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
+                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60">
                   <span className="text-xs text-slate-400 block">{t('outstandingAdvance')}</span>
-                  <span className="text-xl font-black text-rose-400 font-mono">
+                  <span className="text-xl font-black text-rose-400 font-mono mt-0.5 block">
                     {currencySymbol}{metrics.outstandingAdvance}
                   </span>
                 </div>
 
-                <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
+                <div className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60">
                   <span className="text-xs text-slate-400 block">Attendance</span>
-                  <span className="text-xl font-black text-white font-mono">
+                  <span className="text-xl font-black text-white font-mono mt-0.5 block">
                     {metrics.presentCount} <span className="text-xs font-normal text-slate-400">days present</span>
                   </span>
                 </div>
@@ -292,7 +584,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
               {/* Top Processes Chart */}
               {metrics.procChartData.length > 0 && (
-                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-800 my-4">
+                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
                     Top Processes Executed
                   </h4>
@@ -322,7 +614,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
 
               <button
                 onClick={() => setSelectedWorker(null)}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors mt-2"
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold py-3 rounded-2xl text-sm transition-colors"
               >
                 Close Profile
               </button>
@@ -331,53 +623,118 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
         );
       })()}
 
-      {/* MODAL: ADD WORKER */}
+      {/* MODAL: ADD / EDIT WORKER */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">Add Garment Worker</h3>
-            <form onSubmit={handleSaveWorker} className="space-y-3">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-lg font-black text-white">
+                {editingWorker ? 'Edit Garment Worker' : 'Add Garment Worker'}
+              </h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {formError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-medium flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveWorker} className="space-y-4">
+              {/* Worker Code (Required & Unique) */}
               <div>
-                <label className="text-xs text-slate-400">Full Name</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Worker Code <span className="text-rose-400">*</span>
+                </label>
                 <input
                   type="text"
                   required
-                  value={workerForm.full_name || ''}
+                  value={workerForm.worker_code}
+                  onChange={e => setWorkerForm({ ...workerForm, worker_code: e.target.value.toUpperCase() })}
+                  placeholder="e.g. W-001"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Unique ID & Worker Portal login username (e.g. W-001)
+                </p>
+              </div>
+
+              {/* Full Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Full Name <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={workerForm.full_name}
                   onChange={e => setWorkerForm({ ...workerForm, full_name: e.target.value })}
                   placeholder="e.g. Morshed Alam"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mt-1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              {/* Section & Line No */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400">Phone Number</label>
-                  <input
-                    type="text"
-                    value={workerForm.phone || ''}
-                    onChange={e => setWorkerForm({ ...workerForm, phone: e.target.value })}
-                    placeholder="+88017..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mt-1"
-                  />
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Section <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    required
+                    value={workerForm.section}
+                    onChange={e => setWorkerForm({ ...workerForm, section: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Sewing">Sewing</option>
+                    <option value="Finishing">Finishing</option>
+                    <option value="Cutting">Cutting</option>
+                  </select>
                 </div>
+
                 <div>
-                  <label className="text-xs text-slate-400">Line No</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Line No
+                  </label>
                   <input
                     type="text"
-                    value={workerForm.line_no || ''}
+                    value={workerForm.line_no}
                     onChange={e => setWorkerForm({ ...workerForm, line_no: e.target.value })}
-                    placeholder="Line-01"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mt-1"
+                    placeholder="e.g. Line-01"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
+              {/* Phone Number */}
               <div>
-                <label className="text-xs text-slate-400">Payment Method</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Phone Number
+                </label>
+                <input
+                  type="text"
+                  value={workerForm.phone}
+                  onChange={e => setWorkerForm({ ...workerForm, phone: e.target.value })}
+                  placeholder="+88017..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Payment Method
+                </label>
                 <select
-                  value={workerForm.payment_method || 'mobile_wallet'}
+                  value={workerForm.payment_method}
                   onChange={e => setWorkerForm({ ...workerForm, payment_method: e.target.value as any })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white mt-1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
                 >
                   <option value="mobile_wallet">Mobile Wallet (bKash / Nagad)</option>
                   <option value="cash">Cash</option>
@@ -385,22 +742,221 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                 </select>
               </div>
 
-              <div className="flex gap-2 pt-3">
+              {/* Set Initial PIN (Admin Only when Adding New Worker) */}
+              {!editingWorker && isAdmin && (
+                <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 space-y-2">
+                  <div className="flex items-center space-x-2 text-indigo-300 text-xs font-bold">
+                    <KeyRound className="w-4 h-4 text-indigo-400" />
+                    <span>Set Initial 4-Digit Login PIN</span>
+                  </div>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={workerForm.pin || ''}
+                    onChange={e => setWorkerForm({ ...workerForm, pin: e.target.value.replace(/\D/g, '') })}
+                    placeholder="e.g. 1234"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-base text-center font-mono font-bold text-emerald-400 tracking-widest focus:outline-none focus:border-indigo-500"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    4-digit PIN for the Worker Portal. You will see a one-time confirmation dialog after saving.
+                  </p>
+                </div>
+              )}
+
+              {/* Edit Mode Notice regarding PIN */}
+              {editingWorker && isAdmin && (
+                <div className="p-3 bg-slate-800/80 border border-slate-700/80 rounded-xl text-xs text-slate-400 flex items-center justify-between">
+                  <span>To change this worker's login PIN:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false);
+                      handleOpenResetPin(editingWorker);
+                    }}
+                    className="text-amber-400 hover:underline font-bold"
+                  >
+                    Reset PIN
+                  </button>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 bg-slate-800 text-slate-300 font-semibold py-2 rounded-xl text-sm"
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-sm transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-indigo-600 text-white font-semibold py-2 rounded-xl text-sm"
+                  disabled={savingWorker}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center space-x-2"
                 >
-                  Save Worker
+                  {savingWorker ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>{editingWorker ? 'Update Worker' : 'Save Worker'}</span>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RESET WORKER PIN (Admin Only) */}
+      {resetPinWorker && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center space-x-2 text-amber-400">
+                <KeyRound className="w-5 h-5" />
+                <h3 className="text-base font-black text-white">Reset Worker PIN</h3>
+              </div>
+              <button
+                onClick={() => setResetPinWorker(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div>
+              <p className="text-xs text-slate-300">
+                Worker: <strong className="text-white">{resetPinWorker.full_name}</strong>
+              </p>
+              <p className="text-xs text-amber-400 font-mono mt-0.5">
+                Code: {resetPinWorker.worker_code}
+              </p>
+            </div>
+
+            {resetPinError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs font-medium flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{resetPinError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveResetPin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  New 4-Digit Login PIN <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  maxLength={4}
+                  required
+                  autoFocus
+                  value={resetPinInput}
+                  onChange={e => setResetPinInput(e.target.value.replace(/\D/g, ''))}
+                  placeholder="1234"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-3 text-lg text-center font-mono font-bold text-emerald-400 tracking-widest focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResetPinWorker(null)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPin}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center space-x-2"
+                >
+                  {savingPin ? (
+                    <span>Saving...</span>
+                  ) : (
+                    <span>Set New PIN</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREDENTIALS CONFIRMATION DIALOG (SHOWS CODE & PIN ONCE) */}
+      {credentialsModal && credentialsModal.show && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative space-y-6">
+            <div className="flex items-center space-x-3 text-emerald-400">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Worker Credentials Ready</h3>
+                <p className="text-xs text-slate-400">Pass these login details to {credentialsModal.workerName}</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3 font-mono text-sm">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                <span className="text-xs font-sans text-slate-400">Worker Name:</span>
+                <span className="font-bold text-white font-sans">{credentialsModal.workerName}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                <span className="text-xs font-sans text-slate-400">Worker Code (Username):</span>
+                <span className="font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-1 rounded-lg text-base">
+                  {credentialsModal.workerCode}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-sans text-slate-400">4-Digit Login PIN:</span>
+                <span className="font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2.5 py-1 rounded-lg text-base tracking-widest">
+                  {credentialsModal.pin}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <span>
+                <strong>One-Time Notice:</strong> This PIN will <strong>never be displayed again</strong> for security. Make sure to copy or pass it to the worker now.
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const textToCopy = `StitchPay Worker Credentials:\nWorker Name: ${credentialsModal.workerName}\nWorker Code: ${credentialsModal.workerCode}\nPIN: ${credentialsModal.pin}`;
+                  navigator.clipboard.writeText(textToCopy);
+                  setCopiedCredentials(true);
+                  showSuccessToast('Credentials copied to clipboard!');
+                  setTimeout(() => setCopiedCredentials(false), 3000);
+                }}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2"
+              >
+                {copiedCredentials ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Credentials Copied to Clipboard!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copy Credentials to Clipboard</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCredentialsModal(null)}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl transition-all"
+              >
+                I Have Saved / Passed These Credentials
+              </button>
+            </div>
           </div>
         </div>
       )}

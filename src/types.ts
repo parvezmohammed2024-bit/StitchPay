@@ -38,6 +38,7 @@ export interface Worker {
   payment_method: 'cash' | 'bank' | 'mobile_wallet';
   payment_details: Record<string, any>;
   status: 'active' | 'inactive';
+  pin_hash?: string | null;
   created_at?: string;
   // Computed / UI helper fields
   outstanding_advance?: number;

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Copy, Sparkles, AlertTriangle, Users, Layers, 
   DollarSign, Plus, Trash2, CheckCircle2, RefreshCw, X, Eye, ArrowRight,
-  TrendingUp, UserCheck, Search, Info
+  TrendingUp, UserCheck, Search, Info, FileSpreadsheet, Download
 } from 'lucide-react';
-import { dataService } from '../lib/dataService';
+import { dataService, getLocalDateString } from '../lib/dataService';
+import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
 import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole } from '../types';
 
 interface DailySetupScreenProps {
@@ -13,7 +14,7 @@ interface DailySetupScreenProps {
 }
 
 export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProposeRate }) => {
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
   const [processes, setProcesses] = useState<GarmentProcess[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -101,14 +102,16 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
     return counts;
   }, [assignments]);
 
-  // Save / Update Target Qty or Agreed Rate directly
-  const handleUpdateAssignment = async (id: string, updates: Partial<DailyAssignment>) => {
+  // Save / Update Target Qty directly
+  const handleTargetQtyChange = (id: string, newQty: number) => {
+    setAssignments(prev => prev.map(a => a.id === id ? { ...a, target_qty: newQty } : a));
+  };
+
+  const handleTargetQtyBlur = async (id: string, newQty: number) => {
     try {
-      await dataService.saveDailyAssignment({ id, ...updates });
-      const updatedList = await dataService.getDailyAssignments(selectedDate);
-      setAssignments(updatedList);
+      await dataService.updateDailyAssignment(id, { target_qty: newQty });
     } catch (err) {
-      console.error('Failed to update assignment:', err);
+      console.error('Failed to update target qty:', err);
     }
   };
 
@@ -125,9 +128,12 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const handleAssignWorkerToProcess = async (workerId: string) => {
     if (!assigningProcess) return;
     try {
+      const proc = processes.find(p => p.id === assigningProcess.processId);
+      const resolvedStyleId = assigningProcess.styleId || proc?.style_id;
+
       await dataService.saveDailyAssignment({
         work_date: selectedDate,
-        style_id: assigningProcess.styleId,
+        style_id: resolvedStyleId,
         process_id: assigningProcess.processId,
         worker_id: workerId,
         target_qty: 250,
@@ -201,20 +207,23 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   };
 
   const handleConfirmDraftAssignments = async () => {
-    if (!draftReview) return;
+    if (!draftReview || draftReview.draft.length === 0) return;
     setIsLoading(true);
     try {
-      for (const item of draftReview.draft) {
-        await dataService.saveDailyAssignment({
+      const itemsToSave = draftReview.draft.map(item => {
+        const proc = processes.find(p => p.id === item.process_id);
+        return {
           work_date: selectedDate,
-          style_id: item.style_id,
+          style_id: item.style_id || proc?.style_id,
           process_id: item.process_id,
           worker_id: item.worker_id,
           target_qty: item.target_qty,
           agreed_rate: item.agreed_rate,
           status: 'planned',
-        });
-      }
+        };
+      });
+
+      await dataService.saveDailyAssignmentsBulk(itemsToSave);
       const updated = await dataService.getDailyAssignments(selectedDate);
       setAssignments(updated);
       setDraftReview(null);
@@ -264,14 +273,34 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 bg-slate-800/80 p-2 rounded-xl border border-slate-700/60">
-          <Calendar className="w-5 h-5 text-amber-400 pl-1" />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-transparent text-white font-semibold text-sm outline-none focus:ring-0 cursor-pointer"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center space-x-2 bg-slate-800/80 px-3 py-2 rounded-xl border border-slate-700/60">
+            <Calendar className="w-4 h-4 text-amber-400" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-transparent text-white font-semibold text-sm outline-none focus:ring-0 cursor-pointer"
+            />
+          </div>
+
+          <button
+            onClick={() => exportDailyPlanExcel(selectedDate)}
+            className="flex items-center space-x-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-3.5 py-2 rounded-xl text-xs font-semibold transition shadow-sm"
+            title="Download morning Daily Production Plan (A4 printable paper backup)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Download Daily Plan</span>
+          </button>
+
+          <button
+            onClick={() => exportDailyReportExcel(selectedDate)}
+            className="flex items-center space-x-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3.5 py-2 rounded-xl text-xs font-semibold transition shadow-sm"
+            title="Download end-of-day Daily Production Report Excel workbook"
+          >
+            <Download className="w-4 h-4 text-indigo-400" />
+            <span>Download Daily Report</span>
+          </button>
         </div>
       </div>
 
@@ -475,7 +504,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                           )}
 
                           <button
-                            onClick={() => setAssigningProcess({ styleId, processId: proc.id, processName: proc.name })}
+                            onClick={() => setAssigningProcess({ styleId: proc.style_id || styleId, processId: proc.id, processName: proc.name })}
                             className="flex items-center space-x-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition"
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -549,7 +578,13 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                                     <input
                                       type="number"
                                       value={assign.target_qty || ''}
-                                      onChange={(e) => handleUpdateAssignment(assign.id, { target_qty: Number(e.target.value) })}
+                                      onChange={(e) => handleTargetQtyChange(assign.id, Number(e.target.value))}
+                                      onBlur={(e) => handleTargetQtyBlur(assign.id, Number(e.target.value))}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          (e.target as HTMLInputElement).blur();
+                                        }
+                                      }}
                                       className="w-20 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs text-center font-bold focus:border-indigo-500 outline-none"
                                       placeholder="250"
                                     />

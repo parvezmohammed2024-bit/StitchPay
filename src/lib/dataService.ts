@@ -7,6 +7,25 @@ import {
 import { supabase, isSupabaseConfigured } from './supabase';
 import { showErrorToast } from './toast';
 
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function cleanUuid(id?: string | null): string {
+  if (!id) return '';
+  let str = id.trim();
+  // Strip leading 'w-', 'w', 's-', 's', 'p-', 'p' prefixes if followed by hexadecimal UUID
+  str = str.replace(/^[wspWSP]-?/i, '');
+  const uuidMatch = str.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+  if (uuidMatch) {
+    return uuidMatch[1];
+  }
+  return str;
+}
+
 class DataService {
   private settings: FactorySettings = {
     id: 'default-settings-01',
@@ -116,117 +135,161 @@ class DataService {
     return this.currentAuthUser;
   }
 
-  public async loginUser(emailOrPhone: string, password?: string): Promise<UserAccount> {
-    const cleanIdentifier = emailOrPhone.trim().toLowerCase();
+  public async fetchUserRole(userId: string): Promise<UserRole> {
+    if (!isSupabaseConfigured) return 'admin';
 
-    // Fetch accounts from profiles and user_roles
-    const accounts = await this.getUserAccounts();
-    let account = accounts.find(
-      u => u.email_or_phone.trim().toLowerCase() === cleanIdentifier
-    );
+    // 1. Check user_roles table directly
+    try {
+      const { data: roleRow, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-    if (!account) {
-      const workersList = await this.getWorkers();
-      const workerMatch = workersList.find(
-        w => (w.email && w.email.trim().toLowerCase() === cleanIdentifier) ||
-             (w.phone && w.phone.trim().toLowerCase() === cleanIdentifier)
-      );
+      if (!error && roleRow && roleRow.role) {
+        return roleRow.role as UserRole;
+      }
+    } catch (err) {
+      console.warn('Error fetching role from user_roles table:', err);
+    }
 
-      if (workerMatch) {
-        account = await this.saveUserAccount({
-          email_or_phone: cleanIdentifier,
-          password: password || '123456',
-          full_name: workerMatch.full_name,
-          role: 'worker',
-          worker_id: workerMatch.id,
-          status: 'active',
-        });
-      } else {
-        const defaultRole: UserRole = cleanIdentifier.includes('admin') ? 'admin' :
-                                      cleanIdentifier.includes('super') ? 'supervisor' :
-                                      cleanIdentifier.includes('account') ? 'accounts' : 'worker';
-        let linkedWorkerId: string | null = null;
-        if (defaultRole === 'worker' && workersList.length > 0) {
-          linkedWorkerId = workersList[0].id;
-        }
+    // 2. Check using RPC has_role(role) or has_role(_user_id, role)
+    const candidateRoles: UserRole[] = ['admin', 'supervisor', 'accounts'];
+    for (const r of candidateRoles) {
+      try {
+        const { data: hasRole1 } = await supabase.rpc('has_role', { role: r, _user_id: userId });
+        if (hasRole1 === true) return r;
 
-        account = await this.saveUserAccount({
-          email_or_phone: cleanIdentifier,
-          password: password || '123456',
-          full_name: cleanIdentifier.split('@')[0] || 'User',
-          role: defaultRole,
-          worker_id: linkedWorkerId,
-          status: 'active',
-        });
+        const { data: hasRole2 } = await supabase.rpc('has_role', { role: r });
+        if (hasRole2 === true) return r;
+      } catch (e) {
+        // Continue checking other candidates
       }
     }
 
-    this.currentAuthUser = account;
-    this.currentRole = account.role;
-    if (account.worker_id) {
-      this.activeWorkerId = account.worker_id;
+    return 'admin';
+  }
+
+  public async initSupabaseAuthSession(): Promise<UserAccount | null> {
+    if (!isSupabaseConfigured) {
+      return this.getCurrentAuthUser();
     }
 
     try {
-      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-        localStorage.setItem('stitchpay_auth_user', JSON.stringify(account));
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session?.user) {
+        this.currentAuthUser = null;
+        try {
+          if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+            localStorage.removeItem('stitchpay_auth_user');
+          }
+        } catch (e) {}
+        return null;
       }
-    } catch (e) {
-      console.error('Failed to write auth session', e);
-    }
 
-    return account;
-  }
+      const user = session.user;
+      const role = await this.fetchUserRole(user.id);
 
-  public async signupUser(accountData: {
-    email_or_phone: string;
-    password?: string;
-    full_name: string;
-    role: UserRole;
-    worker_id?: string | null;
-  }): Promise<UserAccount> {
-    let linkedWorkerId = accountData.worker_id || null;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
 
-    if (accountData.role === 'worker' && !linkedWorkerId) {
-      const newWorker = await this.saveWorker({
-        full_name: accountData.full_name,
-        phone: accountData.email_or_phone.includes('@') ? null : accountData.email_or_phone,
-        email: accountData.email_or_phone.includes('@') ? accountData.email_or_phone : null,
-        worker_code: `W-${Math.floor(1000 + Math.random() * 9000)}`,
+      const fullName = profile?.full_name || user.user_metadata?.full_name || user.email || 'User';
+
+      const account: UserAccount = {
+        id: user.id,
+        email_or_phone: user.email || '',
+        full_name: fullName,
+        role: role,
+        worker_id: null,
         status: 'active',
-        payment_method: 'cash',
-        payment_details: {},
-      });
-      linkedWorkerId = newWorker.id;
+        created_at: user.created_at || new Date().toISOString(),
+      };
+
+      this.currentAuthUser = account;
+      this.currentRole = account.role;
+
+      try {
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          localStorage.setItem('stitchpay_auth_user', JSON.stringify(account));
+        }
+      } catch (e) {}
+
+      return account;
+    } catch (err) {
+      console.error('Error verifying Supabase auth session:', err);
+      this.currentAuthUser = null;
+      return null;
     }
-
-    const account = await this.saveUserAccount({
-      email_or_phone: accountData.email_or_phone.trim().toLowerCase(),
-      password: accountData.password || '123456',
-      full_name: accountData.full_name,
-      role: accountData.role,
-      worker_id: linkedWorkerId,
-      status: 'active',
-    });
-
-    this.currentAuthUser = account;
-    this.currentRole = account.role;
-    if (account.worker_id) {
-      this.activeWorkerId = account.worker_id;
-    }
-
-    try {
-      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-        localStorage.setItem('stitchpay_auth_user', JSON.stringify(account));
-      }
-    } catch (e) {
-      console.error('Failed to write auth session', e);
-    }
-
-    return account;
   }
 
-  public logoutUser(): void {
+  public async loginUser(emailOrPhone: string, password?: string): Promise<UserAccount> {
+    const cleanEmail = emailOrPhone.trim().toLowerCase();
+
+    if (isSupabaseConfigured) {
+      if (!password) {
+        throw new Error('Password is required to sign in');
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: password.trim(),
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Authentication failed. Invalid credentials.');
+      }
+
+      if (!data.user) {
+        throw new Error('Sign in failed: No user returned');
+      }
+
+      const userId = data.user.id;
+      const role = await this.fetchUserRole(userId);
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const fullName = profile?.full_name || data.user.user_metadata?.full_name || data.user.email || 'User';
+
+      const account: UserAccount = {
+        id: userId,
+        email_or_phone: data.user.email || cleanEmail,
+        full_name: fullName,
+        role: role,
+        worker_id: null,
+        status: 'active',
+        created_at: data.user.created_at || new Date().toISOString(),
+      };
+
+      this.currentAuthUser = account;
+      this.currentRole = account.role;
+
+      try {
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          localStorage.setItem('stitchpay_auth_user', JSON.stringify(account));
+        }
+      } catch (e) {}
+
+      return account;
+    } else {
+      throw new Error('Supabase project credentials not configured.');
+    }
+  }
+
+  public async logoutUser(): Promise<void> {
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.error('Error during Supabase signOut:', e);
+      }
+    }
     this.currentAuthUser = null;
     try {
       if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
@@ -910,6 +973,40 @@ class DataService {
     }
   }
 
+  public async setWorkerPin(workerCode: string, pin: string): Promise<boolean> {
+    const cleanCode = workerCode.trim().toUpperCase();
+    const cleanPin = pin.trim();
+
+    if (!cleanCode || !cleanPin) {
+      throw new Error('Worker code and PIN are required');
+    }
+    if (cleanPin.length !== 4 || !/^\d{4}$/.test(cleanPin)) {
+      throw new Error('PIN must be a 4-digit number');
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.rpc('set_worker_pin', {
+        p_worker_code: cleanCode,
+        p_pin: cleanPin,
+      });
+
+      if (error) {
+        console.error('RPC set_worker_pin error:', error);
+        throw new Error(error.message || 'Failed to set worker PIN');
+      }
+      return true;
+    } else {
+      const idx = this.workers.findIndex(w => w.worker_code.toUpperCase() === cleanCode);
+      if (idx >= 0) {
+        this.workers[idx] = {
+          ...this.workers[idx],
+          pin_hash: 'mock_pin_hash',
+        };
+      }
+      return true;
+    }
+  }
+
   public async clockInWorker(workerId: string): Promise<AttendanceRecord> {
     const todayStr = new Date().toISOString().split('T')[0];
     const nowTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1069,57 +1166,161 @@ class DataService {
     });
   }
 
-  public async saveDailyAssignment(assignment: Partial<DailyAssignment>): Promise<DailyAssignment> {
-    const id = assignment.id || crypto.randomUUID();
-    const workDate = assignment.work_date || new Date().toISOString().split('T')[0];
+  public async updateDailyAssignment(id: string, updates: Partial<DailyAssignment>): Promise<DailyAssignment | null> {
+    const cleanId = cleanUuid(id);
+    if (!cleanId) return null;
 
-    let defaultRate = assignment.agreed_rate;
-    if (defaultRate === undefined) {
-      const bids = await this.getRateBids();
-      const approvedBid = bids.find(b => b.worker_id === assignment.worker_id && b.process_id === assignment.process_id && b.status === 'approved');
-      if (approvedBid) {
-        defaultRate = approvedBid.counter_rate || approvedBid.proposed_rate;
-      } else {
-        const procs = await this.getProcesses(assignment.style_id);
-        const proc = procs.find(p => p.id === assignment.process_id);
-        defaultRate = proc ? proc.rate : 0;
+    const payload: Record<string, any> = {};
+    if (updates.target_qty !== undefined) payload.target_qty = updates.target_qty !== null ? Number(updates.target_qty) : null;
+    if (updates.agreed_rate !== undefined) payload.agreed_rate = Number(updates.agreed_rate);
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.note !== undefined) payload.note = updates.note;
+    if (updates.work_date !== undefined) payload.work_date = updates.work_date;
+
+    console.log('Sending daily_assignments UPDATE payload:', JSON.stringify(payload, null, 2), 'for ID:', cleanId);
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('daily_assignments').update(payload).eq('id', cleanId);
+      if (this.handleError(error, 'Error updating daily assignment')) {
+        throw new Error(error?.message || 'Error updating daily assignment');
+      }
+    } else {
+      const idx = this.dailyAssignments.findIndex(a => a.id === cleanId);
+      if (idx >= 0) {
+        this.dailyAssignments[idx] = { ...this.dailyAssignments[idx], ...payload };
       }
     }
 
-    const record: DailyAssignment = {
-      id,
-      work_date: workDate,
-      style_id: assignment.style_id!,
-      process_id: assignment.process_id!,
-      worker_id: assignment.worker_id!,
-      target_qty: assignment.target_qty ?? null,
-      agreed_rate: Number(defaultRate || 0),
-      status: assignment.status || 'active',
-      note: assignment.note || null,
-      created_at: assignment.created_at || new Date().toISOString(),
-    };
+    return null;
+  }
 
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.from('daily_assignments').upsert({
+  public async saveDailyAssignment(assignment: Partial<DailyAssignment>): Promise<DailyAssignment> {
+    const cleanId = cleanUuid(assignment.id);
+    const hasCoreInsertFields = Boolean(assignment.work_date && assignment.style_id && assignment.process_id && assignment.worker_id);
+
+    // If an existing assignment ID is passed without all required INSERT fields, handle as UPDATE
+    if (cleanId && !assignment.id?.startsWith('draft-') && !hasCoreInsertFields) {
+      await this.updateDailyAssignment(cleanId, assignment);
+      const workDateToFetch = assignment.work_date || getLocalDateString();
+      const fullList = await this.getDailyAssignments(workDateToFetch);
+      return fullList.find(a => a.id === cleanId) || (assignment as DailyAssignment);
+    }
+
+    const results = await this.saveDailyAssignmentsBulk([assignment]);
+    return results[0];
+  }
+
+  public async saveDailyAssignmentsBulk(assignments: Partial<DailyAssignment>[]): Promise<DailyAssignment[]> {
+    if (!assignments || assignments.length === 0) return [];
+
+    const allProcesses = await this.getProcesses();
+    const processesMap = new Map(allProcesses.map(p => [p.id, p]));
+    const bids = await this.getRateBids();
+
+    const recordsToSave: DailyAssignment[] = [];
+    const payloadsToInsert: any[] = [];
+
+    for (let i = 0; i < assignments.length; i++) {
+      const item = assignments[i];
+      const rawId = item.id && !item.id.startsWith('draft-') ? item.id : crypto.randomUUID();
+      const id = cleanUuid(rawId);
+      const workDate = item.work_date || getLocalDateString();
+      const processId = cleanUuid(item.process_id);
+      const workerId = cleanUuid(item.worker_id);
+
+      // Fallback: If style_id is missing or null/empty, read directly from processes.style_id!
+      let styleId = cleanUuid(item.style_id);
+      if ((!styleId || styleId === 'null') && processId) {
+        const proc = processesMap.get(processId);
+        if (proc && proc.style_id) {
+          styleId = cleanUuid(proc.style_id);
+        }
+      }
+
+      // MANDATORY FIELD VALIDATION FOR INSERT: Verify work_date, style_id, process_id, worker_id are all populated
+      const missingFields: string[] = [];
+      if (!workDate) missingFields.push('work_date');
+      if (!styleId) missingFields.push('style_id');
+      if (!processId) missingFields.push('process_id');
+      if (!workerId) missingFields.push('worker_id');
+
+      if (missingFields.length > 0) {
+        const errMsg = `Daily assignment insert BLOCKED: Missing required field(s) [${missingFields.join(', ')}] on assignment item #${i + 1}. Payload attempted: ${JSON.stringify({
+          id,
+          work_date: workDate || null,
+          style_id: styleId || null,
+          process_id: processId || null,
+          worker_id: workerId || null,
+        })}`;
+        console.error(errMsg);
+        showErrorToast(`Save blocked: Missing required field(s): ${missingFields.join(', ')}`);
+        throw new Error(errMsg);
+      }
+
+      let defaultRate = item.agreed_rate;
+      if (defaultRate === undefined || defaultRate === null) {
+        const approvedBid = bids.find(b => cleanUuid(b.worker_id) === workerId && cleanUuid(b.process_id) === processId && b.status === 'approved');
+        if (approvedBid) {
+          defaultRate = approvedBid.counter_rate || approvedBid.proposed_rate;
+        } else {
+          const proc = processesMap.get(processId);
+          defaultRate = proc ? proc.rate : 0;
+        }
+      }
+
+      const record: DailyAssignment = {
+        id,
+        work_date: workDate,
+        style_id: styleId!,
+        process_id: processId,
+        worker_id: workerId,
+        target_qty: item.target_qty ?? null,
+        agreed_rate: Number(defaultRate || 0),
+        status: item.status || 'active',
+        note: item.note || null,
+        created_at: item.created_at || new Date().toISOString(),
+      };
+
+      recordsToSave.push(record);
+
+      // INSERT PAYLOAD FOR DATABASE:
+      // Do NOT send agreed_rate on insert. The database trigger default_agreed_rate populates it from processes.rate automatically!
+      const payload: any = {
         id: record.id,
         work_date: record.work_date,
         style_id: record.style_id,
         process_id: record.process_id,
         worker_id: record.worker_id,
         target_qty: record.target_qty,
-        agreed_rate: record.agreed_rate,
         status: record.status,
         note: record.note,
-      });
-      this.handleError(error, 'Error saving daily assignment');
+      };
 
-      const fullList = await this.getDailyAssignments(workDate);
-      return fullList.find(a => a.id === id) || record;
+      // Only include agreed_rate if explicitly customized on the item (e.g. from an approved bid)
+      if (item.agreed_rate !== undefined && item.agreed_rate !== null) {
+        payload.agreed_rate = Number(item.agreed_rate);
+      }
+
+      payloadsToInsert.push(payload);
+    }
+
+    if (isSupabaseConfigured) {
+      console.log('Sending daily_assignments bulk INSERT payload:', JSON.stringify(payloadsToInsert, null, 2));
+      const { error } = await supabase.from('daily_assignments').upsert(payloadsToInsert);
+      if (this.handleError(error, 'Error saving daily assignment(s)')) {
+        throw new Error(error?.message || 'Error saving daily assignment');
+      }
+
+      const workDateToFetch = recordsToSave[0]?.work_date || getLocalDateString();
+      const fullList = await this.getDailyAssignments(workDateToFetch);
+      return recordsToSave.map(r => fullList.find(a => a.id === r.id) || r);
     } else {
-      const idx = this.dailyAssignments.findIndex(a => a.id === id);
-      if (idx >= 0) this.dailyAssignments[idx] = record;
-      else this.dailyAssignments.push(record);
-      return record;
+      for (const record of recordsToSave) {
+        const idx = this.dailyAssignments.findIndex(a => a.id === record.id);
+        if (idx >= 0) this.dailyAssignments[idx] = record;
+        else this.dailyAssignments.push(record);
+      }
+      return recordsToSave;
     }
   }
 
@@ -1137,21 +1338,18 @@ class DataService {
     const sourceAssignments = await this.getDailyAssignments(fromDate);
     if (sourceAssignments.length === 0) return [];
 
-    const newAssignments: DailyAssignment[] = [];
-    for (const src of sourceAssignments) {
-      const cloned = await this.saveDailyAssignment({
-        work_date: targetDate,
-        style_id: src.style_id,
-        process_id: src.process_id,
-        worker_id: src.worker_id,
-        target_qty: src.target_qty,
-        agreed_rate: src.agreed_rate,
-        status: 'planned',
-        note: `Cloned from ${fromDate}`,
-      });
-      newAssignments.push(cloned);
-    }
-    return newAssignments;
+    const newAssignments: Partial<DailyAssignment>[] = sourceAssignments.map(src => ({
+      work_date: targetDate,
+      style_id: src.style_id,
+      process_id: src.process_id,
+      worker_id: src.worker_id,
+      target_qty: src.target_qty,
+      agreed_rate: src.agreed_rate,
+      status: 'planned',
+      note: `Cloned from ${fromDate}`,
+    }));
+
+    return this.saveDailyAssignmentsBulk(newAssignments);
   }
 
   public async autoAssignFromHistory(styleIds: string[], targetDate: string): Promise<{ draft: DailyAssignment[]; skippedWorkers: string[]; unassignedProcesses: string[] }> {

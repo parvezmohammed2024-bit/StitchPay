@@ -5,7 +5,7 @@ import {
   PlusCircle, Target, TrendingUp, Layers, HelpCircle
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
-import { dataService } from '../lib/dataService';
+import { dataService, getLocalDateString } from '../lib/dataService';
 import { 
   GarmentStyle, GarmentProcess, Worker, ProductionEntry, 
   FactorySettings, UserRole, DailyAssignment 
@@ -27,7 +27,7 @@ interface AssignmentEntryDraft {
 export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
   const { t } = useTranslation();
 
-  const [entryDate, setEntryDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [entryDate, setEntryDate] = useState<string>(getLocalDateString());
   const [shift, setShift] = useState<'day' | 'night'>('day');
 
   const [assignments, setAssignments] = useState<DailyAssignment[]>([]);
@@ -230,7 +230,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
       const proc = processes.find(p => p.id === unplannedProcessId);
       const newAssign = await dataService.saveDailyAssignment({
         work_date: entryDate,
-        style_id: unplannedStyleId,
+        style_id: proc?.style_id || unplannedStyleId,
         process_id: unplannedProcessId,
         worker_id: unplannedWorkerId,
         target_qty: unplannedTargetQty,
