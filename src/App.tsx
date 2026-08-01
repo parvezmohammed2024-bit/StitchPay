@@ -31,14 +31,20 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [isRoleManagerOpen, setIsRoleManagerOpen] = useState<boolean>(false);
-  const [pathname, setPathname] = useState<string>(window.location.pathname);
+  const [pathname, setPathname] = useState<string>(() => {
+    return window.location.pathname + window.location.hash + window.location.search;
+  });
 
   useEffect(() => {
-    const handlePopState = () => {
-      setPathname(window.location.pathname);
+    const handleLocationChange = () => {
+      setPathname(window.location.pathname + window.location.hash + window.location.search);
     };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -87,7 +93,10 @@ export default function App() {
     return translations[lang]?.[key] || translations.en[key] || (key as string);
   };
 
-  const isWorkerRoute = pathname === '/worker' || pathname.startsWith('/worker');
+  const isWorkerRoute = 
+    pathname.includes('/worker') || 
+    pathname.includes('#worker') || 
+    pathname.includes('?worker');
 
   // DEDICATED WORKER ROUTE (/worker)
   if (isWorkerRoute) {
