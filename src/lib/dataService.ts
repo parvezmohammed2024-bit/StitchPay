@@ -2,7 +2,7 @@ import {
   Worker, GarmentStyle, GarmentProcess, ProductionEntry, 
   AttendanceRecord, Adjustment, PayrollPeriod, PayrollLine, 
   FactorySettings, UserRole, DailyAssignment, RateBid,
-  UserAccount, DeliveryReport
+  UserAccount, DeliveryReport, FinishingStage, FinishingEntry
 } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { showErrorToast } from './toast';
@@ -51,6 +51,9 @@ class DataService {
   private rateBids: RateBid[] = [];
   private userAccounts: UserAccount[] = [];
   private deliveries: DeliveryReport[] = [];
+  private finishingStages: FinishingStage[] = [];
+  private finishingEntries: FinishingEntry[] = [];
+  private finishingListeners: Set<() => void> = new Set();
   private payrollPeriod: PayrollPeriod = {
     id: 'pp-2026-w31',
     name: 'Week 31 (Jul 26 - Aug 01, 2026)',
@@ -1737,6 +1740,269 @@ class DataService {
       ...l,
       worker: workersMap.get(l.worker_id),
     }));
+  }
+
+  // --- FINISHING SECTION METHODS ---
+
+  public async getFinishingStages(styleId?: string): Promise<FinishingStage[]> {
+    if (isSupabaseConfigured) {
+      try {
+        let query = supabase.from('finishing_stages').select('*').order('seq_no', { ascending: true });
+        if (styleId) {
+          query = query.eq('style_id', styleId);
+        }
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          return data as FinishingStage[];
+        }
+      } catch (err) {
+        console.warn('Error fetching finishing_stages from Supabase:', err);
+      }
+    }
+
+    if (styleId) {
+      return this.finishingStages
+        .filter(s => s.style_id === styleId && s.is_active !== false)
+        .sort((a, b) => a.seq_no - b.seq_no);
+    }
+    return [...this.finishingStages].sort((a, b) => a.seq_no - b.seq_no);
+  }
+
+  public async applyDefaultFinishingStages(styleId: string, hasButtons: boolean): Promise<FinishingStage[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await supabase.rpc('apply_default_finishing_stages', {
+          p_style_id: styleId,
+          p_has_buttons: hasButtons,
+        });
+        if (!error) {
+          const fetched = await this.getFinishingStages(styleId);
+          if (fetched && fetched.length > 0) return fetched;
+        }
+        console.warn('Supabase RPC apply_default_finishing_stages error or empty, using fallback:', error);
+      } catch (err) {
+        console.warn('RPC call failed, using fallback:', err);
+      }
+    }
+
+    // Standard fallback definitions
+    const defaultDefs = [
+      { code: 'thread_cut', name: 'Thread Cutting', seq: 1 },
+      ...(hasButtons
+        ? [
+            { code: 'buttonhole', name: 'Buttonhole', seq: 2 },
+            { code: 'button_attach', name: 'Button Attach', seq: 3 },
+          ]
+        : []),
+      { code: 'ironing', name: 'Ironing & Pressing', seq: 4 },
+      { code: 'qc', name: 'Quality Control (QC)', seq: 5 },
+      { code: 'packing', name: 'Folding & Packing', seq: 6 },
+      { code: 'ready', name: 'Ready to Deliver', seq: 7 },
+    ];
+
+    // Replace existing stages for this style
+    this.finishingStages = this.finishingStages.filter(s => s.style_id !== styleId);
+
+    const newStages: FinishingStage[] = defaultDefs.map((def, idx) => ({
+      id: this.generateId('fs'),
+      style_id: styleId,
+      seq_no: idx + 1,
+      name: def.name,
+      code: def.code,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    }));
+
+    this.finishingStages.push(...newStages);
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('finishing_stages').upsert(newStages);
+      } catch (err) {
+        console.error('Error upserting default stages:', err);
+      }
+    }
+
+    return newStages;
+  }
+
+  public async saveFinishingStage(stage: Partial<FinishingStage>): Promise<FinishingStage> {
+    const existingIdx = this.finishingStages.findIndex(s => s.id === stage.id);
+    let updated: FinishingStage;
+
+    if (existingIdx >= 0) {
+      updated = { ...this.finishingStages[existingIdx], ...stage };
+      this.finishingStages[existingIdx] = updated;
+    } else {
+      updated = {
+        id: stage.id || this.generateId('fs'),
+        style_id: stage.style_id || '',
+        seq_no: stage.seq_no || (this.finishingStages.length + 1),
+        name: stage.name || 'New Stage',
+        code: stage.code || (stage.name ? stage.name.toLowerCase().replace(/\s+/g, '_') : 'custom'),
+        is_active: stage.is_active !== undefined ? stage.is_active : true,
+        created_at: new Date().toISOString(),
+      };
+      this.finishingStages.push(updated);
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('finishing_stages').upsert([updated]);
+      } catch (err) {
+        console.error('Error saving finishing stage to Supabase:', err);
+      }
+    }
+
+    return updated;
+  }
+
+  public async updateFinishingStagesOrder(stages: FinishingStage[]): Promise<void> {
+    stages.forEach((stg, idx) => {
+      stg.seq_no = idx + 1;
+      const localIdx = this.finishingStages.findIndex(s => s.id === stg.id);
+      if (localIdx >= 0) {
+        this.finishingStages[localIdx].seq_no = idx + 1;
+      }
+    });
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('finishing_stages').upsert(stages);
+      } catch (err) {
+        console.error('Error reordering finishing stages:', err);
+      }
+    }
+  }
+
+  public async getFinishingEntries(filters?: { styleId?: string; date?: string; workerId?: string }): Promise<FinishingEntry[]> {
+    if (isSupabaseConfigured) {
+      try {
+        let query = supabase.from('finishing_entries').select('*');
+        if (filters?.styleId) query = query.eq('style_id', filters.styleId);
+        if (filters?.date) query = query.eq('entry_date', filters.date);
+        if (filters?.workerId) query = query.eq('worker_id', filters.workerId);
+
+        const { data, error } = await query;
+        if (!error && data) {
+          const workers = await this.getWorkers();
+          const styles = await this.getStyles();
+          const stages = await this.getFinishingStages();
+          const workerMap = new Map(workers.map(w => [w.id, w]));
+          const styleMap = new Map(styles.map(s => [s.id, s]));
+          const stageMap = new Map(stages.map(st => [st.id, st]));
+
+          return (data as FinishingEntry[]).map(e => {
+            const w = e.worker_id ? workerMap.get(e.worker_id) : undefined;
+            const stg = stageMap.get(e.stage_id);
+            const stl = styleMap.get(e.style_id);
+            return {
+              ...e,
+              worker_name: w?.full_name,
+              worker_code: w?.worker_code,
+              stage_name: stg?.name,
+              stage_code: stg?.code,
+              style_code: stl?.style_code,
+              style_name: stl?.name,
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('Error fetching finishing_entries from Supabase:', err);
+      }
+    }
+
+    let result = [...this.finishingEntries];
+    if (filters?.styleId) result = result.filter(e => e.style_id === filters.styleId);
+    if (filters?.date) result = result.filter(e => e.entry_date === filters.date);
+    if (filters?.workerId) result = result.filter(e => e.worker_id === filters.workerId);
+
+    const workersMap = new Map((this.workers || []).map(w => [w.id, w]));
+    const styleMap = new Map((this.styles || []).map(s => [s.id, s]));
+    const stageMap = new Map((this.finishingStages || []).map(st => [st.id, st]));
+
+    return result.map(e => {
+      const w = e.worker_id ? workersMap.get(e.worker_id) : undefined;
+      const stg = stageMap.get(e.stage_id);
+      const stl = styleMap.get(e.style_id);
+      return {
+        ...e,
+        worker_name: w?.full_name,
+        worker_code: w?.worker_code,
+        stage_name: stg?.name,
+        stage_code: stg?.code,
+        style_code: stl?.style_code,
+        style_name: stl?.name,
+      };
+    });
+  }
+
+  public async saveFinishingEntries(entries: Partial<FinishingEntry>[]): Promise<FinishingEntry[]> {
+    const savedList: FinishingEntry[] = [];
+    for (const entry of entries) {
+      const newEntry: FinishingEntry = {
+        id: entry.id || this.generateId('fe'),
+        entry_date: entry.entry_date || getLocalDateString(),
+        style_id: entry.style_id || '',
+        stage_id: entry.stage_id || '',
+        worker_id: entry.worker_id || null,
+        qty_ok: Number(entry.qty_ok || 0),
+        qty_rework: Number(entry.qty_rework || 0),
+        qty_reject: Number(entry.qty_reject || 0),
+        shift: entry.shift || 'day',
+        entered_by: entry.entered_by || 'Supervisor',
+        note: entry.note || null,
+        created_at: new Date().toISOString(),
+      };
+      this.finishingEntries.push(newEntry);
+      savedList.push(newEntry);
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('finishing_entries').insert(savedList);
+      } catch (err) {
+        console.error('Error saving finishing_entries to Supabase:', err);
+      }
+    }
+
+    // Trigger local realtime listeners
+    this.finishingListeners.forEach(fn => fn());
+
+    return savedList;
+  }
+
+  public subscribeToWorkerFinishingEntries(workerId: string, callback: () => void): () => void {
+    if (isSupabaseConfigured) {
+      try {
+        const channel = supabase
+          .channel(`finishing_entries_worker_${workerId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'finishing_entries',
+              filter: `worker_id=eq.${workerId}`,
+            },
+            () => {
+              callback();
+            }
+          )
+          .subscribe();
+
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      } catch (err) {
+        console.warn('Realtime subscription failed, using local listener:', err);
+      }
+    }
+
+    this.finishingListeners.add(callback);
+    return () => {
+      this.finishingListeners.delete(callback);
+    };
   }
 }
 

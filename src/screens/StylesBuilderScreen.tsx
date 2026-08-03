@@ -8,7 +8,7 @@ import {
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { showErrorToast, showSuccessToast } from '../lib/toast';
-import { GarmentStyle, GarmentProcess, UserRole, FactorySettings, ProductionEntry } from '../types';
+import { GarmentStyle, GarmentProcess, UserRole, FactorySettings, ProductionEntry, FinishingStage } from '../types';
 import { StyleImage } from '../components/StyleImage';
 import { StyleImageUploader } from '../components/StyleImageUploader';
 
@@ -21,6 +21,11 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
   const [selectedStyle, setSelectedStyle] = useState<GarmentStyle | null>(null);
   const [processes, setProcesses] = useState<GarmentProcess[]>([]);
+  const [finishingStages, setFinishingStages] = useState<FinishingStage[]>([]);
+  const [styleTab, setStyleTab] = useState<'sewing' | 'finishing'>('sewing');
+  const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [stageForm, setStageForm] = useState<Partial<FinishingStage>>({});
+  const [hasButtonsForDefaults, setHasButtonsForDefaults] = useState<boolean>(true);
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
 
@@ -99,10 +104,12 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       if (mainBoardStyles.length > 0 && !selectedStyle) {
         setSelectedStyle(mainBoardStyles[0]);
         loadProcesses(mainBoardStyles[0].id);
+        loadFinishingStages(mainBoardStyles[0].id);
       } else if (selectedStyle) {
         const match = stList.find(s => s.id === selectedStyle.id);
         if (match) setSelectedStyle(match);
         loadProcesses(selectedStyle.id);
+        loadFinishingStages(selectedStyle.id);
       }
     } catch (err: any) {
       showErrorToast(`Failed to load production board: ${err.message || String(err)}`);
@@ -118,9 +125,70 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     }
   };
 
+  const loadFinishingStages = async (styleId: string) => {
+    try {
+      const stages = await dataService.getFinishingStages(styleId);
+      setFinishingStages(stages);
+    } catch (err: any) {
+      showErrorToast(`Failed to load finishing stages: ${err.message || String(err)}`);
+    }
+  };
+
   const handleSelectStyle = (style: GarmentStyle) => {
     setSelectedStyle(style);
     loadProcesses(style.id);
+    loadFinishingStages(style.id);
+  };
+
+  const handleApplyDefaultFinishingStages = async () => {
+    if (!selectedStyle) return;
+    try {
+      await dataService.applyDefaultFinishingStages(selectedStyle.id, hasButtonsForDefaults);
+      showSuccessToast('Standard finishing stages applied.');
+      await loadFinishingStages(selectedStyle.id);
+    } catch (err: any) {
+      showErrorToast(`Failed to apply standard stages: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleSaveFinishingStageSubmit = async (stageData: Partial<FinishingStage>) => {
+    if (!selectedStyle) return;
+    try {
+      await dataService.saveFinishingStage({
+        ...stageData,
+        style_id: selectedStyle.id,
+      });
+      showSuccessToast('Finishing stage saved.');
+      setEditingStageId(null);
+      setStageForm({});
+      await loadFinishingStages(selectedStyle.id);
+    } catch (err: any) {
+      showErrorToast(`Failed to save stage: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleReorderFinishingStage = async (stageId: string, direction: 'up' | 'down') => {
+    if (!selectedStyle) return;
+    const sorted = [...finishingStages].sort((a, b) => a.seq_no - b.seq_no);
+    const idx = sorted.findIndex(s => s.id === stageId);
+    if (idx < 0) return;
+
+    if (direction === 'up' && idx > 0) {
+      const temp = sorted[idx];
+      sorted[idx] = sorted[idx - 1];
+      sorted[idx - 1] = temp;
+    } else if (direction === 'down' && idx < sorted.length - 1) {
+      const temp = sorted[idx];
+      sorted[idx] = sorted[idx + 1];
+      sorted[idx + 1] = temp;
+    }
+
+    try {
+      await dataService.updateFinishingStagesOrder(sorted);
+      await loadFinishingStages(selectedStyle.id);
+    } catch (err: any) {
+      showErrorToast(`Failed to reorder stage: ${err.message || String(err)}`);
+    }
   };
 
   const handleSaveStyle = async (e: React.FormEvent) => {
@@ -758,14 +826,43 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
         </div>
       </div>
 
-      {/* OPERATION BREAKDOWN TABLE FOR SELECTED STYLE */}
+      {/* OPERATION / STAGE BREAKDOWN FOR SELECTED STYLE */}
       {selectedStyle && (
         <div className="bg-white border border-stone-200 rounded-3xl p-6 shadow-xs space-y-5">
+          {/* TABS HEADER: Sewing Operations | Finishing Stages */}
+          <div className="flex items-center space-x-2 border-b border-stone-200 pb-3">
+            <button
+              type="button"
+              onClick={() => setStyleTab('sewing')}
+              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-2 ${
+                styleTab === 'sewing'
+                  ? 'bg-indigo-700 text-white shadow-xs'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              <Scissors className="w-3.5 h-3.5" />
+              <span>Sewing Operations ({processes.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStyleTab('finishing')}
+              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-2 ${
+                styleTab === 'finishing'
+                  ? 'bg-indigo-700 text-white shadow-xs'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Finishing Stages ({finishingStages.length})</span>
+            </button>
+          </div>
+
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-stone-200">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2">
-                  <span>Operation Process Breakdown — {selectedStyle.name}</span>
+                  <span>{styleTab === 'sewing' ? 'Sewing Operations Breakdown' : 'Finishing Stages Pipeline'} — {selectedStyle.name}</span>
                   <span className="text-xs font-mono text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300 font-bold">
                     {selectedStyle.style_code}
                   </span>
@@ -783,248 +880,467 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   {selectedStyle.status}
                 </span>
               </div>
-              <p className="text-xs text-stone-600 mt-1">{processes.length} sequential sewing operations</p>
+              <p className="text-xs text-stone-600 mt-1">
+                {styleTab === 'sewing' ? `${processes.length} sequential sewing operations` : `${finishingStages.length} sequential finishing process stages`}
+              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => handleOpenCloneNewStyle(selectedStyle)}
-                className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-xs font-bold text-amber-900 px-3 py-2 rounded-xl transition-colors"
-              >
-                <Layers className="w-3.5 h-3.5 text-amber-800" />
-                <span>Clone to New Style</span>
-              </button>
-
-              {isOwnerAdmin && (
+              {styleTab === 'sewing' ? (
                 <>
                   <button
-                    onClick={() => setShowCloneModal(true)}
-                    className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-xs font-medium text-stone-800 px-3 py-2 rounded-xl transition-colors"
+                    onClick={() => handleOpenCloneNewStyle(selectedStyle)}
+                    className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-xs font-bold text-amber-900 px-3 py-2 rounded-xl transition-colors"
                   >
-                    <Copy className="w-3.5 h-3.5 text-stone-600" />
-                    <span>Import Operations</span>
+                    <Layers className="w-3.5 h-3.5 text-amber-800" />
+                    <span>Clone to New Style</span>
+                  </button>
+
+                  {isOwnerAdmin && (
+                    <>
+                      <button
+                        onClick={() => setShowCloneModal(true)}
+                        className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-xs font-medium text-stone-800 px-3 py-2 rounded-xl transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-stone-600" />
+                        <span>Import Operations</span>
+                      </button>
+
+                      <button
+                        onClick={() => setShowCSVModal(true)}
+                        className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-xs font-medium text-stone-800 px-3 py-2 rounded-xl transition-colors"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>{t('importCSV')}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setEditingProcessId('new');
+                          setProcForm({ seq_no: processes.length + 1, name: '', machine_type: 'Single Needle Lockstitch', smv: 1.5, rate: 3.5 });
+                        }}
+                        className="flex items-center space-x-1.5 bg-indigo-700 hover:bg-indigo-800 text-xs font-bold text-white px-3 py-2 rounded-xl transition-colors shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Operation</span>
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center space-x-1.5 text-xs font-medium text-stone-700 cursor-pointer bg-stone-50 px-2.5 py-1.5 rounded-xl border border-stone-200">
+                    <input
+                      type="checkbox"
+                      checked={hasButtonsForDefaults}
+                      onChange={(e) => setHasButtonsForDefaults(e.target.checked)}
+                      className="w-3.5 h-3.5 text-indigo-700 rounded border-stone-300"
+                    />
+                    <span>Style has buttons</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleApplyDefaultFinishingStages}
+                    className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-xs font-bold text-amber-900 px-3 py-2 rounded-xl transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-800" />
+                    <span>Use Standard Stages</span>
                   </button>
 
                   <button
-                    onClick={() => setShowCSVModal(true)}
-                    className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-xs font-medium text-stone-800 px-3 py-2 rounded-xl transition-colors"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>{t('importCSV')}</span>
-                  </button>
-
-                  <button
+                    type="button"
                     onClick={() => {
-                      setEditingProcessId('new');
-                      setProcForm({ seq_no: processes.length + 1, name: '', machine_type: 'Single Needle Lockstitch', smv: 1.5, rate: 3.5 });
+                      setEditingStageId('new');
+                      setStageForm({ seq_no: finishingStages.length + 1, name: '', code: '', is_active: true });
                     }}
                     className="flex items-center space-x-1.5 bg-indigo-700 hover:bg-indigo-800 text-xs font-bold text-white px-3 py-2 rounded-xl transition-colors shadow-xs"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Add Operation</span>
+                    <span>Add Stage</span>
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Processes List Table */}
-          <div className="w-full max-w-full overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse min-w-[500px]">
-              <thead>
-                <tr className="text-xs text-stone-600 uppercase bg-stone-50 border-b border-stone-200 font-mono">
-                  <th className="py-3 px-3 w-12 text-center">{t('processSeq')}</th>
-                  <th className="py-3 px-3">{t('processName')}</th>
-                  <th className="py-3 px-3">{t('machineType')}</th>
-                  <th className="py-3 px-3 text-right">{t('smv')}</th>
-                  <th className="py-3 px-3 text-right">{t('pieceRate')}</th>
-                  {isOwnerAdmin && <th className="py-3 px-3 text-center w-24">{t('actions')}</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-200">
-                {processes.map((proc) => {
-                  const isEditing = editingProcessId === proc.id;
-                  return (
-                    <tr key={proc.id} className="hover:bg-stone-50 transition-colors">
-                      <td className="py-3 px-3 text-center font-mono font-bold text-stone-600">
-                        {proc.seq_no}
-                      </td>
+          {/* SEWING TAB CONTENT */}
+          {styleTab === 'sewing' && (
+            <>
+              {/* Processes List Table */}
+              <div className="w-full max-w-full overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse min-w-[500px]">
+                  <thead>
+                    <tr className="text-xs text-stone-600 uppercase bg-stone-50 border-b border-stone-200 font-mono">
+                      <th className="py-3 px-3 w-12 text-center">{t('processSeq')}</th>
+                      <th className="py-3 px-3">{t('processName')}</th>
+                      <th className="py-3 px-3">{t('machineType')}</th>
+                      <th className="py-3 px-3 text-right">{t('smv')}</th>
+                      <th className="py-3 px-3 text-right">{t('pieceRate')}</th>
+                      {isOwnerAdmin && <th className="py-3 px-3 text-center w-24">{t('actions')}</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-200">
+                    {processes.map((proc) => {
+                      const isEditing = editingProcessId === proc.id;
+                      return (
+                        <tr key={proc.id} className="hover:bg-stone-50 transition-colors">
+                          <td className="py-3 px-3 text-center font-mono font-bold text-stone-600">
+                            {proc.seq_no}
+                          </td>
 
-                      <td className="py-3 px-3 font-medium text-stone-900">
-                        {isEditing ? (
+                          <td className="py-3 px-3 font-medium text-stone-900">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={procForm.name || ''}
+                                onChange={e => setProcForm({ ...procForm, name: e.target.value })}
+                                className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
+                              />
+                            ) : (
+                              proc.name
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 text-stone-700">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={procForm.machine_type || ''}
+                                onChange={e => setProcForm({ ...procForm, machine_type: e.target.value })}
+                                className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
+                              />
+                            ) : (
+                              <span className="text-xs bg-stone-100 border border-stone-200 px-2 py-1 rounded text-stone-700">
+                                {proc.machine_type || 'Standard'}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono text-stone-700">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={procForm.smv || ''}
+                                onChange={e => setProcForm({ ...procForm, smv: parseFloat(e.target.value) })}
+                                className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-20 text-right"
+                              />
+                            ) : (
+                              `${proc.smv || 0} min`
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono font-bold text-amber-800">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                step="0.05"
+                                value={procForm.rate || ''}
+                                onChange={e => setProcForm({ ...procForm, rate: parseFloat(e.target.value) })}
+                                className="bg-stone-50 border border-amber-500 rounded-lg px-2 py-1 text-sm text-amber-800 font-bold w-24 text-right"
+                              />
+                            ) : (
+                              `${currencySymbol}${Number(proc.rate || 0).toFixed(2)}`
+                            )}
+                          </td>
+
+                          {isOwnerAdmin && (
+                            <td className="py-3 px-3 text-center">
+                              {isEditing ? (
+                                <div className="flex items-center justify-center space-x-1">
+                                  <button
+                                    onClick={() => handleSaveProcess({ id: proc.id, ...procForm })}
+                                    className="p-1 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingProcessId(null)}
+                                    className="p-1 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center space-x-1">
+                                  <button
+                                    onClick={() => {
+                                      setEditingProcessId(proc.id);
+                                      setProcForm(proc);
+                                    }}
+                                    className="p-1 text-stone-500 hover:text-indigo-700 hover:bg-stone-100 rounded-lg transition-colors"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteProcess(proc.id)}
+                                    className="p-1 text-stone-500 hover:text-rose-700 hover:bg-stone-100 transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+
+                    {/* Inline Row for Adding New Operation */}
+                    {editingProcessId === 'new' && (
+                      <tr className="bg-indigo-50/50 border-t border-indigo-200">
+                        <td className="py-3 px-3 text-center font-mono font-bold text-indigo-700">
+                          {procForm.seq_no}
+                        </td>
+                        <td className="py-3 px-3">
                           <input
                             type="text"
+                            placeholder="Operation Name"
                             value={procForm.name || ''}
                             onChange={e => setProcForm({ ...procForm, name: e.target.value })}
-                            className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
+                            className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
+                            autoFocus
                           />
-                        ) : (
-                          proc.name
-                        )}
-                      </td>
-
-                      <td className="py-3 px-3 text-stone-700">
-                        {isEditing ? (
+                        </td>
+                        <td className="py-3 px-3">
                           <input
                             type="text"
+                            placeholder="Machine Type"
                             value={procForm.machine_type || ''}
                             onChange={e => setProcForm({ ...procForm, machine_type: e.target.value })}
-                            className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
+                            className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
                           />
-                        ) : (
-                          <span className="text-xs bg-stone-100 border border-stone-200 px-2 py-1 rounded text-stone-700">
-                            {proc.machine_type || 'Standard'}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-3 text-right font-mono text-stone-700">
-                        {isEditing ? (
+                        </td>
+                        <td className="py-3 px-3 text-right">
                           <input
                             type="number"
                             step="0.1"
+                            placeholder="SMV"
                             value={procForm.smv || ''}
                             onChange={e => setProcForm({ ...procForm, smv: parseFloat(e.target.value) })}
-                            className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-20 text-right"
+                            className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-20 text-right"
                           />
-                        ) : (
-                          `${proc.smv || 0} min`
-                        )}
-                      </td>
-
-                      <td className="py-3 px-3 text-right font-mono font-bold text-amber-800">
-                        {isEditing ? (
+                        </td>
+                        <td className="py-3 px-3 text-right">
                           <input
                             type="number"
                             step="0.05"
+                            placeholder="Rate"
                             value={procForm.rate || ''}
                             onChange={e => setProcForm({ ...procForm, rate: parseFloat(e.target.value) })}
-                            className="bg-stone-50 border border-amber-500 rounded-lg px-2 py-1 text-sm text-amber-800 font-bold w-24 text-right"
+                            className="bg-white border border-amber-500 rounded-lg px-2 py-1 text-sm text-amber-800 font-bold w-24 text-right"
                           />
-                        ) : (
-                          `${currencySymbol}${Number(proc.rate || 0).toFixed(2)}`
-                        )}
-                      </td>
-
-                      {isOwnerAdmin && (
-                        <td className="py-3 px-3 text-center">
-                          {isEditing ? (
-                            <div className="flex items-center justify-center space-x-1">
-                              <button
-                                onClick={() => handleSaveProcess({ id: proc.id, ...procForm })}
-                                className="p-1 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => setEditingProcessId(null)}
-                                className="p-1 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center space-x-1">
-                              <button
-                                onClick={() => {
-                                  setEditingProcessId(proc.id);
-                                  setProcForm(proc);
-                                }}
-                                className="p-1 text-stone-500 hover:text-indigo-700 hover:bg-stone-100 rounded-lg transition-colors"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteProcess(proc.id)}
-                                className="p-1 text-stone-500 hover:text-rose-700 hover:bg-stone-100 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
                         </td>
-                      )}
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center space-x-1">
+                            <button
+                              onClick={() => handleSaveProcess(procForm)}
+                              className="p-1 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setEditingProcessId(null)}
+                              className="p-1 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Sticky Total Labour Cost Footer */}
+              <div className="bg-stone-50 border-t border-stone-200 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2 shadow-xs">
+                <div className="flex items-center space-x-2 text-stone-700 text-sm">
+                  <DollarSign className="w-5 h-5 text-amber-800" />
+                  <span className="font-medium">{t('totalLabourCost')}</span>
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-amber-800 font-mono tracking-tight bg-white px-4 py-1.5 rounded-xl border border-amber-300">
+                  {currencySymbol}{totalLabourCost.toFixed(2)} <span className="text-xs text-stone-600 font-normal">/ piece</span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* FINISHING STAGES TAB CONTENT */}
+          {styleTab === 'finishing' && (
+            <div className="space-y-4">
+              <div className="w-full max-w-full overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse min-w-[500px]">
+                  <thead>
+                    <tr className="text-xs text-stone-600 uppercase bg-stone-50 border-b border-stone-200 font-mono">
+                      <th className="py-3 px-3 w-16 text-center">Seq #</th>
+                      <th className="py-3 px-3">Stage Name</th>
+                      <th className="py-3 px-3">Stage Code</th>
+                      <th className="py-3 px-3 text-center">Status</th>
+                      <th className="py-3 px-3 text-center w-36">Actions & Order</th>
                     </tr>
-                  );
-                })}
+                  </thead>
+                  <tbody className="divide-y divide-stone-200">
+                    {[...finishingStages]
+                      .sort((a, b) => a.seq_no - b.seq_no)
+                      .map((stg, idx, arr) => {
+                        const isEditing = editingStageId === stg.id;
+                        return (
+                          <tr key={stg.id} className="hover:bg-stone-50 transition-colors">
+                            <td className="py-3 px-3 text-center font-mono font-bold text-stone-600">
+                              {stg.seq_no}
+                            </td>
 
-                {/* Inline Row for Adding New Operation */}
-                {editingProcessId === 'new' && (
-                  <tr className="bg-indigo-50/50 border-t border-indigo-200">
-                    <td className="py-3 px-3 text-center font-mono font-bold text-indigo-700">
-                      {procForm.seq_no}
-                    </td>
-                    <td className="py-3 px-3">
-                      <input
-                        type="text"
-                        placeholder="Operation Name"
-                        value={procForm.name || ''}
-                        onChange={e => setProcForm({ ...procForm, name: e.target.value })}
-                        className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
-                        autoFocus
-                      />
-                    </td>
-                    <td className="py-3 px-3">
-                      <input
-                        type="text"
-                        placeholder="Machine Type"
-                        value={procForm.machine_type || ''}
-                        onChange={e => setProcForm({ ...procForm, machine_type: e.target.value })}
-                        className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
-                      />
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="SMV"
-                        value={procForm.smv || ''}
-                        onChange={e => setProcForm({ ...procForm, smv: parseFloat(e.target.value) })}
-                        className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-20 text-right"
-                      />
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <input
-                        type="number"
-                        step="0.05"
-                        placeholder="Rate"
-                        value={procForm.rate || ''}
-                        onChange={e => setProcForm({ ...procForm, rate: parseFloat(e.target.value) })}
-                        className="bg-white border border-amber-500 rounded-lg px-2 py-1 text-sm text-amber-800 font-bold w-24 text-right"
-                      />
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex items-center justify-center space-x-1">
-                        <button
-                          onClick={() => handleSaveProcess(procForm)}
-                          className="p-1 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setEditingProcessId(null)}
-                          className="p-1 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                            <td className="py-3 px-3 font-medium text-stone-900">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={stageForm.name || ''}
+                                  onChange={e => setStageForm({ ...stageForm, name: e.target.value })}
+                                  className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
+                                />
+                              ) : (
+                                stg.name
+                              )}
+                            </td>
 
-          {/* Sticky Total Labour Cost Footer */}
-          <div className="bg-stone-50 border-t border-stone-200 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2 shadow-xs">
-            <div className="flex items-center space-x-2 text-stone-700 text-sm">
-              <DollarSign className="w-5 h-5 text-amber-800" />
-              <span className="font-medium">{t('totalLabourCost')}</span>
+                            <td className="py-3 px-3">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={stageForm.code || ''}
+                                  onChange={e => setStageForm({ ...stageForm, code: e.target.value })}
+                                  className="bg-stone-50 border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full font-mono text-xs"
+                                />
+                              ) : (
+                                <span className="font-mono text-xs bg-stone-100 text-stone-700 px-2 py-0.5 rounded border border-stone-200">
+                                  {stg.code}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await handleSaveFinishingStageSubmit({ id: stg.id, is_active: !stg.is_active });
+                                }}
+                                className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase border cursor-pointer ${
+                                  stg.is_active !== false
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-stone-100 text-stone-500 border-stone-300 hover:bg-stone-200'
+                                }`}
+                              >
+                                {stg.is_active !== false ? 'Active' : 'Disabled'}
+                              </button>
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              {isEditing ? (
+                                <div className="flex items-center justify-center space-x-1">
+                                  <button
+                                    onClick={() => handleSaveFinishingStageSubmit({ id: stg.id, ...stageForm })}
+                                    className="p-1 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingStageId(null)}
+                                    className="p-1 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center space-x-1">
+                                  <button
+                                    onClick={() => handleReorderFinishingStage(stg.id, 'up')}
+                                    disabled={idx === 0}
+                                    className="p-1 text-stone-500 hover:text-stone-900 disabled:opacity-30 disabled:hover:text-stone-500"
+                                    title="Move Up"
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    onClick={() => handleReorderFinishingStage(stg.id, 'down')}
+                                    disabled={idx === arr.length - 1}
+                                    className="p-1 text-stone-500 hover:text-stone-900 disabled:opacity-30 disabled:hover:text-stone-500"
+                                    title="Move Down"
+                                  >
+                                    ↓
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingStageId(stg.id);
+                                      setStageForm(stg);
+                                    }}
+                                    className="p-1 text-stone-500 hover:text-indigo-700 hover:bg-stone-100 rounded-lg transition-colors ml-1"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                    {/* Inline Row for Adding New Stage */}
+                    {editingStageId === 'new' && (
+                      <tr className="bg-indigo-50/50 border-t border-indigo-200">
+                        <td className="py-3 px-3 text-center font-mono font-bold text-indigo-700">
+                          {stageForm.seq_no}
+                        </td>
+                        <td className="py-3 px-3">
+                          <input
+                            type="text"
+                            placeholder="Stage Name (e.g. Ironing)"
+                            value={stageForm.name || ''}
+                            onChange={e => setStageForm({ ...stageForm, name: e.target.value })}
+                            className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full"
+                            autoFocus
+                          />
+                        </td>
+                        <td className="py-3 px-3">
+                          <input
+                            type="text"
+                            placeholder="code (e.g. ironing)"
+                            value={stageForm.code || ''}
+                            onChange={e => setStageForm({ ...stageForm, code: e.target.value })}
+                            className="bg-white border border-indigo-600 rounded-lg px-2 py-1 text-sm text-stone-900 w-full font-mono text-xs"
+                          />
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="text-xs text-emerald-700 font-bold">Active</span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center space-x-1">
+                            <button
+                              onClick={() => handleSaveFinishingStageSubmit(stageForm)}
+                              className="p-1 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setEditingStageId(null)}
+                              className="p-1 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200 text-xs text-stone-600">
+                💡 Standard finishing stages sequence: Thread Cutting → Buttonhole → Button Attach → Ironing & Pressing → Quality Control (QC) → Folding & Packing → Ready to Deliver.
+              </div>
             </div>
-            <div className="text-xl sm:text-2xl font-black text-amber-800 font-mono tracking-tight bg-white px-4 py-1.5 rounded-xl border border-amber-300">
-              {currencySymbol}{totalLabourCost.toFixed(2)} <span className="text-xs text-stone-600 font-normal">/ piece</span>
-            </div>
-          </div>
+          )}
         </div>
       )}
 

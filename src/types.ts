@@ -170,6 +170,38 @@ export interface AttendanceRecord {
   created_at?: string;
 }
 
+export interface FinishingStage {
+  id: string;
+  style_id: string;
+  seq_no: number;
+  name: string;
+  code: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface FinishingEntry {
+  id: string;
+  entry_date: string;
+  style_id: string;
+  stage_id: string;
+  worker_id?: string | null;
+  qty_ok: number;
+  qty_rework: number;
+  qty_reject: number;
+  shift: 'day' | 'night';
+  entered_by?: string | null;
+  note?: string | null;
+  created_at?: string;
+  // Joined fields for UI
+  worker_name?: string;
+  worker_code?: string;
+  stage_name?: string;
+  stage_code?: string;
+  style_code?: string;
+  style_name?: string;
+}
+
 export interface DeliveryReport {
   id: string;
   delivery_date: string;

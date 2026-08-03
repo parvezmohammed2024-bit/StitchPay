@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, Zap, Scissors, Users, Table, 
   CalendarCheck, Banknote, BarChart3, Settings,
-  Workflow, BadgePercent, Truck, MoreHorizontal, X, LogOut, ChevronRight
+  Workflow, BadgePercent, Layers, MoreHorizontal, X, LogOut, ChevronRight
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { UserRole } from '../types';
@@ -12,7 +12,7 @@ export type ScreenId =
   | 'workerPortal'
   | 'dailySetup'
   | 'quickEntry' 
-  | 'deliveries'
+  | 'finishing'
   | 'rateBids'
   | 'bulkGrid' 
   | 'styles' 
@@ -37,7 +37,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
     { id: 'dashboard' as ScreenId, label: t('navDashboard'), icon: LayoutDashboard, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'dailySetup' as ScreenId, label: 'Daily Line Setup', icon: Workflow, roles: ['admin', 'supervisor'] },
     { id: 'quickEntry' as ScreenId, label: t('navQuickEntry'), icon: Zap, roles: ['admin', 'supervisor'] },
-    { id: 'deliveries' as ScreenId, label: 'Delivery Reports', icon: Truck, roles: ['admin', 'supervisor', 'accounts'] },
+    { id: 'finishing' as ScreenId, label: 'Finishing', icon: Layers, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'rateBids' as ScreenId, label: 'Rate Approvals', icon: BadgePercent, roles: ['admin', 'supervisor'] },
     { id: 'styles' as ScreenId, label: t('navStyles'), icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'workers' as ScreenId, label: t('navWorkers'), icon: Users, roles: ['admin', 'supervisor', 'accounts'] },
@@ -66,7 +66,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
     { id: 'payroll' as ScreenId, label: 'Payroll Run', icon: Banknote, roles: ['admin', 'accounts'] },
     { id: 'rateBids' as ScreenId, label: 'Rate Approvals', icon: BadgePercent, roles: ['admin', 'supervisor'] },
     { id: 'reports' as ScreenId, label: 'Reports', icon: BarChart3, roles: ['admin', 'accounts'] },
-    { id: 'deliveries' as ScreenId, label: 'Delivery Reports', icon: Truck, roles: ['admin', 'supervisor', 'accounts'] },
+    { id: 'finishing' as ScreenId, label: 'Finishing', icon: Layers, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'settings' as ScreenId, label: 'Settings', icon: Settings, roles: ['admin'] },
   ].filter(item => item.roles.includes(role));
 

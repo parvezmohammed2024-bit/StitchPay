@@ -74,10 +74,10 @@ export const UserRoleManagerModal: React.FC<UserRoleManagerModalProps> = ({ isOp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white border border-stone-200 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-2xl w-full max-w-3xl max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl my-auto overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-stone-200 bg-white">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-stone-200 bg-white shrink-0">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center border border-amber-300">
               <Crown className="w-5 h-5 text-amber-700" />
@@ -102,7 +102,7 @@ export const UserRoleManagerModal: React.FC<UserRoleManagerModalProps> = ({ isOp
           </button>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-6 flex-1 overflow-y-auto">
           {message && (
             <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 text-xs flex items-center justify-between">
               <span>{message}</span>
@@ -268,7 +268,7 @@ export const UserRoleManagerModal: React.FC<UserRoleManagerModalProps> = ({ isOp
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-stone-200 bg-stone-50 flex justify-end">
+        <div className="p-4 border-t border-stone-200 bg-stone-50 flex justify-end shrink-0">
           <button
             onClick={onClose}
             className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-lg text-xs font-semibold transition-colors"
