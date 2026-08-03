@@ -334,7 +334,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
           qty_rework: qtyRework,
           qty_reject: qtyReject,
           note: entryNotes || null,
-          entered_by: 'Supervisor',
+          entered_by: null,
         });
       }
     }

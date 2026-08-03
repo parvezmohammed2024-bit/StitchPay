@@ -820,8 +820,18 @@ class DataService {
       throw new Error('Cannot save or edit production entries inside a locked or paid payroll period.');
     }
 
-    const entryId = entry.id || crypto.randomUUID();
-    const qtyOk = entry.qty_ok ?? 0;
+    const isValidUUID = (id?: string) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const entryId = entry.id && isValidUUID(entry.id) ? entry.id : crypto.randomUUID();
+    const qtyOk = Number(entry.qty_ok ?? 0);
+
+    // CRITICAL: Verify assignment_id is a real assignment ID and not worker_id or a non-existent ID
+    let validAssignmentId: string | null = null;
+    if (entry.assignment_id && entry.assignment_id !== entry.worker_id && isValidUUID(entry.assignment_id)) {
+      const assignments = await this.getDailyAssignments();
+      if (assignments.some(a => a.id === entry.assignment_id)) {
+        validAssignmentId = entry.assignment_id;
+      }
+    }
 
     // CRITICAL: When inserting/updating in Supabase, do NOT write rate_snapshot or amount.
     // The database trigger computes both automatically from assignment agreed_rate!
@@ -829,27 +839,26 @@ class DataService {
     if (isSupabaseConfigured) {
       const payload: Record<string, any> = {
         id: entryId,
-        assignment_id: entry.assignment_id || null,
+        assignment_id: validAssignmentId,
         worker_id: entry.worker_id,
         style_id: entry.style_id,
         process_id: entry.process_id,
         entry_date: entryDate,
         qty_ok: qtyOk,
-        qty_rework: entry.qty_rework || 0,
-        qty_reject: entry.qty_reject || 0,
+        qty_rework: Number(entry.qty_rework || 0),
+        qty_reject: Number(entry.qty_reject || 0),
         shift: entry.shift || 'day',
+        entered_by: isValidUUID(entry.entered_by) ? entry.entered_by : null,
         note: entry.note || null,
       };
 
-      if (entry.entered_by) {
-        payload.entered_by = entry.entered_by;
-      }
+      console.log('[SUPABASE PRODUCTION INSERT PAYLOAD]:', JSON.stringify(payload, null, 2));
 
-      const { error } = await supabase.from('production_entries').upsert(payload);
+      const { error } = await supabase.from('production_entries').upsert(payload).select();
       if (error) {
         console.error('Error saving production entry to Supabase:', error);
-        this.handleError(error, 'Error saving production entry');
-        throw error;
+        showErrorToast(`Database Error (production_entries): ${error.message}`);
+        throw new Error(error.message);
       }
 
       const refreshed = await this.getProductionEntries();
@@ -865,8 +874,8 @@ class DataService {
       style_id: entry.style_id!,
       process_id: entry.process_id!,
       qty_ok: qtyOk,
-      qty_rework: entry.qty_rework || 0,
-      qty_reject: entry.qty_reject || 0,
+      qty_rework: Number(entry.qty_rework || 0),
+      qty_reject: Number(entry.qty_reject || 0),
       rate_snapshot: entry.rate_snapshot || 0,
       amount: entry.amount || 0,
       shift: entry.shift || 'day',
@@ -933,11 +942,30 @@ class DataService {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.from('cutting_entries').select('*').order('entry_date', { ascending: false });
-        if (!error && Array.isArray(data) && data.length > 0) {
-          // Merge Supabase entries with any local unsaved entries
-          const dbMap = new Map((data as CuttingEntry[]).map(d => [d.id, d]));
-          const localOnly = this.cuttingEntries.filter(c => !dbMap.has(c.id));
-          this.cuttingEntries = [...localOnly, ...(data as CuttingEntry[])];
+        if (!error && Array.isArray(data)) {
+          const stylesMap = new Map(this.styles.map(s => [s.id, s]));
+          const workersMap = new Map(this.workers.map(w => [w.id, w]));
+
+          const mapped: CuttingEntry[] = data.map((d: any) => ({
+            id: d.id,
+            entry_date: d.entry_date,
+            style_id: d.style_id,
+            cut_type: d.cut_type || 'bulk',
+            pieces_cut: Number(d.qty_cut ?? d.pieces_cut ?? 0),
+            tables_layers: d.lay_id || d.tables_layers || null,
+            worker_id: d.worker_id || null,
+            notes: d.note || d.notes || null,
+            created_at: d.created_at,
+            style_code: stylesMap.get(d.style_id)?.style_code || '',
+            style_name: stylesMap.get(d.style_id)?.name || '',
+            worker_name: d.worker_id ? workersMap.get(d.worker_id)?.full_name || '' : '',
+          }));
+
+          this.cuttingEntries = mapped;
+          if (styleId) {
+            return mapped.filter(c => c.style_id === styleId);
+          }
+          return mapped;
         }
       } catch (e) {
         console.warn('Supabase cutting_entries query failed, using local store:', e);
@@ -965,32 +993,64 @@ class DataService {
   }
 
   public async saveCuttingEntry(entry: Partial<CuttingEntry>): Promise<CuttingEntry> {
-    const id = entry.id || crypto.randomUUID();
+    const isValidUUID = (id?: string) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const entryId = entry.id && isValidUUID(entry.id) ? entry.id : crypto.randomUUID();
+    const entryDate = entry.entry_date || getLocalDateString();
+    const qtyCut = Number(entry.pieces_cut || (entry as any).qty_cut || 0);
+    const qtyReject = Number((entry as any).qty_reject || 0);
+    const notesText = entry.notes || (entry as any).note || null;
+    const cutTypeVal = entry.cut_type || 'bulk';
+
+    if (isSupabaseConfigured) {
+      // Exact schema columns:
+      // cutting_entries: id, entry_date, style_id, lay_id, size, color, qty_cut, qty_reject, worker_id, shift, note, entered_by, cut_type, created_at
+      const payload: Record<string, any> = {
+        id: entryId,
+        entry_date: entryDate,
+        style_id: entry.style_id,
+        lay_id: (entry as any).lay_id || null,
+        size: (entry as any).size || 'ALL',
+        color: (entry as any).color || null,
+        qty_cut: qtyCut,
+        qty_reject: qtyReject,
+        worker_id: entry.worker_id || null,
+        shift: (entry as any).shift || 'day',
+        note: notesText,
+        entered_by: isValidUUID((entry as any).entered_by) ? (entry as any).entered_by : null,
+        cut_type: cutTypeVal,
+      };
+
+      console.log('[SUPABASE CUTTING INSERT PAYLOAD]:', JSON.stringify(payload, null, 2));
+
+      const { data, error } = await supabase.from('cutting_entries').upsert(payload).select();
+      if (error) {
+        console.error('Error saving cutting_entries to Supabase:', error);
+        showErrorToast(`Database Error (cutting_entries): ${error.message}`);
+        throw new Error(error.message);
+      }
+
+      const refreshed = await this.getCuttingEntries();
+      const saved = refreshed.find(c => c.id === entryId);
+      if (saved) return saved;
+    }
+
     const newEntry: CuttingEntry = {
-      id,
-      entry_date: entry.entry_date || getLocalDateString(),
+      id: entryId,
+      entry_date: entryDate,
       style_id: entry.style_id!,
-      cut_type: entry.cut_type || 'bulk',
-      pieces_cut: Number(entry.pieces_cut || 0),
+      cut_type: cutTypeVal,
+      pieces_cut: qtyCut,
       tables_layers: entry.tables_layers || null,
       worker_id: entry.worker_id || null,
-      notes: entry.notes || null,
+      notes: notesText,
       created_at: entry.created_at || new Date().toISOString(),
     };
 
-    const idx = this.cuttingEntries.findIndex(c => c.id === id);
+    const idx = this.cuttingEntries.findIndex(c => c.id === entryId);
     if (idx >= 0) {
       this.cuttingEntries[idx] = newEntry;
     } else {
       this.cuttingEntries.unshift(newEntry);
-    }
-
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('cutting_entries').upsert([newEntry]);
-      } catch (e) {
-        console.warn('Error saving cutting entry to Supabase:', e);
-      }
     }
 
     return newEntry;
@@ -2117,32 +2177,59 @@ class DataService {
   }
 
   public async saveFinishingEntries(entries: Partial<FinishingEntry>[]): Promise<FinishingEntry[]> {
-    const savedList: FinishingEntry[] = [];
+    const isValidUUID = (id?: string) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const payloads: Record<string, any>[] = [];
+
     for (const entry of entries) {
-      const newEntry: FinishingEntry = {
-        id: entry.id || this.generateId('fe'),
+      const entryId = entry.id && isValidUUID(entry.id) ? entry.id : crypto.randomUUID();
+      payloads.push({
+        id: entryId,
         entry_date: entry.entry_date || getLocalDateString(),
-        style_id: entry.style_id || '',
-        stage_id: entry.stage_id || '',
+        style_id: entry.style_id || null,
+        stage_id: entry.stage_id || null,
         worker_id: entry.worker_id || null,
         qty_ok: Number(entry.qty_ok || 0),
         qty_rework: Number(entry.qty_rework || 0),
         qty_reject: Number(entry.qty_reject || 0),
         shift: entry.shift || 'day',
-        entered_by: entry.entered_by || 'Supervisor',
+        entered_by: isValidUUID(entry.entered_by) ? entry.entered_by : null,
         note: entry.note || null,
+      });
+    }
+
+    if (isSupabaseConfigured && payloads.length > 0) {
+      console.log('[SUPABASE FINISHING INSERT PAYLOAD]:', JSON.stringify(payloads, null, 2));
+
+      const { data, error } = await supabase.from('finishing_entries').insert(payloads).select();
+      if (error) {
+        console.error('Error saving finishing_entries to Supabase:', error);
+        showErrorToast(`Database Error (finishing_entries): ${error.message}`);
+        throw new Error(error.message);
+      }
+
+      // Refetch from Supabase rather than trusting local state
+      this.finishingListeners.forEach(fn => fn());
+      return await this.getFinishingEntries();
+    }
+
+    const savedList: FinishingEntry[] = [];
+    for (const p of payloads) {
+      const newEntry: FinishingEntry = {
+        id: p.id,
+        entry_date: p.entry_date,
+        style_id: p.style_id || '',
+        stage_id: p.stage_id || '',
+        worker_id: p.worker_id || null,
+        qty_ok: p.qty_ok,
+        qty_rework: p.qty_rework,
+        qty_reject: p.qty_reject,
+        shift: p.shift,
+        entered_by: p.entered_by,
+        note: p.note,
         created_at: new Date().toISOString(),
       };
       this.finishingEntries.push(newEntry);
       savedList.push(newEntry);
-    }
-
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('finishing_entries').insert(savedList);
-      } catch (err) {
-        console.error('Error saving finishing_entries to Supabase:', err);
-      }
     }
 
     // Trigger local realtime listeners

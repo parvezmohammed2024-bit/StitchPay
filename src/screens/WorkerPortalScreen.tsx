@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserCheck, Clock, Pause, Square, Scissors, TrendingUp, CheckCircle2, 
   Zap, Trophy, Calendar, Crown, DollarSign, LogOut, Key, ShieldAlert,
-  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check
+  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check, Lock
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { dataService } from '../lib/dataService';
@@ -62,7 +62,9 @@ export const WorkerPortalScreen: React.FC = () => {
   const [workersList, setWorkersList] = useState<Worker[]>([]);
   const [garmentStyles, setGarmentStyles] = useState<GarmentStyle[]>([]);
   const [myFinishingEntries, setMyFinishingEntries] = useState<FinishingEntry[]>([]);
+  const [allFinishingEntries, setAllFinishingEntries] = useState<FinishingEntry[]>([]);
   const [myCuttingEntries, setMyCuttingEntries] = useState<CuttingEntry[]>([]);
+  const [allCuttingEntries, setAllCuttingEntries] = useState<CuttingEntry[]>([]);
   const [allFinishingStages, setAllFinishingStages] = useState<FinishingStage[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -221,10 +223,12 @@ export const WorkerPortalScreen: React.FC = () => {
     setAllPeriodEntries(entryList.filter(e => e.worker_id === workerId));
 
     // Filter finishing entries for worker
+    setAllFinishingEntries(finishingList);
     const workerFinishing = finishingList.filter(f => f.worker_id === workerId);
     setMyFinishingEntries(workerFinishing);
 
     // Filter cutting entries for worker
+    setAllCuttingEntries(cuttingList);
     const workerCutting = cuttingList.filter(c => c.worker_id === workerId);
     setMyCuttingEntries(workerCutting);
 
@@ -316,9 +320,18 @@ export const WorkerPortalScreen: React.FC = () => {
     }
   };
 
+  // Section Permissions
+  const currentSection = (currentWorker?.section || '').trim().toLowerCase();
+  const isFinishingWorker = currentSection.includes('finish');
+  const isCuttingWorker = currentSection.includes('cut');
+
   // Submit Finishing Output
   const handleSaveFinishingEntry = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isFinishingWorker) {
+      alert('Permission Denied: Only workers assigned to the Finishing section can log finishing output.');
+      return;
+    }
     if (!currentWorker || !finishingForm.style_id || !finishingForm.stage_id || !finishingForm.qty_ok) return;
 
     setSubmittingFinishing(true);
@@ -333,7 +346,7 @@ export const WorkerPortalScreen: React.FC = () => {
         qty_rework: Number(finishingForm.qty_rework || 0),
         qty_reject: Number(finishingForm.qty_reject || 0),
         note: finishingForm.note || 'Logged via Worker Mobile Portal',
-        entered_by: currentWorker.full_name,
+        entered_by: null,
       }]);
 
       setIsFinishingModalOpen(false);
@@ -362,6 +375,10 @@ export const WorkerPortalScreen: React.FC = () => {
   // Submit Cutting Output
   const handleSaveCuttingEntry = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isCuttingWorker) {
+      alert('Permission Denied: Only workers assigned to the Cutting section can log cutting output.');
+      return;
+    }
     if (!currentWorker || !cuttingForm.style_id || !cuttingForm.pieces_cut) return;
 
     setSubmittingCutting(true);
@@ -1052,147 +1069,144 @@ export const WorkerPortalScreen: React.FC = () => {
       )}
 
       {/* 5. FINISHING ACTIVITY CONTENT */}
-      {activityTab === 'finishing' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* FINISHING HEADER & METRIC SUMMARY */}
-          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
-              <div>
-                <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
-                  <Layers className="w-5 h-5 text-purple-700" />
-                  <span>Finishing Activity Portal</span>
-                </h2>
-                <p className="text-xs text-stone-600 mt-0.5">
-                  Log finishing process outputs (Thread Trimming, Buttoning, Ironing, Packing, QC) & track stage submissions
-                </p>
+      {activityTab === 'finishing' && (() => {
+        const displayedFinishingEntries = isFinishingWorker ? myFinishingEntries : allFinishingEntries;
+
+        return (
+          <div className="space-y-6 animate-fade-in">
+            {/* PERMISSION NOTICE BANNER FOR NON-FINISHING WORKERS */}
+            {!isFinishingWorker && (
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3.5 px-4 text-xs text-amber-900 flex items-center justify-between shadow-2xs">
+                <span className="flex items-center space-x-2 font-medium">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Logged in as <strong>{currentWorker?.full_name} ({currentWorker?.section || 'Sewing'})</strong>. You are in <strong>Read-Only Mode</strong>. Only workers assigned to the Finishing section can log finishing output.</span>
+                </span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-200/70 px-2.5 py-1 rounded-lg border border-amber-300 shrink-0 ml-2">Read Only</span>
+              </div>
+            )}
+
+            {/* FINISHING HEADER & METRIC SUMMARY */}
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
+                <div>
+                  <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
+                    <Layers className="w-5 h-5 text-purple-700" />
+                    <span>Finishing Activity Portal</span>
+                  </h2>
+                  <p className="text-xs text-stone-600 mt-0.5">
+                    {isFinishingWorker 
+                      ? "Log finishing process outputs (Thread Trimming, Buttoning, Ironing, Packing, QC) & track stage submissions"
+                      : "View finishing process metrics and stage completion output numbers across active garments"
+                    }
+                  </p>
+                </div>
+
+                {isFinishingWorker ? (
+                  <button
+                    onClick={() => {
+                      setFinishingForm({
+                        style_id: garmentStyles[0]?.id || '',
+                        stage_id: allFinishingStages[0]?.id || '',
+                        entry_date: new Date().toISOString().split('T')[0],
+                        shift: 'day',
+                        qty_ok: '',
+                        qty_rework: '0',
+                        qty_reject: '0',
+                        note: '',
+                      });
+                      setIsFinishingModalOpen(true);
+                    }}
+                    className="bg-purple-800 hover:bg-purple-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2 self-start sm:self-center"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Record Finishing Output</span>
+                  </button>
+                ) : (
+                  <div className="bg-amber-50 text-amber-900 border border-amber-200 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center space-x-1.5 self-start sm:self-center">
+                    <Lock className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Finishing Workers Only</span>
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={() => {
-                  setFinishingForm({
-                    style_id: garmentStyles[0]?.id || '',
-                    stage_id: allFinishingStages[0]?.id || '',
-                    entry_date: new Date().toISOString().split('T')[0],
-                    shift: 'day',
-                    qty_ok: '',
-                    qty_rework: '0',
-                    qty_reject: '0',
-                    note: '',
-                  });
-                  setIsFinishingModalOpen(true);
-                }}
-                className="bg-purple-800 hover:bg-purple-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2 self-start sm:self-center"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Record Finishing Output</span>
-              </button>
+              {/* METRIC CARDS */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">Today's Finishing Output</span>
+                  <span className="text-2xl font-black text-purple-900 mt-0.5 font-mono block">
+                    {displayedFinishingEntries.filter(f => f.entry_date === new Date().toISOString().split('T')[0]).reduce((s, f) => s + (f.qty_ok || 0), 0).toLocaleString()} <span className="text-xs font-normal text-purple-700">pcs</span>
+                  </span>
+                  <span className="text-[10px] text-purple-700 font-medium">{isFinishingWorker ? 'My output today' : 'Total factory output today'}</span>
+                </div>
+
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Finishing Output</span>
+                  <span className="text-2xl font-black text-stone-900 mt-0.5 font-mono block">
+                    {displayedFinishingEntries.reduce((s, f) => s + (f.qty_ok || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500">Cumulative total</span>
+                </div>
+
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Rework / Rejects</span>
+                  <span className="text-2xl font-black text-amber-800 mt-0.5 font-mono block">
+                    {displayedFinishingEntries.reduce((s, f) => s + (f.qty_rework || 0) + (f.qty_reject || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500">Quality check items</span>
+                </div>
+
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Logged Submissions</span>
+                  <span className="text-2xl font-black text-indigo-700 mt-0.5 font-mono block">
+                    {displayedFinishingEntries.length} <span className="text-xs font-normal text-stone-500">logs</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500">Finishing records</span>
+                </div>
+              </div>
             </div>
 
-            {/* METRIC CARDS */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-              <div className="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">Today's Finishing Output</span>
-                <span className="text-2xl font-black text-purple-900 mt-0.5 font-mono block">
-                  {myFinishingEntries.filter(f => f.entry_date === new Date().toISOString().split('T')[0]).reduce((s, f) => s + (f.qty_ok || 0), 0).toLocaleString()} <span className="text-xs font-normal text-purple-700">pcs</span>
+            {/* ACTIVE FINISHING STAGES PER STYLE */}
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                  <Layers className="w-4 h-4 text-purple-700" />
+                  <span>Active Garment Finishing Stages</span>
+                </h3>
+                <span className="text-xs text-stone-500 font-medium">
+                  {isFinishingWorker ? "Select stage to submit output" : "Garment stage completion status"}
                 </span>
-                <span className="text-[10px] text-purple-700 font-medium">Logged today</span>
               </div>
 
-              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Finishing Output</span>
-                <span className="text-2xl font-black text-stone-900 mt-0.5 font-mono block">
-                  {myFinishingEntries.reduce((s, f) => s + (f.qty_ok || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
-                </span>
-                <span className="text-[10px] text-stone-500">Cumulative total</span>
-              </div>
-
-              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Rework / Rejects</span>
-                <span className="text-2xl font-black text-amber-800 mt-0.5 font-mono block">
-                  {myFinishingEntries.reduce((s, f) => s + (f.qty_rework || 0) + (f.qty_reject || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
-                </span>
-                <span className="text-[10px] text-stone-500">Quality check items</span>
-              </div>
-
-              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Logged Submissions</span>
-                <span className="text-2xl font-black text-indigo-700 mt-0.5 font-mono block">
-                  {myFinishingEntries.length} <span className="text-xs font-normal text-stone-500">logs</span>
-                </span>
-                <span className="text-[10px] text-stone-500">Finishing records</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ACTIVE FINISHING STAGES PER STYLE */}
-          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
-                <Layers className="w-4 h-4 text-purple-700" />
-                <span>Active Garment Finishing Stages</span>
-              </h3>
-              <span className="text-xs text-stone-500 font-medium">Select stage to submit output</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {garmentStyles.filter(s => s.status !== 'completed').map(st => {
-                const styleStages = allFinishingStages.filter(stage => stage.style_id === st.id);
-                
-                return (
-                  <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
-                          {st.style_code}
-                        </span>
-                        <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
-                      </div>
-                      <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
-                        {st.order_qty?.toLocaleString()} pcs
-                      </span>
-                    </div>
-
-                    {/* Stages List */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Stages Pipeline:</div>
-                      {styleStages.length === 0 ? (
-                        <div className="text-xs text-stone-500 italic bg-white p-2.5 rounded-xl border border-stone-200 flex items-center justify-between">
-                          <span>Standard Finishing Stages</span>
-                          <button
-                            onClick={() => {
-                              setFinishingForm({
-                                style_id: st.id,
-                                stage_id: '',
-                                entry_date: new Date().toISOString().split('T')[0],
-                                shift: 'day',
-                                qty_ok: '',
-                                qty_rework: '0',
-                                qty_reject: '0',
-                                note: '',
-                              });
-                              setIsFinishingModalOpen(true);
-                            }}
-                            className="text-xs text-purple-800 hover:text-purple-950 font-bold"
-                          >
-                            + Log Output
-                          </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {garmentStyles.filter(s => s.status !== 'completed').map(st => {
+                  const styleStages = allFinishingStages.filter(stage => stage.style_id === st.id);
+                  
+                  return (
+                    <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                            {st.style_code}
+                          </span>
+                          <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
                         </div>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {styleStages.map(stg => (
-                            <div key={stg.id} className="bg-white p-2.5 rounded-xl border border-stone-200 flex items-center justify-between text-xs">
-                              <div className="font-bold text-stone-800 flex items-center space-x-1.5">
-                                <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-[10px] flex items-center justify-center font-mono font-bold">
-                                  {stg.seq_no}
-                                </span>
-                                <span>{stg.name}</span>
-                              </div>
+                        <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
+                          {st.order_qty?.toLocaleString()} pcs
+                        </span>
+                      </div>
 
+                      {/* Stages List */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Stages Pipeline:</div>
+                        {styleStages.length === 0 ? (
+                          <div className="text-xs text-stone-500 italic bg-white p-2.5 rounded-xl border border-stone-200 flex items-center justify-between">
+                            <span>Standard Finishing Stages</span>
+                            {isFinishingWorker ? (
                               <button
                                 onClick={() => {
                                   setFinishingForm({
                                     style_id: st.id,
-                                    stage_id: stg.id,
+                                    stage_id: '',
                                     entry_date: new Date().toISOString().split('T')[0],
                                     shift: 'day',
                                     qty_ok: '',
@@ -1202,306 +1216,392 @@ export const WorkerPortalScreen: React.FC = () => {
                                   });
                                   setIsFinishingModalOpen(true);
                                 }}
-                                className="bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors"
+                                className="text-xs text-purple-800 hover:text-purple-950 font-bold"
                               >
                                 + Log Output
                               </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* WORKER'S FINISHING LOG SUBMISSIONS TABLE */}
-          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-purple-700" />
-                <span>My Finishing Activity Log Submissions</span>
-              </h3>
-              <span className="text-xs text-stone-500 font-mono">{myFinishingEntries.length} records</span>
-            </div>
-
-            {myFinishingEntries.length === 0 ? (
-              <div className="p-8 text-center text-stone-500 text-xs space-y-1">
-                <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
-                <p className="font-semibold text-stone-700">No finishing logs recorded yet</p>
-                <p className="text-stone-500 text-[11px]">Click "Record Finishing Output" above to log your finishing work.</p>
-              </div>
-            ) : (
-              <div className="w-full max-w-full overflow-x-auto">
-                <table className="w-full text-left text-xs min-w-[600px]">
-                  <thead>
-                    <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-2.5 px-3">Date & Shift</th>
-                      <th className="py-2.5 px-3">Garment Style</th>
-                      <th className="py-2.5 px-3">Finishing Stage</th>
-                      <th className="py-2.5 px-3 text-right">OK Pieces</th>
-                      <th className="py-2.5 px-3 text-right">Rework</th>
-                      <th className="py-2.5 px-3 text-right">Reject</th>
-                      <th className="py-2.5 px-3">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-200 text-stone-700">
-                    {myFinishingEntries.map(fe => {
-                      const st = garmentStyles.find(s => s.id === fe.style_id);
-                      const stg = allFinishingStages.find(s => s.id === fe.stage_id);
-
-                      return (
-                        <tr key={fe.id} className="hover:bg-stone-50 transition-colors">
-                          <td className="py-3 px-3">
-                            <span className="font-bold text-stone-900 block">{fe.entry_date}</span>
-                            <span className="text-[10px] text-stone-500 uppercase">{fe.shift || 'day'} shift</span>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
-                              {fe.style_code || st?.style_code || 'STY'}
-                            </span>
-                            <span className="block text-stone-800 font-medium mt-0.5">{fe.style_name || st?.name}</span>
-                          </td>
-                          <td className="py-3 px-3 font-bold text-purple-900">
-                            {fe.stage_name || stg?.name || 'Finishing Stage'}
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono text-emerald-800 font-bold">
-                            {fe.qty_ok} pcs
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono text-amber-800 font-bold">
-                            {fe.qty_rework || 0} pcs
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono text-rose-700 font-bold">
-                            {fe.qty_reject || 0} pcs
-                          </td>
-                          <td className="py-3 px-3 text-stone-500 text-[11px]">
-                            {fe.note || '-'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 6. CUTTING ACTIVITY CONTENT */}
-      {activityTab === 'cutting' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* CUTTING HEADER & METRIC SUMMARY */}
-          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
-              <div>
-                <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
-                  <Scissors className="w-5 h-5 text-indigo-700 rotate-90" />
-                  <span>Cutting Activity Portal</span>
-                </h2>
-                <p className="text-xs text-stone-600 mt-0.5">
-                  Record table cutting output (Bulk Cutting & Sample Cutting) & track cutting log history
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  const cutStyles = garmentStyles.filter(s => s.requires_cutting !== false);
-                  setCuttingForm({
-                    style_id: cutStyles[0]?.id || garmentStyles[0]?.id || '',
-                    cut_type: 'bulk',
-                    entry_date: new Date().toISOString().split('T')[0],
-                    pieces_cut: '',
-                    tables_layers: '',
-                    notes: '',
-                  });
-                  setIsCuttingModalOpen(true);
-                }}
-                className="bg-indigo-800 hover:bg-indigo-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2 self-start sm:self-center"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Record Cutting Output</span>
-              </button>
-            </div>
-
-            {/* METRIC CARDS */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-              <div className="bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block">Today's Cut Output</span>
-                <span className="text-2xl font-black text-indigo-900 mt-0.5 font-mono block">
-                  {myCuttingEntries.filter(c => c.entry_date === new Date().toISOString().split('T')[0]).reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-indigo-700">pcs</span>
-                </span>
-                <span className="text-[10px] text-indigo-700 font-medium">Logged today</span>
-              </div>
-
-              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Bulk Cut Pieces</span>
-                <span className="text-2xl font-black text-stone-900 mt-0.5 font-mono block">
-                  {myCuttingEntries.filter(c => c.cut_type === 'bulk').reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
-                </span>
-                <span className="text-[10px] text-stone-500">Production cutting</span>
-              </div>
-
-              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Sample Cut Pieces</span>
-                <span className="text-2xl font-black text-amber-800 mt-0.5 font-mono block">
-                  {myCuttingEntries.filter(c => c.cut_type === 'sample').reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
-                </span>
-                <span className="text-[10px] text-stone-500">Sample cutting</span>
-              </div>
-
-              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Cutting Submissions</span>
-                <span className="text-2xl font-black text-emerald-800 mt-0.5 font-mono block">
-                  {myCuttingEntries.length} <span className="text-xs font-normal text-stone-500">logs</span>
-                </span>
-                <span className="text-[10px] text-stone-500">Cutting records</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ACTIVE CUTTING ORDERS BOARD */}
-          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
-                <Scissors className="w-4 h-4 text-indigo-700 rotate-90" />
-                <span>Active In-House Cutting Orders</span>
-              </h3>
-              <span className="text-xs text-stone-500 font-medium">Styles requiring table cutting</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {garmentStyles.filter(s => s.requires_cutting !== false && s.status !== 'completed').map(st => {
-                const styleCutTotal = myCuttingEntries
-                  .filter(c => c.style_id === st.id)
-                  .reduce((s, c) => s + c.pieces_cut, 0);
-
-                const cutPct = Math.min(100, Math.round((styleCutTotal / (st.order_qty || 1)) * 100));
-
-                return (
-                  <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
-                          {st.style_code}
-                        </span>
-                        <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
-                      </div>
-                      <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
-                        Target: {st.order_qty?.toLocaleString()} pcs
-                      </span>
-                    </div>
-
-                    {/* Progress */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px] text-stone-600 font-bold">
-                        <span>Logged Cut Pieces:</span>
-                        <span className="text-indigo-800 font-mono">{styleCutTotal.toLocaleString()} pcs</span>
-                      </div>
-                      <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
-                        <div className="bg-indigo-700 h-full rounded-full transition-all" style={{ width: `${cutPct}%` }}></div>
-                      </div>
-                    </div>
-
-                    <div className="pt-1 flex justify-end">
-                      <button
-                        onClick={() => {
-                          setCuttingForm({
-                            style_id: st.id,
-                            cut_type: 'bulk',
-                            entry_date: new Date().toISOString().split('T')[0],
-                            pieces_cut: '',
-                            tables_layers: '',
-                            notes: '',
-                          });
-                          setIsCuttingModalOpen(true);
-                        }}
-                        className="bg-indigo-800 hover:bg-indigo-900 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition-colors flex items-center space-x-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Record Cutting Output</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* WORKER'S CUTTING LOG SUBMISSIONS TABLE */}
-          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-indigo-700" />
-                <span>My Cutting Activity Log Submissions</span>
-              </h3>
-              <span className="text-xs text-stone-500 font-mono">{myCuttingEntries.length} records</span>
-            </div>
-
-            {myCuttingEntries.length === 0 ? (
-              <div className="p-8 text-center text-stone-500 text-xs space-y-1">
-                <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
-                <p className="font-semibold text-stone-700">No cutting logs recorded yet</p>
-                <p className="text-stone-500 text-[11px]">Click "Record Cutting Output" above to log your cutting table output.</p>
-              </div>
-            ) : (
-              <div className="w-full max-w-full overflow-x-auto">
-                <table className="w-full text-left text-xs min-w-[550px]">
-                  <thead>
-                    <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Garment Style</th>
-                      <th className="py-2.5 px-3">Cut Type</th>
-                      <th className="py-2.5 px-3 text-right">Pieces Cut</th>
-                      <th className="py-2.5 px-3">Table / Layers</th>
-                      <th className="py-2.5 px-3">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-200 text-stone-700">
-                    {myCuttingEntries.map(ce => {
-                      const st = garmentStyles.find(s => s.id === ce.style_id);
-
-                      return (
-                        <tr key={ce.id} className="hover:bg-stone-50 transition-colors">
-                          <td className="py-3 px-3 font-bold text-stone-900">{ce.entry_date}</td>
-                          <td className="py-3 px-3">
-                            <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
-                              {ce.style_code || st?.style_code || 'STY'}
-                            </span>
-                            <span className="block text-stone-800 font-medium mt-0.5">{ce.style_name || st?.name}</span>
-                          </td>
-                          <td className="py-3 px-3">
-                            {ce.cut_type === 'bulk' ? (
-                              <span className="text-[11px] font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                Bulk Cutting
-                              </span>
                             ) : (
-                              <span className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                                Sample Cutting
+                              <span className="text-[11px] font-bold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-lg border border-stone-200">
+                                View Only
                               </span>
                             )}
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono text-indigo-900 font-bold">
-                            {ce.pieces_cut} pcs
-                          </td>
-                          <td className="py-3 px-3 font-mono text-stone-600 text-[11px]">
-                            {ce.tables_layers || '-'}
-                          </td>
-                          <td className="py-3 px-3 text-stone-500 text-[11px]">
-                            {ce.notes || '-'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {styleStages.map(stg => (
+                              <div key={stg.id} className="bg-white p-2.5 rounded-xl border border-stone-200 flex items-center justify-between text-xs">
+                                <div className="font-bold text-stone-800 flex items-center space-x-1.5">
+                                  <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-[10px] flex items-center justify-center font-mono font-bold">
+                                    {stg.seq_no}
+                                  </span>
+                                  <span>{stg.name}</span>
+                                </div>
+
+                                {isFinishingWorker ? (
+                                  <button
+                                    onClick={() => {
+                                      setFinishingForm({
+                                        style_id: st.id,
+                                        stage_id: stg.id,
+                                        entry_date: new Date().toISOString().split('T')[0],
+                                        shift: 'day',
+                                        qty_ok: '',
+                                        qty_rework: '0',
+                                        qty_reject: '0',
+                                        note: '',
+                                      });
+                                      setIsFinishingModalOpen(true);
+                                    }}
+                                    className="bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors"
+                                  >
+                                    + Log Output
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] font-bold text-stone-400 bg-stone-100 px-2 py-0.5 rounded-lg border border-stone-200">
+                                    View Only
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* FINISHING LOG SUBMISSIONS TABLE */}
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-purple-700" />
+                  <span>{isFinishingWorker ? 'My Finishing Activity Log Submissions' : 'Factory Finishing Activity Logs (Read-Only)'}</span>
+                </h3>
+                <span className="text-xs text-stone-500 font-mono">{displayedFinishingEntries.length} records</span>
+              </div>
+
+              {displayedFinishingEntries.length === 0 ? (
+                <div className="p-8 text-center text-stone-500 text-xs space-y-1">
+                  <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
+                  <p className="font-semibold text-stone-700">No finishing logs recorded yet</p>
+                  <p className="text-stone-500 text-[11px]">
+                    {isFinishingWorker ? 'Click "Record Finishing Output" above to log your finishing work.' : 'Finishing entries logged by workers will appear here.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="w-full max-w-full overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[600px]">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-2.5 px-3">Date & Shift</th>
+                        <th className="py-2.5 px-3">Garment Style</th>
+                        <th className="py-2.5 px-3">Finishing Stage</th>
+                        <th className="py-2.5 px-3 text-right">OK Pieces</th>
+                        <th className="py-2.5 px-3 text-right">Rework</th>
+                        <th className="py-2.5 px-3 text-right">Reject</th>
+                        <th className="py-2.5 px-3">Entered By</th>
+                        <th className="py-2.5 px-3">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200 text-stone-700">
+                      {displayedFinishingEntries.map(fe => {
+                        const st = garmentStyles.find(s => s.id === fe.style_id);
+                        const stg = allFinishingStages.find(s => s.id === fe.stage_id);
+
+                        return (
+                          <tr key={fe.id} className="hover:bg-stone-50 transition-colors">
+                            <td className="py-3 px-3">
+                              <span className="font-bold text-stone-900 block">{fe.entry_date}</span>
+                              <span className="text-[10px] text-stone-500 uppercase">{fe.shift || 'day'} shift</span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
+                                {fe.style_code || st?.style_code || 'STY'}
+                              </span>
+                              <span className="block text-stone-800 font-medium mt-0.5">{fe.style_name || st?.name}</span>
+                            </td>
+                            <td className="py-3 px-3 font-bold text-purple-900">
+                              {fe.stage_name || stg?.name || 'Finishing Stage'}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-emerald-800 font-bold">
+                              {fe.qty_ok} pcs
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-amber-800 font-bold">
+                              {fe.qty_rework || 0} pcs
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-rose-700 font-bold">
+                              {fe.qty_reject || 0} pcs
+                            </td>
+                            <td className="py-3 px-3 font-medium text-stone-700">
+                              {fe.entered_by || 'Worker'}
+                            </td>
+                            <td className="py-3 px-3 text-stone-500 text-[11px]">
+                              {fe.note || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 6. CUTTING ACTIVITY CONTENT */}
+      {activityTab === 'cutting' && (() => {
+        const displayedCuttingEntries = isCuttingWorker ? myCuttingEntries : allCuttingEntries;
+
+        return (
+          <div className="space-y-6 animate-fade-in">
+            {/* PERMISSION NOTICE BANNER FOR NON-CUTTING WORKERS */}
+            {!isCuttingWorker && (
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3.5 px-4 text-xs text-amber-900 flex items-center justify-between shadow-2xs">
+                <span className="flex items-center space-x-2 font-medium">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Logged in as <strong>{currentWorker?.full_name} ({currentWorker?.section || 'Sewing'})</strong>. You are in <strong>Read-Only Mode</strong>. Only workers assigned to the Cutting section can log cutting output.</span>
+                </span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-200/70 px-2.5 py-1 rounded-lg border border-amber-300 shrink-0 ml-2">Read Only</span>
               </div>
             )}
+
+            {/* CUTTING HEADER & METRIC SUMMARY */}
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
+                <div>
+                  <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
+                    <Scissors className="w-5 h-5 text-indigo-700 rotate-90" />
+                    <span>Cutting Activity Portal</span>
+                  </h2>
+                  <p className="text-xs text-stone-600 mt-0.5">
+                    {isCuttingWorker 
+                      ? "Record table cutting output (Bulk Cutting & Sample Cutting) & track cutting log history"
+                      : "View cutting output metrics, order cutting progress, and cutting submission logs across styles"
+                    }
+                  </p>
+                </div>
+
+                {isCuttingWorker ? (
+                  <button
+                    onClick={() => {
+                      const cutStyles = garmentStyles.filter(s => s.requires_cutting !== false);
+                      setCuttingForm({
+                        style_id: cutStyles[0]?.id || garmentStyles[0]?.id || '',
+                        cut_type: 'bulk',
+                        entry_date: new Date().toISOString().split('T')[0],
+                        pieces_cut: '',
+                        tables_layers: '',
+                        notes: '',
+                      });
+                      setIsCuttingModalOpen(true);
+                    }}
+                    className="bg-indigo-800 hover:bg-indigo-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2 self-start sm:self-center"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Record Cutting Output</span>
+                  </button>
+                ) : (
+                  <div className="bg-amber-50 text-amber-900 border border-amber-200 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center space-x-1.5 self-start sm:self-center">
+                    <Lock className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Cutting Workers Only</span>
+                  </div>
+                )}
+              </div>
+
+              {/* METRIC CARDS */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block">Today's Cut Output</span>
+                  <span className="text-2xl font-black text-indigo-900 mt-0.5 font-mono block">
+                    {displayedCuttingEntries.filter(c => c.entry_date === new Date().toISOString().split('T')[0]).reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-indigo-700">pcs</span>
+                  </span>
+                  <span className="text-[10px] text-indigo-700 font-medium">{isCuttingWorker ? 'My output today' : 'Total factory output today'}</span>
+                </div>
+
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Bulk Cut Pieces</span>
+                  <span className="text-2xl font-black text-stone-900 mt-0.5 font-mono block">
+                    {displayedCuttingEntries.filter(c => c.cut_type === 'bulk').reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500">Production cutting</span>
+                </div>
+
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Sample Cut Pieces</span>
+                  <span className="text-2xl font-black text-amber-800 mt-0.5 font-mono block">
+                    {displayedCuttingEntries.filter(c => c.cut_type === 'sample').reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500">Sample cutting</span>
+                </div>
+
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Cutting Submissions</span>
+                  <span className="text-2xl font-black text-emerald-800 mt-0.5 font-mono block">
+                    {displayedCuttingEntries.length} <span className="text-xs font-normal text-stone-500">logs</span>
+                  </span>
+                  <span className="text-[10px] text-stone-500">Cutting records</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ACTIVE CUTTING ORDERS BOARD */}
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                  <Scissors className="w-4 h-4 text-indigo-700 rotate-90" />
+                  <span>Active In-House Cutting Orders</span>
+                </h3>
+                <span className="text-xs text-stone-500 font-medium">Styles requiring table cutting</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {garmentStyles.filter(s => s.requires_cutting !== false && s.status !== 'completed').map(st => {
+                  const styleCutTotal = allCuttingEntries
+                    .filter(c => c.style_id === st.id)
+                    .reduce((s, c) => s + (c.pieces_cut || 0), 0);
+
+                  const cutPct = Math.min(100, Math.round((styleCutTotal / (st.order_qty || 1)) * 100));
+
+                  return (
+                    <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                            {st.style_code}
+                          </span>
+                          <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
+                        </div>
+                        <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
+                          Target: {st.order_qty?.toLocaleString()} pcs
+                        </span>
+                      </div>
+
+                      {/* Progress */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] text-stone-600 font-bold">
+                          <span>Total Cut Pieces:</span>
+                          <span className="text-indigo-800 font-mono">{styleCutTotal.toLocaleString()} pcs ({cutPct}%)</span>
+                        </div>
+                        <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-indigo-700 h-full rounded-full transition-all" style={{ width: `${cutPct}%` }}></div>
+                        </div>
+                      </div>
+
+                      <div className="pt-1 flex justify-end">
+                        {isCuttingWorker ? (
+                          <button
+                            onClick={() => {
+                              setCuttingForm({
+                                style_id: st.id,
+                                cut_type: 'bulk',
+                                entry_date: new Date().toISOString().split('T')[0],
+                                pieces_cut: '',
+                                tables_layers: '',
+                                notes: '',
+                              });
+                              setIsCuttingModalOpen(true);
+                            }}
+                            className="bg-indigo-800 hover:bg-indigo-900 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition-colors flex items-center space-x-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Record Cutting Output</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-bold text-stone-400 bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200">
+                            View Only
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CUTTING LOG SUBMISSIONS TABLE */}
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-indigo-700" />
+                  <span>{isCuttingWorker ? 'My Cutting Activity Log Submissions' : 'Factory Cutting Activity Logs (Read-Only)'}</span>
+                </h3>
+                <span className="text-xs text-stone-500 font-mono">{displayedCuttingEntries.length} records</span>
+              </div>
+
+              {displayedCuttingEntries.length === 0 ? (
+                <div className="p-8 text-center text-stone-500 text-xs space-y-1">
+                  <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
+                  <p className="font-semibold text-stone-700">No cutting logs recorded yet</p>
+                  <p className="text-stone-500 text-[11px]">
+                    {isCuttingWorker ? 'Click "Record Cutting Output" above to log your cutting table output.' : 'Cutting entries logged by workers will appear here.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="w-full max-w-full overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[600px]">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3">Garment Style</th>
+                        <th className="py-2.5 px-3">Cut Type</th>
+                        <th className="py-2.5 px-3 text-right">Pieces Cut</th>
+                        <th className="py-2.5 px-3">Table / Layers</th>
+                        <th className="py-2.5 px-3">Entered By</th>
+                        <th className="py-2.5 px-3">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200 text-stone-700">
+                      {displayedCuttingEntries.map(ce => {
+                        const st = garmentStyles.find(s => s.id === ce.style_id);
+                        const wrk = workersList.find(w => w.id === ce.worker_id);
+
+                        return (
+                          <tr key={ce.id} className="hover:bg-stone-50 transition-colors">
+                            <td className="py-3 px-3 font-bold text-stone-900">{ce.entry_date}</td>
+                            <td className="py-3 px-3">
+                              <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
+                                {ce.style_code || st?.style_code || 'STY'}
+                              </span>
+                              <span className="block text-stone-800 font-medium mt-0.5">{ce.style_name || st?.name}</span>
+                            </td>
+                            <td className="py-3 px-3">
+                              {ce.cut_type === 'bulk' ? (
+                                <span className="text-[11px] font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                  Bulk Cutting
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                  Sample Cutting
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono font-black text-indigo-900 text-sm">
+                              {ce.pieces_cut?.toLocaleString()} pcs
+                            </td>
+                            <td className="py-3 px-3 font-mono text-stone-600">
+                              {ce.tables_layers || '-'}
+                            </td>
+                            <td className="py-3 px-3 font-medium text-stone-700">
+                              {wrk?.full_name || 'Cutting Worker'}
+                            </td>
+                            <td className="py-3 px-3 text-stone-500 text-[11px]">
+                              {ce.notes || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODALS */}
       {/* Rate Bidding Modal */}
