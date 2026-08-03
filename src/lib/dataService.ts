@@ -57,8 +57,8 @@ class DataService {
   private deliveries: DeliveryReport[] = [];
   private finishingStages: FinishingStage[] = [];
   private finishingEntries: FinishingEntry[] = [];
-  private cuttingEntries: CuttingEntry[] = INITIAL_CUTTING_ENTRIES;
-  private samples: GarmentSample[] = INITIAL_SAMPLES;
+  private cuttingEntries: CuttingEntry[] = [];
+  private samples: GarmentSample[] = [];
   private finishingListeners: Set<() => void> = new Set();
   private payrollPeriod: PayrollPeriod = {
     id: 'pp-2026-w31',
@@ -932,8 +932,11 @@ class DataService {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.from('cutting_entries').select('*').order('entry_date', { ascending: false });
-        if (!error && data) {
-          this.cuttingEntries = data as CuttingEntry[];
+        if (!error && Array.isArray(data) && data.length > 0) {
+          // Merge Supabase entries with any local unsaved entries
+          const dbMap = new Map((data as CuttingEntry[]).map(d => [d.id, d]));
+          const localOnly = this.cuttingEntries.filter(c => !dbMap.has(c.id));
+          this.cuttingEntries = [...localOnly, ...(data as CuttingEntry[])];
         }
       } catch (e) {
         console.warn('Supabase cutting_entries query failed, using local store:', e);
@@ -1003,13 +1006,28 @@ class DataService {
     }
   }
 
+  public async clearCuttingData(): Promise<void> {
+    this.cuttingEntries = [];
+    this.samples = [];
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('cutting_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await supabase.from('samples').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      } catch (e) {
+        console.warn('Error clearing cutting data from Supabase:', e);
+      }
+    }
+  }
+
   // --- SAMPLES ---
   public async getSamples(styleId?: string): Promise<GarmentSample[]> {
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.from('samples').select('*').order('created_at', { ascending: false });
-        if (!error && data) {
-          this.samples = data as GarmentSample[];
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const dbMap = new Map((data as GarmentSample[]).map(d => [d.id, d]));
+          const localOnly = this.samples.filter(s => !dbMap.has(s.id));
+          this.samples = [...localOnly, ...(data as GarmentSample[])];
         }
       } catch (e) {
         console.warn('Supabase samples query failed, using local store:', e);

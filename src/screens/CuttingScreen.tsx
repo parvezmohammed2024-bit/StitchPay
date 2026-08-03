@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Scissors, Plus, AlertTriangle, CheckCircle2, Clock, 
   Calendar, Layers, Filter, Image as ImageIcon, FileText, 
-  Upload, Sparkles, AlertCircle, Check, X, Tag, UserCheck
+  Upload, Sparkles, AlertCircle, Check, X, Tag, UserCheck, Trash2
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { 
@@ -73,8 +73,8 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [fetchedStyles, fetchedEntries, fetchedSamples, fetchedWorkers] = await Promise.all([
-        dataService.getStyles(),
+      const fetchedStyles = await dataService.getStyles();
+      const [fetchedEntries, fetchedSamples, fetchedWorkers] = await Promise.all([
         dataService.getCuttingEntries(),
         dataService.getSamples(),
         dataService.getWorkers()
@@ -100,9 +100,10 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   const bulkCutMap = useMemo(() => {
     const map = new Map<string, number>();
     cuttingEntries.forEach(entry => {
-      if (entry.cut_type === 'bulk' || !entry.cut_type) {
-        const current = map.get(entry.style_id) || 0;
-        map.set(entry.style_id, current + Number(entry.pieces_cut || 0));
+      if ((entry.cut_type === 'bulk' || !entry.cut_type) && entry.style_id) {
+        const sid = String(entry.style_id).trim();
+        const current = map.get(sid) || 0;
+        map.set(sid, current + Number(entry.pieces_cut || 0));
       }
     });
     return map;
@@ -112,9 +113,10 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   const sampleCutMap = useMemo(() => {
     const map = new Map<string, number>();
     cuttingEntries.forEach(entry => {
-      if (entry.cut_type === 'sample') {
-        const current = map.get(entry.style_id) || 0;
-        map.set(entry.style_id, current + Number(entry.pieces_cut || 0));
+      if (entry.cut_type === 'sample' && entry.style_id) {
+        const sid = String(entry.style_id).trim();
+        const current = map.get(sid) || 0;
+        map.set(sid, current + Number(entry.pieces_cut || 0));
       }
     });
     return map;
@@ -158,8 +160,9 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
     const done: Array<GarmentStyle & { bulk_cut: number; sample_cut: number; days_left: number | null }> = [];
 
     styles.forEach(st => {
-      const bulk_cut = bulkCutMap.get(st.id) || 0;
-      const sample_cut = sampleCutMap.get(st.id) || 0;
+      const sid = String(st.id).trim();
+      const bulk_cut = bulkCutMap.get(sid) || 0;
+      const sample_cut = sampleCutMap.get(sid) || 0;
       const days_left = getDaysRemaining(st.target_ship_date);
       const item = { ...st, bulk_cut, sample_cut, days_left };
 
@@ -336,6 +339,14 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
     }
   };
 
+  const handleClearData = async () => {
+    if (window.confirm('Are you sure you want to clear all cutting entries and sample data to start fresh?')) {
+      await dataService.clearCuttingData();
+      showSuccessToast('All cutting & sample demo data cleared! Ready for fresh entries.');
+      loadData();
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner & Navigation Tabs */}
@@ -396,6 +407,17 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
             <Plus className="w-4 h-4" />
             <span>Record Output</span>
           </button>
+
+          {(cuttingEntries.length > 0 || samples.length > 0) && (
+            <button
+              onClick={handleClearData}
+              title="Clear all recorded entries for a fresh start"
+              className="flex items-center space-x-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-2 rounded-xl text-xs font-bold transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Clear Demo Data</span>
+            </button>
+          )}
         </div>
       </div>
 
