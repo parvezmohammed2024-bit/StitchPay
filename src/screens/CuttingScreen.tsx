@@ -160,6 +160,9 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
     const done: Array<GarmentStyle & { bulk_cut: number; sample_cut: number; days_left: number | null }> = [];
 
     styles.forEach(st => {
+      // Styles marked requires_cutting = false are EXCLUDED from cutting board entirely
+      if (st.requires_cutting === false) return;
+
       const sid = String(st.id).trim();
       const bulk_cut = bulkCutMap.get(sid) || 0;
       const sample_cut = sampleCutMap.get(sid) || 0;
@@ -439,15 +442,17 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs">
-          <div className="text-stone-500 text-xs font-medium">Active Board Styles</div>
-          <div className="text-2xl font-black text-indigo-700 mt-1">{styles.length} Styles</div>
+          <div className="text-stone-500 text-xs font-medium">Active Cutting Board Styles</div>
+          <div className="text-2xl font-black text-indigo-700 mt-1">
+            {styles.filter(s => s.requires_cutting !== false).length} Styles
+          </div>
           <div className="text-[10px] text-stone-400 mt-0.5">{boardData.inProgress.length} In Progress • {boardData.pending.length} Pending</div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs">
           <div className="text-emerald-700 text-xs font-medium">PP Approval Rate</div>
           <div className="text-2xl font-black text-emerald-800 mt-1">
-            {samples.filter(s => s.sample_type === 'PP' && s.status === 'Approved').length} / {styles.length} Approved
+            {samples.filter(s => s.sample_type === 'PP' && s.status === 'Approved').length} / {styles.filter(s => s.requires_cutting !== false).length} Approved
           </div>
           <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Critical pre-cutting sign-offs</div>
         </div>

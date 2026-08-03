@@ -204,7 +204,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         sewingCompletedQty = Math.min(...Array.from(processTotalsMap.values()));
       }
 
-      const sewingWarning = receivedFromSewing > sewingCompletedQty && sewingCompletedQty > 0;
+      // Skip reconciliation warning for pre-cut styles (requires_cutting = false)
+      const sewingWarning = style.requires_cutting !== false && (receivedFromSewing > sewingCompletedQty && sewingCompletedQty > 0);
 
       // Final ready to deliver stage (last stage in pipeline)
       const readyStageSummary = stageSummaries.length > 0 ? stageSummaries[stageSummaries.length - 1] : null;

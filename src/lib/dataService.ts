@@ -524,6 +524,7 @@ class DataService {
       target_ship_date: cleanStyle.target_ship_date ?? existing?.target_ship_date ?? null,
       start_date: cleanStyle.start_date ?? existing?.start_date ?? null,
       status: cleanStyle.status ?? existing?.status ?? 'upcoming',
+      requires_cutting: cleanStyle.requires_cutting ?? existing?.requires_cutting ?? true,
       notes: cleanStyle.notes ?? existing?.notes ?? null,
     };
 

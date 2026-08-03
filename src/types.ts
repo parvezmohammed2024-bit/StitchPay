@@ -58,6 +58,7 @@ export interface GarmentStyle {
   status: 'upcoming' | 'active' | 'completed' | 'archived';
   completed_at?: string | null;
   notes: string | null;
+  requires_cutting?: boolean;
   created_at?: string;
   // Computed
   completed_pieces?: number;

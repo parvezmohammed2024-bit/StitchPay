@@ -3,7 +3,7 @@ import {
   Scissors, Plus, Copy, FileSpreadsheet, Trash2, Edit3, 
   DollarSign, Shirt, Check, X, AlertTriangle, Archive, CheckCircle2,
   Layers, RefreshCw, Calendar, Clock, History, AlertCircle, ArrowUpRight,
-  TrendingDown, CheckCircle
+  TrendingDown, CheckCircle, Info
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
@@ -68,7 +68,8 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
   const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
   const [procForm, setProcForm] = useState<Partial<GarmentProcess>>({});
 
-  // New Style Form
+  // New / Edit Style Form
+  const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
   const [isUploadingStyleImage, setIsUploadingStyleImage] = useState(false);
   const [styleForm, setStyleForm] = useState<Partial<GarmentStyle>>({
     name: '',
@@ -79,7 +80,41 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     target_ship_date: '',
     status: 'upcoming',
     image_url: null,
+    requires_cutting: true,
   });
+
+  const handleOpenAddStyleModal = () => {
+    setEditingStyleId(null);
+    setStyleForm({
+      name: '',
+      style_code: '',
+      buyer_name: '',
+      order_qty: 10000,
+      start_date: new Date().toISOString().split('T')[0],
+      target_ship_date: '',
+      status: 'upcoming',
+      image_url: null,
+      requires_cutting: true,
+    });
+    setShowStyleModal(true);
+  };
+
+  const handleOpenEditStyleModal = (st: GarmentStyle) => {
+    setEditingStyleId(st.id);
+    setStyleForm({
+      id: st.id,
+      name: st.name,
+      style_code: st.style_code,
+      buyer_name: st.buyer_name || '',
+      order_qty: st.order_qty,
+      start_date: st.start_date || '',
+      target_ship_date: st.target_ship_date || '',
+      status: st.status,
+      image_url: st.image_url,
+      requires_cutting: st.requires_cutting !== false,
+    });
+    setShowStyleModal(true);
+  };
 
   const isOwnerAdmin = role === 'admin';
 
@@ -202,9 +237,13 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     }
 
     try {
-      const saved = await dataService.saveStyle(styleForm);
-      showSuccessToast(`Style ${saved.style_code} created as ${saved.status}.`);
+      const saved = await dataService.saveStyle({
+        ...styleForm,
+        id: editingStyleId || styleForm.id,
+      });
+      showSuccessToast(editingStyleId ? `Style ${saved.style_code} updated successfully.` : `Style ${saved.style_code} created as ${saved.status}.`);
       setShowStyleModal(false);
+      setEditingStyleId(null);
       setStyleForm({
         name: '',
         style_code: '',
@@ -214,12 +253,13 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
         target_ship_date: '',
         status: 'upcoming',
         image_url: null,
+        requires_cutting: true,
       });
       setSelectedStyle(saved);
       await loadData();
       await loadProcesses(saved.id);
     } catch (err: any) {
-      showErrorToast(`Failed to create style: ${err.message || String(err)}`);
+      showErrorToast(`Failed to save style: ${err.message || String(err)}`);
     }
   };
 
@@ -526,10 +566,18 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 className="w-16 h-16 rounded-2xl object-cover border border-stone-200"
               />
               <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
-                    {st.style_code}
-                  </span>
+                <div className="flex items-center justify-between gap-1 flex-wrap">
+                  <div className="flex items-center space-x-1.5 flex-wrap">
+                    <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                      {st.style_code}
+                    </span>
+                    {st.requires_cutting === false && (
+                      <span className="text-[10px] font-bold text-stone-700 bg-stone-100 border border-stone-300 px-1.5 py-0.5 rounded-md flex items-center space-x-1" title="Pre-cut fabric supplied in-house">
+                        <Scissors className="w-3 h-3 text-stone-500 line-through" />
+                        <span>Pre-cut</span>
+                      </span>
+                    )}
+                  </div>
 
                   {/* Status selector */}
                   <select
@@ -724,13 +772,23 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
               </button>
 
               {isOwnerAdmin && (
-                <button
-                  onClick={() => handleDeleteStyle(st.id, st.style_code)}
-                  title="Delete style"
-                  className="p-1 text-stone-400 hover:text-rose-700 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleOpenEditStyleModal(st)}
+                    title="Edit style order details & cutting requirement"
+                    className="flex items-center space-x-1 text-[11px] text-indigo-700 hover:text-indigo-900 font-bold"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteStyle(st.id, st.style_code)}
+                    title="Delete style"
+                    className="p-1 text-stone-400 hover:text-rose-700 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -765,7 +823,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
 
           {isOwnerAdmin && (
             <button
-              onClick={() => setShowStyleModal(true)}
+              onClick={handleOpenAddStyleModal}
               className="flex items-center space-x-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all text-xs"
             >
               <Plus className="w-4 h-4" />
@@ -1637,18 +1695,20 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
         </div>
       )}
 
-      {/* MODAL: ADD NEW STYLE ORDER */}
+      {/* MODAL: ADD / EDIT STYLE ORDER */}
       {showStyleModal && (
-        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-stone-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-              <h3 className="text-lg font-bold text-stone-900">Add Style Order</h3>
-              <button onClick={() => setShowStyleModal(false)} className="text-stone-400 hover:text-stone-900">
+        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-stone-200 rounded-3xl max-w-md w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3 shrink-0 mb-3">
+              <h3 className="text-lg font-bold text-stone-900">
+                {editingStyleId ? 'Edit Style Order' : 'Add Style Order'}
+              </h3>
+              <button onClick={() => setShowStyleModal(false)} className="text-stone-400 hover:text-stone-900 p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveStyle} className="space-y-3">
+            <form onSubmit={handleSaveStyle} className="space-y-3 overflow-y-auto pr-1 flex-1">
               {/* Image Uploader */}
               <div className="pb-2 border-b border-stone-200">
                 <StyleImageUploader
@@ -1742,6 +1802,36 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 </select>
               </div>
 
+              {/* Requires Cutting In-House Toggle */}
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2 mt-2">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="space-y-0.5 pr-2">
+                    <span className="text-xs font-bold text-stone-900 block">Requires cutting in-house</span>
+                    <span className="text-[11px] text-stone-500 block">
+                      {styleForm.requires_cutting !== false
+                        ? 'Fabric will be cut on factory tables before sewing'
+                        : 'Pre-cut fabric supplied'}
+                    </span>
+                  </div>
+                  <div className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={styleForm.requires_cutting !== false}
+                      onChange={e => setStyleForm({ ...styleForm, requires_cutting: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-700"></div>
+                  </div>
+                </label>
+
+                {styleForm.requires_cutting === false && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-900 font-medium flex items-center space-x-2">
+                    <Info className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Pre-cut fabric supplied — this style will not appear in the Cutting section.</span>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2 pt-3">
                 <button
                   type="button"
@@ -1761,7 +1851,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                       <span>Uploading Image...</span>
                     </>
                   ) : (
-                    <span>Create Style Order</span>
+                    <span>{editingStyleId ? 'Save Style Changes' : 'Create Style Order'}</span>
                   )}
                 </button>
               </div>

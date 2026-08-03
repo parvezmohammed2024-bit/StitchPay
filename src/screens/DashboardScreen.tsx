@@ -482,6 +482,52 @@ export const DashboardScreen: React.FC = () => {
                   <span>{completed.toLocaleString()} completed</span>
                   <span>Target: {target.toLocaleString()} pcs</span>
                 </div>
+
+                {/* Production Pipeline Stages */}
+                <div className="pt-3 border-t border-stone-200 mt-3">
+                  <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Pipeline Stage Flow</span>
+                    {style.requires_cutting === false && (
+                      <span className="text-[10px] font-bold text-stone-500 bg-stone-200/70 px-1.5 py-0.5 rounded">
+                        Starts at Sewing
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-1 text-[11px] font-bold text-center">
+                    {/* Stage 1: Cutting */}
+                    {style.requires_cutting === false ? (
+                      <div className="bg-stone-200/60 text-stone-600 border border-stone-300 rounded-lg p-1.5 flex flex-col items-center justify-center">
+                        <span className="text-[9px] uppercase tracking-tight text-stone-600">Cutting</span>
+                        <span className="text-[10px] font-bold text-stone-600">Pre-cut</span>
+                      </div>
+                    ) : (
+                      <div className="bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
+                        <span className="text-[9px] uppercase tracking-tight text-indigo-600">Cutting</span>
+                        <span className="text-[10px] font-bold text-indigo-800">In-house</span>
+                      </div>
+                    )}
+
+                    {/* Stage 2: Sewing */}
+                    <div className="bg-amber-50 text-amber-900 border border-amber-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
+                      <span className="text-[9px] uppercase tracking-tight text-amber-700">Sewing</span>
+                      <span className="text-[10px] font-bold text-amber-900">Active</span>
+                    </div>
+
+                    {/* Stage 3: Finishing */}
+                    <div className="bg-purple-50 text-purple-900 border border-purple-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
+                      <span className="text-[9px] uppercase tracking-tight text-purple-700">Finishing</span>
+                      <span className="text-[10px] font-bold text-purple-900">Pipeline</span>
+                    </div>
+
+                    {/* Stage 4: Delivery */}
+                    <div className="bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
+                      <span className="text-[9px] uppercase tracking-tight text-emerald-700">Delivery</span>
+                      <span className="text-[10px] font-bold text-emerald-900">
+                        {(style.delivered_pieces || 0).toLocaleString()} pcs
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             );
           })}

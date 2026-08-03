@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   UserCheck, Clock, Pause, Square, Scissors, TrendingUp, CheckCircle2, 
   Zap, Trophy, Calendar, Crown, DollarSign, LogOut, Key, ShieldAlert,
-  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info
+  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { dataService } from '../lib/dataService';
-import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess } from '../types';
+import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess, CuttingEntry, FinishingEntry, FinishingStage } from '../types';
 import { RateBiddingModal } from '../components/RateBiddingModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 
@@ -20,6 +20,9 @@ export const WorkerPortalScreen: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState<boolean>(false);
 
+  // Portal Menu Tab Navigation
+  const [activityTab, setActivityTab] = useState<'sewing' | 'finishing' | 'cutting'>('sewing');
+
   // Portal Data State
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [monthlyAttendanceCount, setMonthlyAttendanceCount] = useState<number>(0);
@@ -28,6 +31,10 @@ export const WorkerPortalScreen: React.FC = () => {
   const [allPeriodEntries, setAllPeriodEntries] = useState<ProductionEntry[]>([]);
   const [allEntries, setAllEntries] = useState<ProductionEntry[]>([]);
   const [workersList, setWorkersList] = useState<Worker[]>([]);
+  const [garmentStyles, setGarmentStyles] = useState<GarmentStyle[]>([]);
+  const [myFinishingEntries, setMyFinishingEntries] = useState<FinishingEntry[]>([]);
+  const [myCuttingEntries, setMyCuttingEntries] = useState<CuttingEntry[]>([]);
+  const [allFinishingStages, setAllFinishingStages] = useState<FinishingStage[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Modals & Forms
@@ -36,6 +43,32 @@ export const WorkerPortalScreen: React.FC = () => {
   const [selectedWork, setSelectedWork] = useState<DailyAssignment | null>(null);
   const [submittingEntry, setSubmittingEntry] = useState<boolean>(false);
   const [clockMessage, setClockMessage] = useState<string | null>(null);
+
+  // Finishing Modal & Form
+  const [isFinishingModalOpen, setIsFinishingModalOpen] = useState(false);
+  const [submittingFinishing, setSubmittingFinishing] = useState(false);
+  const [finishingForm, setFinishingForm] = useState({
+    style_id: '',
+    stage_id: '',
+    entry_date: new Date().toISOString().split('T')[0],
+    shift: 'day' as 'day' | 'night',
+    qty_ok: '',
+    qty_rework: '0',
+    qty_reject: '0',
+    note: '',
+  });
+
+  // Cutting Modal & Form
+  const [isCuttingModalOpen, setIsCuttingModalOpen] = useState(false);
+  const [submittingCutting, setSubmittingCutting] = useState(false);
+  const [cuttingForm, setCuttingForm] = useState({
+    style_id: '',
+    cut_type: 'bulk' as 'bulk' | 'sample',
+    entry_date: new Date().toISOString().split('T')[0],
+    pieces_cut: '',
+    tables_layers: '',
+    notes: '',
+  });
 
   // Check existing session on mount
   useEffect(() => {
@@ -52,6 +85,15 @@ export const WorkerPortalScreen: React.FC = () => {
       const match = allWrks.find(w => w.id === savedWorkerId);
       if (match) {
         setCurrentWorker(match);
+        // Default tab based on worker section
+        const sec = (match.section || '').toLowerCase();
+        if (sec.includes('finishing')) {
+          setActivityTab('finishing');
+        } else if (sec.includes('cutting')) {
+          setActivityTab('cutting');
+        } else {
+          setActivityTab('sewing');
+        }
         await loadWorkerData(match.id);
       } else {
         sessionStorage.removeItem('stitchpay_worker_id');
@@ -75,6 +117,14 @@ export const WorkerPortalScreen: React.FC = () => {
       if (verified) {
         sessionStorage.setItem('stitchpay_worker_id', verified.id);
         setCurrentWorker(verified);
+        const sec = (verified.section || '').toLowerCase();
+        if (sec.includes('finishing')) {
+          setActivityTab('finishing');
+        } else if (sec.includes('cutting')) {
+          setActivityTab('cutting');
+        } else {
+          setActivityTab('sewing');
+        }
         await loadWorkerData(verified.id);
       } else {
         setLoginError('Invalid Mobile Number or PIN. Please try again.');
@@ -93,6 +143,8 @@ export const WorkerPortalScreen: React.FC = () => {
     setAssignedWorks([]);
     setTodayEntries([]);
     setAllPeriodEntries([]);
+    setMyFinishingEntries([]);
+    setMyCuttingEntries([]);
   };
 
   const loadWorkerData = async (workerId: string) => {
@@ -100,16 +152,25 @@ export const WorkerPortalScreen: React.FC = () => {
     const todayStr = new Date().toISOString().split('T')[0];
     const currentMonthPrefix = todayStr.slice(0, 7); // 'YYYY-MM'
 
-    const [wrkList, attTodayList, allAttList, assignList, entryList] = await Promise.all([
+    const [
+      wrkList, attTodayList, allAttList, assignList, entryList,
+      stylesList, finishingList, cuttingList, stagesList
+    ] = await Promise.all([
       dataService.getWorkers(),
       dataService.getAttendance(todayStr),
       dataService.getAttendance(),
       dataService.getDailyAssignments(todayStr),
       dataService.getProductionEntries(),
+      dataService.getStyles(),
+      dataService.getFinishingEntries(),
+      dataService.getCuttingEntries(),
+      dataService.getFinishingStages(),
     ]);
 
     setWorkersList(wrkList);
     setAllEntries(entryList);
+    setGarmentStyles(stylesList);
+    setAllFinishingStages(stagesList);
 
     // Filter today attendance
     const att = attTodayList.find(a => a.worker_id === workerId) || null;
@@ -129,6 +190,14 @@ export const WorkerPortalScreen: React.FC = () => {
     const myTodayEntries = entryList.filter(e => e.worker_id === workerId && e.entry_date === todayStr);
     setTodayEntries(myTodayEntries);
     setAllPeriodEntries(entryList.filter(e => e.worker_id === workerId));
+
+    // Filter finishing entries for worker
+    const workerFinishing = finishingList.filter(f => f.worker_id === workerId);
+    setMyFinishingEntries(workerFinishing);
+
+    // Filter cutting entries for worker
+    const workerCutting = cuttingList.filter(c => c.worker_id === workerId);
+    setMyCuttingEntries(workerCutting);
 
     setLoading(false);
   };
@@ -187,7 +256,7 @@ export const WorkerPortalScreen: React.FC = () => {
     }
   };
 
-  // Submit piece production output
+  // Submit piece production output (Sewing)
   const handleQuickEntrySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWork || !currentWorker || !entryQty || Number(entryQty) <= 0) return;
@@ -215,6 +284,86 @@ export const WorkerPortalScreen: React.FC = () => {
       alert(err.message || 'Failed to submit production');
     } finally {
       setSubmittingEntry(false);
+    }
+  };
+
+  // Submit Finishing Output
+  const handleSaveFinishingEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentWorker || !finishingForm.style_id || !finishingForm.stage_id || !finishingForm.qty_ok) return;
+
+    setSubmittingFinishing(true);
+    try {
+      await dataService.saveFinishingEntries([{
+        worker_id: currentWorker.id,
+        style_id: finishingForm.style_id,
+        stage_id: finishingForm.stage_id,
+        entry_date: finishingForm.entry_date,
+        shift: finishingForm.shift,
+        qty_ok: Number(finishingForm.qty_ok || 0),
+        qty_rework: Number(finishingForm.qty_rework || 0),
+        qty_reject: Number(finishingForm.qty_reject || 0),
+        note: finishingForm.note || 'Logged via Worker Mobile Portal',
+        entered_by: currentWorker.full_name,
+      }]);
+
+      setIsFinishingModalOpen(false);
+      const stageMatch = allFinishingStages.find(s => s.id === finishingForm.stage_id);
+      setClockMessage(`✅ Finishing output of ${finishingForm.qty_ok} pcs for ${stageMatch?.name || 'stage'} logged successfully!`);
+      setTimeout(() => setClockMessage(null), 5000);
+
+      setFinishingForm({
+        style_id: '',
+        stage_id: '',
+        entry_date: new Date().toISOString().split('T')[0],
+        shift: 'day',
+        qty_ok: '',
+        qty_rework: '0',
+        qty_reject: '0',
+        note: '',
+      });
+      await loadWorkerData(currentWorker.id);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save finishing output');
+    } finally {
+      setSubmittingFinishing(false);
+    }
+  };
+
+  // Submit Cutting Output
+  const handleSaveCuttingEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentWorker || !cuttingForm.style_id || !cuttingForm.pieces_cut) return;
+
+    setSubmittingCutting(true);
+    try {
+      await dataService.saveCuttingEntry({
+        worker_id: currentWorker.id,
+        style_id: cuttingForm.style_id,
+        cut_type: cuttingForm.cut_type,
+        entry_date: cuttingForm.entry_date,
+        pieces_cut: Number(cuttingForm.pieces_cut || 0),
+        tables_layers: cuttingForm.tables_layers || null,
+        notes: cuttingForm.notes || 'Logged via Worker Mobile Portal',
+      });
+
+      setIsCuttingModalOpen(false);
+      setClockMessage(`✅ Cutting output of ${cuttingForm.pieces_cut} pcs logged successfully!`);
+      setTimeout(() => setClockMessage(null), 5000);
+
+      setCuttingForm({
+        style_id: '',
+        cut_type: 'bulk',
+        entry_date: new Date().toISOString().split('T')[0],
+        pieces_cut: '',
+        tables_layers: '',
+        notes: '',
+      });
+      await loadWorkerData(currentWorker.id);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save cutting output');
+    } finally {
+      setSubmittingCutting(false);
     }
   };
 
@@ -517,340 +666,851 @@ export const WorkerPortalScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. TODAY'S WORK SECTION (REAL-TIME UPDATED & PAY-TYPE ADAPTIVE) */}
-      <div className="bg-white border border-stone-200 rounded-3xl overflow-hidden shadow-xs space-y-0">
-        <div className="p-5 border-b border-stone-200 bg-stone-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
-              <Scissors className="w-5 h-5 text-amber-800" />
-              <span>Today's Work</span>
-            </h2>
-            <p className="text-xs text-stone-600 mt-0.5">
-              Live operation logs and earnings updated instantly as supervisor saves entries
-            </p>
+      {/* 3. ACTIVITY NAVIGATION MENU BAR */}
+      <div className="bg-white border border-stone-200 rounded-3xl p-2 shadow-xs flex items-center gap-2 overflow-x-auto">
+        <button
+          onClick={() => setActivityTab('sewing')}
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 ${
+            activityTab === 'sewing'
+              ? 'bg-amber-800 text-white shadow-xs'
+              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/60'
+          }`}
+        >
+          <Scissors className="w-4 h-4" />
+          <span>Sewing Activity</span>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+            activityTab === 'sewing' ? 'bg-amber-900/60 text-amber-100' : 'bg-stone-200 text-stone-700'
+          }`}>
+            {assignedWorks.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActivityTab('finishing')}
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 ${
+            activityTab === 'finishing'
+              ? 'bg-purple-800 text-white shadow-xs'
+              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/60'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Finishing Activity</span>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+            activityTab === 'finishing' ? 'bg-purple-900/60 text-purple-100' : 'bg-stone-200 text-stone-700'
+          }`}>
+            {myFinishingEntries.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActivityTab('cutting')}
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 ${
+            activityTab === 'cutting'
+              ? 'bg-indigo-800 text-white shadow-xs'
+              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/60'
+          }`}
+        >
+          <Scissors className="w-4 h-4 rotate-90" />
+          <span>Cutting Activity</span>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+            activityTab === 'cutting' ? 'bg-indigo-900/60 text-indigo-100' : 'bg-stone-200 text-stone-700'
+          }`}>
+            {myCuttingEntries.length}
+          </span>
+        </button>
+      </div>
+
+      {/* 4. SEWING ACTIVITY CONTENT */}
+      {activityTab === 'sewing' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* TODAY'S WORK SECTION (REAL-TIME UPDATED & PAY-TYPE ADAPTIVE) */}
+          <div className="bg-white border border-stone-200 rounded-3xl overflow-hidden shadow-xs space-y-0">
+            <div className="p-5 border-b border-stone-200 bg-stone-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                  <Scissors className="w-5 h-5 text-amber-800" />
+                  <span>Today's Work</span>
+                </h2>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  Live operation logs and earnings updated instantly as supervisor saves entries
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                  <span>Live Real-Time Sync</span>
+                </span>
+              </div>
+            </div>
+
+            {/* OPERATIONS BREAKDOWN LIST */}
+            {assignedWorks.length === 0 ? (
+              <div className="p-8 text-center text-stone-500 text-xs space-y-1">
+                <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
+                <p className="font-semibold text-stone-700">No line operations assigned to you today</p>
+                <p className="text-stone-500 text-[11px]">Please check with your line supervisor for today's assignment.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-stone-200">
+                {assignedWorks.map(work => {
+                  const myOutputForWork = todayEntries
+                    .filter(e => e.process_id === work.process_id)
+                    .reduce((s, e) => s + e.qty_ok, 0);
+
+                  const targetQty = work.target_qty || 250;
+                  const progressPct = Math.min(100, Math.round((myOutputForWork / targetQty) * 100));
+                  const agreedRate = work.agreed_rate || 0;
+                  const opAmountEarned = myOutputForWork * agreedRate;
+
+                  return (
+                    <div key={work.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-stone-50 transition-colors">
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-black text-base text-stone-900">{work.process_name}</span>
+                          <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-800 font-mono font-bold border border-stone-200">
+                            {work.style_code}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
+                          <span>Style: <strong className="text-stone-800">{work.style_name}</strong></span>
+                          <span>•</span>
+                          <span>Target Qty: <strong className="text-stone-800">{targetQty} pcs</strong></span>
+                          <span>•</span>
+                          <span>Completed Qty: <strong className="text-emerald-800">{myOutputForWork} pcs</strong></span>
+                          
+                          {/* CONDITIONAL DISPLAY: Show Rate & Amount ONLY for Piece-Rate Workers */}
+                          {isPieceRateWorker ? (
+                            <>
+                              <span>•</span>
+                              <span className="text-emerald-800 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                                Rate: ৳{agreedRate}/pc
+                              </span>
+                              <span>•</span>
+                              <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-300">
+                                Earned: ৳{opAmountEarned.toLocaleString()}
+                              </span>
+                            </>
+                          ) : (
+                            /* MONTHLY SALARY WORKER: Omit rate, amount, and earnings completely */
+                            null
+                          )}
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full max-w-md bg-stone-100 h-2.5 rounded-full overflow-hidden mt-1 border border-stone-200">
+                          <div
+                            className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${progressPct}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Actions: Bidding Option (piece-rate only) + Log Output */}
+                      <div className="flex items-center space-x-2 self-start md:self-center shrink-0">
+                        {isPieceRateWorker && (
+                          <button
+                            onClick={() => setBiddingAssignment(work)}
+                            className="bg-stone-100 hover:bg-stone-200 text-amber-900 border border-stone-200 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1"
+                          >
+                            <DollarSign className="w-3.5 h-3.5 text-amber-800" />
+                            <span>Bidding Option</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => setSelectedWork(work)}
+                          className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-1.5"
+                        >
+                          <Zap className="w-4 h-4 fill-current" />
+                          <span>Log Output</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* TODAY'S WORK SUMMARY METRICS BAR */}
+            <div className="p-5 bg-stone-50 border-t border-stone-200">
+              {isPieceRateWorker ? (
+                /* PIECE RATE WORKER METRICS SUMMARY */
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Today's Earnings</span>
+                    <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">৳{todayEarningsBDT.toLocaleString()}</span>
+                    <span className="text-[10px] text-stone-500">{todayOutputPcs} pcs today</span>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Running Total (Pay Period)</span>
+                    <span className="text-xl font-black text-indigo-700 mt-0.5 font-mono block">৳{totalPeriodEarningsBDT.toLocaleString()}</span>
+                    <span className="text-[10px] text-stone-500">Current period total</span>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Pieces Completed This Week</span>
+                    <span className="text-xl font-black text-stone-900 mt-0.5 font-mono block">{weeklyOutputPcs.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span></span>
+                    <span className="text-[10px] text-stone-500">Last 7 days total</span>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Net Payable Amount</span>
+                    <span className="text-xl font-black text-emerald-800 mt-0.5 font-mono block">৳{netReceivableBDT.toLocaleString()}</span>
+                    <span className="text-[10px] text-stone-500">After advance deductions</span>
+                  </div>
+                </div>
+              ) : (
+                /* MONTHLY SALARY WORKER METRICS SUMMARY (No rate, no piece amounts) */
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Fixed Monthly Salary</span>
+                    <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">৳{(currentWorker.monthly_salary || 0).toLocaleString()}</span>
+                    <span className="text-[10px] text-stone-500">Fixed Monthly Rate</span>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Days Worked This Month</span>
+                    <span className="text-xl font-black text-indigo-700 mt-0.5 font-mono block">{monthlyAttendanceCount} <span className="text-xs font-normal text-stone-500">days</span></span>
+                    <span className="text-[10px] text-stone-500">Present in attendance</span>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Today's Piece Output</span>
+                    <span className="text-xl font-black text-stone-900 mt-0.5 font-mono block">{todayOutputPcs.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span></span>
+                    <span className="text-[10px] text-stone-500">Completed today</span>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Pieces Completed This Week</span>
+                    <span className="text-xl font-black text-emerald-800 mt-0.5 font-mono block">{weeklyOutputPcs.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span></span>
+                    <span className="text-[10px] text-stone-500">Last 7 days total</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full flex items-center space-x-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-              <span>Live Real-Time Sync</span>
-            </span>
+          {/* EARNINGS & PRODUCTION GRAPH WITH RANKING */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
+                  <TrendingUp className="w-5 h-5 text-indigo-700" />
+                  <span>Production Trend & Factory Standing</span>
+                </h2>
+                <p className="text-xs text-stone-600">Cumulative output analysis and performance metrics</p>
+              </div>
+
+              {/* Ranking Badge */}
+              <div className="bg-amber-50 border border-amber-300 px-4 py-2 rounded-2xl flex items-center space-x-3 self-start sm:self-center">
+                <Trophy className="w-6 h-6 text-amber-800" />
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-amber-900 tracking-wider">Factory Worker Rank</div>
+                  <div className="text-sm font-black text-stone-900">
+                    Rank #{currentRank} <span className="text-xs text-stone-600 font-normal">of {totalRankedWorkers} Workers</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Graph: Output & Earnings over last 7 days */}
+            <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
+              <div className="text-xs font-bold text-stone-700 flex items-center justify-between">
+                <span>Last 7 Days Production Trend</span>
+                <span className="text-[10px] text-stone-500 font-mono">Output Pieces {isPieceRateWorker ? '& Earnings (৳ BDT)' : 'Daily'}</span>
+              </div>
+
+              <div className="h-56 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={last7DaysData}>
+                    <defs>
+                      <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#047857" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#047857" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorPcs" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4338CA" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#4338CA" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                    <XAxis dataKey="dateFormatted" stroke="#78716c" fontSize={11} />
+                    <YAxis stroke="#78716c" fontSize={11} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e7e5e4', borderRadius: '12px', color: '#1c1917' }}
+                      labelStyle={{ color: '#1c1917', fontWeight: 'bold' }}
+                    />
+                    {isPieceRateWorker && (
+                      <Area type="monotone" dataKey="earnings" name="Earnings (৳)" stroke="#047857" fillOpacity={1} fill="url(#colorEarnings)" />
+                    )}
+                    <Area type="monotone" dataKey="pcs" name="Pieces (Pcs)" stroke="#4338CA" fillOpacity={1} fill="url(#colorPcs)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* LAST 7 DAYS PRODUCTION DETAILS BREAKDOWN */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                <Calendar className="w-5 h-5 text-indigo-700" />
+                <span>Last 7 Days Production Details</span>
+              </h2>
+              <span className="text-xs text-stone-600 font-mono">Daily Breakdown</span>
+            </div>
+
+            <div className="w-full max-w-full overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[480px]">
+                <thead>
+                  <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Completed Pieces</th>
+                    {isPieceRateWorker && <th className="py-2.5 px-3">Day Earnings</th>}
+                    <th className="py-2.5 px-3">Logged Operations</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-200 text-stone-700">
+                  {last7DaysData.map((day, idx) => (
+                    <tr key={idx} className="hover:bg-stone-50 transition-colors">
+                      <td className="py-3 px-3 font-bold text-stone-900">{day.dateFormatted}</td>
+                      <td className="py-3 px-3 font-mono text-indigo-800 font-bold">{day.pcs} pcs</td>
+                      {isPieceRateWorker && (
+                        <td className="py-3 px-3 font-mono text-emerald-800 font-bold">৳{day.earnings.toLocaleString()}</td>
+                      )}
+                      <td className="py-3 px-3 text-stone-600">
+                        {day.entries.length > 0 ? (
+                          <span className="bg-stone-100 px-2 py-1 rounded text-[11px] text-stone-800">
+                            {day.entries.length} log submissions
+                          </span>
+                        ) : (
+                          <span className="text-stone-400">No logs / Off day</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* TOP PERFORMANCE LEADERBOARD TILL NOW */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                <Crown className="w-5 h-5 text-amber-800" />
+                <span>Top Performers Till Now (Factory Leaderboard)</span>
+              </h2>
+              <span className="text-xs text-amber-900 font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
+                Top 5 Workers
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {topPerformers.map(item => (
+                <div
+                  key={item.worker.id}
+                  className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${
+                    item.rank === 1
+                      ? 'bg-amber-50 border-amber-300 shadow-xs'
+                      : 'bg-stone-50 border-stone-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
+                      item.rank === 1 ? 'bg-amber-700 text-white' : 'bg-stone-200 text-stone-800'
+                    }`}>
+                      #{item.rank}
+                    </span>
+                    <span className="text-[10px] text-stone-500 font-mono">{item.worker.worker_code}</span>
+                  </div>
+
+                  <div className="flex items-center space-x-2.5">
+                    <WorkerAvatar
+                      photoUrl={item.worker.photo_url}
+                      name={item.worker.full_name}
+                      size="md"
+                      className="rounded-xl"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-stone-900 truncate max-w-[100px]">{item.worker.full_name}</div>
+                      <div className="text-[10px] text-stone-600">{item.worker.section || 'Sewing'}</div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-stone-200 pt-2 text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-stone-600">Total Output:</span>
+                      <strong className="text-indigo-800 font-mono">{item.totalPcs} pcs</strong>
+                    </div>
+                    {item.worker.pay_type !== 'monthly_salary' && (
+                      <div className="flex justify-between">
+                        <span className="text-stone-600">Total Pay:</span>
+                        <strong className="text-emerald-800 font-mono">৳{item.totalAmt.toLocaleString()}</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+      )}
 
-        {/* OPERATIONS BREAKDOWN LIST */}
-        {assignedWorks.length === 0 ? (
-          <div className="p-8 text-center text-stone-500 text-xs space-y-1">
-            <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
-            <p className="font-semibold text-stone-700">No line operations assigned to you today</p>
-            <p className="text-stone-500 text-[11px]">Please check with your line supervisor for today's assignment.</p>
+      {/* 5. FINISHING ACTIVITY CONTENT */}
+      {activityTab === 'finishing' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* FINISHING HEADER & METRIC SUMMARY */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
+                  <Layers className="w-5 h-5 text-purple-700" />
+                  <span>Finishing Activity Portal</span>
+                </h2>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  Log finishing process outputs (Thread Trimming, Buttoning, Ironing, Packing, QC) & track stage submissions
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setFinishingForm({
+                    style_id: garmentStyles[0]?.id || '',
+                    stage_id: allFinishingStages[0]?.id || '',
+                    entry_date: new Date().toISOString().split('T')[0],
+                    shift: 'day',
+                    qty_ok: '',
+                    qty_rework: '0',
+                    qty_reject: '0',
+                    note: '',
+                  });
+                  setIsFinishingModalOpen(true);
+                }}
+                className="bg-purple-800 hover:bg-purple-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2 self-start sm:self-center"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Record Finishing Output</span>
+              </button>
+            </div>
+
+            {/* METRIC CARDS */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+              <div className="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block">Today's Finishing Output</span>
+                <span className="text-2xl font-black text-purple-900 mt-0.5 font-mono block">
+                  {myFinishingEntries.filter(f => f.entry_date === new Date().toISOString().split('T')[0]).reduce((s, f) => s + (f.qty_ok || 0), 0).toLocaleString()} <span className="text-xs font-normal text-purple-700">pcs</span>
+                </span>
+                <span className="text-[10px] text-purple-700 font-medium">Logged today</span>
+              </div>
+
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Finishing Output</span>
+                <span className="text-2xl font-black text-stone-900 mt-0.5 font-mono block">
+                  {myFinishingEntries.reduce((s, f) => s + (f.qty_ok || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                </span>
+                <span className="text-[10px] text-stone-500">Cumulative total</span>
+              </div>
+
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Rework / Rejects</span>
+                <span className="text-2xl font-black text-amber-800 mt-0.5 font-mono block">
+                  {myFinishingEntries.reduce((s, f) => s + (f.qty_rework || 0) + (f.qty_reject || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                </span>
+                <span className="text-[10px] text-stone-500">Quality check items</span>
+              </div>
+
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Logged Submissions</span>
+                <span className="text-2xl font-black text-indigo-700 mt-0.5 font-mono block">
+                  {myFinishingEntries.length} <span className="text-xs font-normal text-stone-500">logs</span>
+                </span>
+                <span className="text-[10px] text-stone-500">Finishing records</span>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="divide-y divide-stone-200">
-            {assignedWorks.map(work => {
-              const myOutputForWork = todayEntries
-                .filter(e => e.process_id === work.process_id)
-                .reduce((s, e) => s + e.qty_ok, 0);
 
-              const targetQty = work.target_qty || 250;
-              const progressPct = Math.min(100, Math.round((myOutputForWork / targetQty) * 100));
-              const agreedRate = work.agreed_rate || 0;
-              const opAmountEarned = myOutputForWork * agreedRate;
+          {/* ACTIVE FINISHING STAGES PER STYLE */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                <Layers className="w-4 h-4 text-purple-700" />
+                <span>Active Garment Finishing Stages</span>
+              </h3>
+              <span className="text-xs text-stone-500 font-medium">Select stage to submit output</span>
+            </div>
 
-              return (
-                <div key={work.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-stone-50 transition-colors">
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-black text-base text-stone-900">{work.process_name}</span>
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-800 font-mono font-bold border border-stone-200">
-                        {work.style_code}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {garmentStyles.filter(s => s.status !== 'completed').map(st => {
+                const styleStages = allFinishingStages.filter(stage => stage.style_id === st.id);
+                
+                return (
+                  <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                          {st.style_code}
+                        </span>
+                        <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
+                      </div>
+                      <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
+                        {st.order_qty?.toLocaleString()} pcs
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
-                      <span>Style: <strong className="text-stone-800">{work.style_name}</strong></span>
-                      <span>•</span>
-                      <span>Target Qty: <strong className="text-stone-800">{targetQty} pcs</strong></span>
-                      <span>•</span>
-                      <span>Completed Qty: <strong className="text-emerald-800">{myOutputForWork} pcs</strong></span>
-                      
-                      {/* CONDITIONAL DISPLAY: Show Rate & Amount ONLY for Piece-Rate Workers */}
-                      {isPieceRateWorker ? (
-                        <>
-                          <span>•</span>
-                          <span className="text-emerald-800 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                            Rate: ৳{agreedRate}/pc
-                          </span>
-                          <span>•</span>
-                          <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-300">
-                            Earned: ৳{opAmountEarned.toLocaleString()}
-                          </span>
-                        </>
+                    {/* Stages List */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Stages Pipeline:</div>
+                      {styleStages.length === 0 ? (
+                        <div className="text-xs text-stone-500 italic bg-white p-2.5 rounded-xl border border-stone-200 flex items-center justify-between">
+                          <span>Standard Finishing Stages</span>
+                          <button
+                            onClick={() => {
+                              setFinishingForm({
+                                style_id: st.id,
+                                stage_id: '',
+                                entry_date: new Date().toISOString().split('T')[0],
+                                shift: 'day',
+                                qty_ok: '',
+                                qty_rework: '0',
+                                qty_reject: '0',
+                                note: '',
+                              });
+                              setIsFinishingModalOpen(true);
+                            }}
+                            className="text-xs text-purple-800 hover:text-purple-950 font-bold"
+                          >
+                            + Log Output
+                          </button>
+                        </div>
                       ) : (
-                        /* MONTHLY SALARY WORKER: Omit rate, amount, and earnings completely */
-                        null
+                        <div className="space-y-1.5">
+                          {styleStages.map(stg => (
+                            <div key={stg.id} className="bg-white p-2.5 rounded-xl border border-stone-200 flex items-center justify-between text-xs">
+                              <div className="font-bold text-stone-800 flex items-center space-x-1.5">
+                                <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 text-[10px] flex items-center justify-center font-mono font-bold">
+                                  {stg.seq_no}
+                                </span>
+                                <span>{stg.name}</span>
+                              </div>
+
+                              <button
+                                onClick={() => {
+                                  setFinishingForm({
+                                    style_id: st.id,
+                                    stage_id: stg.id,
+                                    entry_date: new Date().toISOString().split('T')[0],
+                                    shift: 'day',
+                                    qty_ok: '',
+                                    qty_rework: '0',
+                                    qty_reject: '0',
+                                    note: '',
+                                  });
+                                  setIsFinishingModalOpen(true);
+                                }}
+                                className="bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-1 rounded-lg font-bold text-[11px] transition-colors"
+                              >
+                                + Log Output
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-                    {/* Progress Bar */}
-                    <div className="w-full max-w-md bg-stone-100 h-2.5 rounded-full overflow-hidden mt-1 border border-stone-200">
-                      <div
-                        className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${progressPct}%` }}
-                      ></div>
+          {/* WORKER'S FINISHING LOG SUBMISSIONS TABLE */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-purple-700" />
+                <span>My Finishing Activity Log Submissions</span>
+              </h3>
+              <span className="text-xs text-stone-500 font-mono">{myFinishingEntries.length} records</span>
+            </div>
+
+            {myFinishingEntries.length === 0 ? (
+              <div className="p-8 text-center text-stone-500 text-xs space-y-1">
+                <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
+                <p className="font-semibold text-stone-700">No finishing logs recorded yet</p>
+                <p className="text-stone-500 text-[11px]">Click "Record Finishing Output" above to log your finishing work.</p>
+              </div>
+            ) : (
+              <div className="w-full max-w-full overflow-x-auto">
+                <table className="w-full text-left text-xs min-w-[600px]">
+                  <thead>
+                    <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="py-2.5 px-3">Date & Shift</th>
+                      <th className="py-2.5 px-3">Garment Style</th>
+                      <th className="py-2.5 px-3">Finishing Stage</th>
+                      <th className="py-2.5 px-3 text-right">OK Pieces</th>
+                      <th className="py-2.5 px-3 text-right">Rework</th>
+                      <th className="py-2.5 px-3 text-right">Reject</th>
+                      <th className="py-2.5 px-3">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-200 text-stone-700">
+                    {myFinishingEntries.map(fe => {
+                      const st = garmentStyles.find(s => s.id === fe.style_id);
+                      const stg = allFinishingStages.find(s => s.id === fe.stage_id);
+
+                      return (
+                        <tr key={fe.id} className="hover:bg-stone-50 transition-colors">
+                          <td className="py-3 px-3">
+                            <span className="font-bold text-stone-900 block">{fe.entry_date}</span>
+                            <span className="text-[10px] text-stone-500 uppercase">{fe.shift || 'day'} shift</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
+                              {fe.style_code || st?.style_code || 'STY'}
+                            </span>
+                            <span className="block text-stone-800 font-medium mt-0.5">{fe.style_name || st?.name}</span>
+                          </td>
+                          <td className="py-3 px-3 font-bold text-purple-900">
+                            {fe.stage_name || stg?.name || 'Finishing Stage'}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-emerald-800 font-bold">
+                            {fe.qty_ok} pcs
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-amber-800 font-bold">
+                            {fe.qty_rework || 0} pcs
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-rose-700 font-bold">
+                            {fe.qty_reject || 0} pcs
+                          </td>
+                          <td className="py-3 px-3 text-stone-500 text-[11px]">
+                            {fe.note || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 6. CUTTING ACTIVITY CONTENT */}
+      {activityTab === 'cutting' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* CUTTING HEADER & METRIC SUMMARY */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
+                  <Scissors className="w-5 h-5 text-indigo-700 rotate-90" />
+                  <span>Cutting Activity Portal</span>
+                </h2>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  Record table cutting output (Bulk Cutting & Sample Cutting) & track cutting log history
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  const cutStyles = garmentStyles.filter(s => s.requires_cutting !== false);
+                  setCuttingForm({
+                    style_id: cutStyles[0]?.id || garmentStyles[0]?.id || '',
+                    cut_type: 'bulk',
+                    entry_date: new Date().toISOString().split('T')[0],
+                    pieces_cut: '',
+                    tables_layers: '',
+                    notes: '',
+                  });
+                  setIsCuttingModalOpen(true);
+                }}
+                className="bg-indigo-800 hover:bg-indigo-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2 self-start sm:self-center"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Record Cutting Output</span>
+              </button>
+            </div>
+
+            {/* METRIC CARDS */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+              <div className="bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block">Today's Cut Output</span>
+                <span className="text-2xl font-black text-indigo-900 mt-0.5 font-mono block">
+                  {myCuttingEntries.filter(c => c.entry_date === new Date().toISOString().split('T')[0]).reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-indigo-700">pcs</span>
+                </span>
+                <span className="text-[10px] text-indigo-700 font-medium">Logged today</span>
+              </div>
+
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Bulk Cut Pieces</span>
+                <span className="text-2xl font-black text-stone-900 mt-0.5 font-mono block">
+                  {myCuttingEntries.filter(c => c.cut_type === 'bulk').reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                </span>
+                <span className="text-[10px] text-stone-500">Production cutting</span>
+              </div>
+
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Total Sample Cut Pieces</span>
+                <span className="text-2xl font-black text-amber-800 mt-0.5 font-mono block">
+                  {myCuttingEntries.filter(c => c.cut_type === 'sample').reduce((s, c) => s + (c.pieces_cut || 0), 0).toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span>
+                </span>
+                <span className="text-[10px] text-stone-500">Sample cutting</span>
+              </div>
+
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
+                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Cutting Submissions</span>
+                <span className="text-2xl font-black text-emerald-800 mt-0.5 font-mono block">
+                  {myCuttingEntries.length} <span className="text-xs font-normal text-stone-500">logs</span>
+                </span>
+                <span className="text-[10px] text-stone-500">Cutting records</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ACTIVE CUTTING ORDERS BOARD */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                <Scissors className="w-4 h-4 text-indigo-700 rotate-90" />
+                <span>Active In-House Cutting Orders</span>
+              </h3>
+              <span className="text-xs text-stone-500 font-medium">Styles requiring table cutting</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {garmentStyles.filter(s => s.requires_cutting !== false && s.status !== 'completed').map(st => {
+                const styleCutTotal = myCuttingEntries
+                  .filter(c => c.style_id === st.id)
+                  .reduce((s, c) => s + c.pieces_cut, 0);
+
+                const cutPct = Math.min(100, Math.round((styleCutTotal / (st.order_qty || 1)) * 100));
+
+                return (
+                  <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                          {st.style_code}
+                        </span>
+                        <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
+                      </div>
+                      <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
+                        Target: {st.order_qty?.toLocaleString()} pcs
+                      </span>
+                    </div>
+
+                    {/* Progress */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-stone-600 font-bold">
+                        <span>Logged Cut Pieces:</span>
+                        <span className="text-indigo-800 font-mono">{styleCutTotal.toLocaleString()} pcs</span>
+                      </div>
+                      <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
+                        <div className="bg-indigo-700 h-full rounded-full transition-all" style={{ width: `${cutPct}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="pt-1 flex justify-end">
+                      <button
+                        onClick={() => {
+                          setCuttingForm({
+                            style_id: st.id,
+                            cut_type: 'bulk',
+                            entry_date: new Date().toISOString().split('T')[0],
+                            pieces_cut: '',
+                            tables_layers: '',
+                            notes: '',
+                          });
+                          setIsCuttingModalOpen(true);
+                        }}
+                        className="bg-indigo-800 hover:bg-indigo-900 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs transition-colors flex items-center space-x-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Record Cutting Output</span>
+                      </button>
                     </div>
                   </div>
-
-                  {/* Actions: Bidding Option (piece-rate only) + Log Output */}
-                  <div className="flex items-center space-x-2 self-start md:self-center shrink-0">
-                    {isPieceRateWorker && (
-                      <button
-                        onClick={() => setBiddingAssignment(work)}
-                        className="bg-stone-100 hover:bg-stone-200 text-amber-900 border border-stone-200 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1"
-                      >
-                        <DollarSign className="w-3.5 h-3.5 text-amber-800" />
-                        <span>Bidding Option</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => setSelectedWork(work)}
-                      className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-1.5"
-                    >
-                      <Zap className="w-4 h-4 fill-current" />
-                      <span>Log Output</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* TODAY'S WORK SUMMARY METRICS BAR */}
-        <div className="p-5 bg-stone-50 border-t border-stone-200">
-          {isPieceRateWorker ? (
-            /* PIECE RATE WORKER METRICS SUMMARY */
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Today's Earnings</span>
-                <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">৳{todayEarningsBDT.toLocaleString()}</span>
-                <span className="text-[10px] text-stone-500">{todayOutputPcs} pcs today</span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Running Total (Pay Period)</span>
-                <span className="text-xl font-black text-indigo-700 mt-0.5 font-mono block">৳{totalPeriodEarningsBDT.toLocaleString()}</span>
-                <span className="text-[10px] text-stone-500">Current period total</span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Pieces Completed This Week</span>
-                <span className="text-xl font-black text-stone-900 mt-0.5 font-mono block">{weeklyOutputPcs.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span></span>
-                <span className="text-[10px] text-stone-500">Last 7 days total</span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Net Payable Amount</span>
-                <span className="text-xl font-black text-emerald-800 mt-0.5 font-mono block">৳{netReceivableBDT.toLocaleString()}</span>
-                <span className="text-[10px] text-stone-500">After advance deductions</span>
-              </div>
-            </div>
-          ) : (
-            /* MONTHLY SALARY WORKER METRICS SUMMARY (No rate, no piece amounts) */
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Fixed Monthly Salary</span>
-                <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">৳{(currentWorker.monthly_salary || 0).toLocaleString()}</span>
-                <span className="text-[10px] text-stone-500">Fixed Monthly Rate</span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Days Worked This Month</span>
-                <span className="text-xl font-black text-indigo-700 mt-0.5 font-mono block">{monthlyAttendanceCount} <span className="text-xs font-normal text-stone-500">days</span></span>
-                <span className="text-[10px] text-stone-500">Present in attendance</span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Today's Piece Output</span>
-                <span className="text-xl font-black text-stone-900 mt-0.5 font-mono block">{todayOutputPcs.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span></span>
-                <span className="text-[10px] text-stone-500">Completed today</span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Pieces Completed This Week</span>
-                <span className="text-xl font-black text-emerald-800 mt-0.5 font-mono block">{weeklyOutputPcs.toLocaleString()} <span className="text-xs font-normal text-stone-500">pcs</span></span>
-                <span className="text-[10px] text-stone-500">Last 7 days total</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 4. EARNINGS & PRODUCTION GRAPH WITH RANKING */}
-      <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
-          <div>
-            <h2 className="text-lg font-black text-stone-900 flex items-center space-x-2">
-              <TrendingUp className="w-5 h-5 text-indigo-700" />
-              <span>Production Trend & Factory Standing</span>
-            </h2>
-            <p className="text-xs text-stone-600">Cumulative output analysis and performance metrics</p>
-          </div>
-
-          {/* Ranking Badge */}
-          <div className="bg-amber-50 border border-amber-300 px-4 py-2 rounded-2xl flex items-center space-x-3 self-start sm:self-center">
-            <Trophy className="w-6 h-6 text-amber-800" />
-            <div>
-              <div className="text-[10px] uppercase font-bold text-amber-900 tracking-wider">Factory Worker Rank</div>
-              <div className="text-sm font-black text-stone-900">
-                Rank #{currentRank} <span className="text-xs text-stone-600 font-normal">of {totalRankedWorkers} Workers</span>
-              </div>
+                );
+              })}
             </div>
           </div>
-        </div>
 
-        {/* Visual Graph: Output & Earnings over last 7 days */}
-        <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
-          <div className="text-xs font-bold text-stone-700 flex items-center justify-between">
-            <span>Last 7 Days Production Trend</span>
-            <span className="text-[10px] text-stone-500 font-mono">Output Pieces {isPieceRateWorker ? '& Earnings (৳ BDT)' : 'Daily'}</span>
-          </div>
-
-          <div className="h-56 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={last7DaysData}>
-                <defs>
-                  <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#047857" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#047857" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorPcs" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4338CA" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#4338CA" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                <XAxis dataKey="dateFormatted" stroke="#78716c" fontSize={11} />
-                <YAxis stroke="#78716c" fontSize={11} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e7e5e4', borderRadius: '12px', color: '#1c1917' }}
-                  labelStyle={{ color: '#1c1917', fontWeight: 'bold' }}
-                />
-                {isPieceRateWorker && (
-                  <Area type="monotone" dataKey="earnings" name="Earnings (৳)" stroke="#047857" fillOpacity={1} fill="url(#colorEarnings)" />
-                )}
-                <Area type="monotone" dataKey="pcs" name="Pieces (Pcs)" stroke="#4338CA" fillOpacity={1} fill="url(#colorPcs)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* 5. LAST 7 DAYS PRODUCTION DETAILS BREAKDOWN */}
-      <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-          <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
-            <Calendar className="w-5 h-5 text-indigo-700" />
-            <span>Last 7 Days Production Details</span>
-          </h2>
-          <span className="text-xs text-stone-600 font-mono">Daily Breakdown</span>
-        </div>
-
-        <div className="w-full max-w-full overflow-x-auto">
-          <table className="w-full text-left text-xs min-w-[480px]">
-            <thead>
-              <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3">Date</th>
-                <th className="py-2.5 px-3">Completed Pieces</th>
-                {isPieceRateWorker && <th className="py-2.5 px-3">Day Earnings</th>}
-                <th className="py-2.5 px-3">Logged Operations</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-200 text-stone-700">
-              {last7DaysData.map((day, idx) => (
-                <tr key={idx} className="hover:bg-stone-50 transition-colors">
-                  <td className="py-3 px-3 font-bold text-stone-900">{day.dateFormatted}</td>
-                  <td className="py-3 px-3 font-mono text-indigo-800 font-bold">{day.pcs} pcs</td>
-                  {isPieceRateWorker && (
-                    <td className="py-3 px-3 font-mono text-emerald-800 font-bold">৳{day.earnings.toLocaleString()}</td>
-                  )}
-                  <td className="py-3 px-3 text-stone-600">
-                    {day.entries.length > 0 ? (
-                      <span className="bg-stone-100 px-2 py-1 rounded text-[11px] text-stone-800">
-                        {day.entries.length} log submissions
-                      </span>
-                    ) : (
-                      <span className="text-stone-400">No logs / Off day</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 6. TOP PERFORMANCE LEADERBOARD TILL NOW */}
-      <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-          <h2 className="text-base font-black text-stone-900 flex items-center space-x-2">
-            <Crown className="w-5 h-5 text-amber-800" />
-            <span>Top Performers Till Now (Factory Leaderboard)</span>
-          </h2>
-          <span className="text-xs text-amber-900 font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
-            Top 5 Workers
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {topPerformers.map(item => (
-            <div
-              key={item.worker.id}
-              className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${
-                item.rank === 1
-                  ? 'bg-amber-50 border-amber-300 shadow-xs'
-                  : 'bg-stone-50 border-stone-200'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
-                  item.rank === 1 ? 'bg-amber-700 text-white' : 'bg-stone-200 text-stone-800'
-                }`}>
-                  #{item.rank}
-                </span>
-                <span className="text-[10px] text-stone-500 font-mono">{item.worker.worker_code}</span>
-              </div>
-
-              <div className="flex items-center space-x-2.5">
-                <WorkerAvatar
-                  photoUrl={item.worker.photo_url}
-                  name={item.worker.full_name}
-                  size="md"
-                  className="rounded-xl"
-                />
-                <div>
-                  <div className="text-xs font-bold text-stone-900 truncate max-w-[100px]">{item.worker.full_name}</div>
-                  <div className="text-[10px] text-stone-600">{item.worker.section || 'Sewing'}</div>
-                </div>
-              </div>
-
-              <div className="border-t border-stone-200 pt-2 text-xs space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-stone-600">Total Output:</span>
-                  <strong className="text-indigo-800 font-mono">{item.totalPcs} pcs</strong>
-                </div>
-                {item.worker.pay_type !== 'monthly_salary' && (
-                  <div className="flex justify-between">
-                    <span className="text-stone-600">Total Pay:</span>
-                    <strong className="text-emerald-800 font-mono">৳{item.totalAmt.toLocaleString()}</strong>
-                  </div>
-                )}
-              </div>
+          {/* WORKER'S CUTTING LOG SUBMISSIONS TABLE */}
+          <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-indigo-700" />
+                <span>My Cutting Activity Log Submissions</span>
+              </h3>
+              <span className="text-xs text-stone-500 font-mono">{myCuttingEntries.length} records</span>
             </div>
-          ))}
+
+            {myCuttingEntries.length === 0 ? (
+              <div className="p-8 text-center text-stone-500 text-xs space-y-1">
+                <Info className="w-6 h-6 text-stone-400 mx-auto mb-2" />
+                <p className="font-semibold text-stone-700">No cutting logs recorded yet</p>
+                <p className="text-stone-500 text-[11px]">Click "Record Cutting Output" above to log your cutting table output.</p>
+              </div>
+            ) : (
+              <div className="w-full max-w-full overflow-x-auto">
+                <table className="w-full text-left text-xs min-w-[550px]">
+                  <thead>
+                    <tr className="border-b border-stone-200 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Garment Style</th>
+                      <th className="py-2.5 px-3">Cut Type</th>
+                      <th className="py-2.5 px-3 text-right">Pieces Cut</th>
+                      <th className="py-2.5 px-3">Table / Layers</th>
+                      <th className="py-2.5 px-3">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-200 text-stone-700">
+                    {myCuttingEntries.map(ce => {
+                      const st = garmentStyles.find(s => s.id === ce.style_id);
+
+                      return (
+                        <tr key={ce.id} className="hover:bg-stone-50 transition-colors">
+                          <td className="py-3 px-3 font-bold text-stone-900">{ce.entry_date}</td>
+                          <td className="py-3 px-3">
+                            <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
+                              {ce.style_code || st?.style_code || 'STY'}
+                            </span>
+                            <span className="block text-stone-800 font-medium mt-0.5">{ce.style_name || st?.name}</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            {ce.cut_type === 'bulk' ? (
+                              <span className="text-[11px] font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                Bulk Cutting
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                Sample Cutting
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-indigo-900 font-bold">
+                            {ce.pieces_cut} pcs
+                          </td>
+                          <td className="py-3 px-3 font-mono text-stone-600 text-[11px]">
+                            {ce.tables_layers || '-'}
+                          </td>
+                          <td className="py-3 px-3 text-stone-500 text-[11px]">
+                            {ce.notes || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* MODALS */}
       {/* Rate Bidding Modal */}
@@ -861,13 +1521,13 @@ export const WorkerPortalScreen: React.FC = () => {
         onSubmitBid={handleSubmitBid}
       />
 
-      {/* Production Output Log Modal */}
+      {/* Production Output Log Modal (Sewing) */}
       {selectedWork && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
           <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4">
             <h3 className="text-base font-bold text-stone-900 flex items-center space-x-2">
               <Zap className="w-5 h-5 text-amber-800" />
-              <span>Log Production Output</span>
+              <span>Log Sewing Production Output</span>
             </h3>
 
             <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 text-xs space-y-1">
@@ -908,6 +1568,277 @@ export const WorkerPortalScreen: React.FC = () => {
                   className="px-5 py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-2xl text-xs shadow-xs"
                 >
                   {submittingEntry ? 'Submitting...' : 'Confirm & Save Output'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Record Finishing Output Modal */}
+      {isFinishingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="text-base font-bold text-stone-900 flex items-center space-x-2">
+                <Layers className="w-5 h-5 text-purple-700" />
+                <span>Record Finishing Stage Output</span>
+              </h3>
+              <button
+                onClick={() => setIsFinishingModalOpen(false)}
+                className="text-stone-400 hover:text-stone-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFinishingEntry} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Garment Style <span className="text-rose-600">*</span></label>
+                <select
+                  required
+                  value={finishingForm.style_id}
+                  onChange={(e) => {
+                    const selectedStId = e.target.value;
+                    const styleStages = allFinishingStages.filter(st => st.style_id === selectedStId);
+                    setFinishingForm(prev => ({
+                      ...prev,
+                      style_id: selectedStId,
+                      stage_id: styleStages[0]?.id || prev.stage_id || '',
+                    }));
+                  }}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none focus:border-purple-700"
+                >
+                  <option value="">Select Style...</option>
+                  {garmentStyles.map(st => (
+                    <option key={st.id} value={st.id}>{st.style_code} - {st.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Finishing Stage <span className="text-rose-600">*</span></label>
+                <select
+                  required
+                  value={finishingForm.stage_id}
+                  onChange={(e) => setFinishingForm(prev => ({ ...prev, stage_id: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none focus:border-purple-700"
+                >
+                  <option value="">Select Stage...</option>
+                  {allFinishingStages
+                    .filter(stg => !finishingForm.style_id || stg.style_id === finishingForm.style_id)
+                    .map(stg => (
+                      <option key={stg.id} value={stg.id}>
+                        {stg.seq_no}. {stg.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Entry Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={finishingForm.entry_date}
+                    onChange={(e) => setFinishingForm(prev => ({ ...prev, entry_date: e.target.value }))}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Shift</label>
+                  <select
+                    value={finishingForm.shift}
+                    onChange={(e) => setFinishingForm(prev => ({ ...prev, shift: e.target.value }))}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
+                  >
+                    <option value="day">Day Shift</option>
+                    <option value="night">Night Shift</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  OK Completed Pieces <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  placeholder="e.g. 150"
+                  value={finishingForm.qty_ok}
+                  onChange={(e) => setFinishingForm(prev => ({ ...prev, qty_ok: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-2.5 text-lg font-black text-stone-900 focus:outline-none focus:border-purple-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">Rework Pieces</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={finishingForm.qty_rework}
+                    onChange={(e) => setFinishingForm(prev => ({ ...prev, qty_rework: e.target.value }))}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">Reject Pieces</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={finishingForm.qty_reject}
+                    onChange={(e) => setFinishingForm(prev => ({ ...prev, qty_reject: e.target.value }))}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1">Notes / Remarks</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Thread trimming completed for Table 2"
+                  value={finishingForm.note}
+                  onChange={(e) => setFinishingForm(prev => ({ ...prev, note: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium text-stone-900 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFinishingModalOpen(false)}
+                  className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-2xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingFinishing}
+                  className="px-5 py-2.5 bg-purple-800 hover:bg-purple-900 text-white font-bold rounded-2xl text-xs shadow-xs"
+                >
+                  {submittingFinishing ? 'Saving...' : 'Save Finishing Output'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Record Cutting Output Modal */}
+      {isCuttingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="text-base font-bold text-stone-900 flex items-center space-x-2">
+                <Scissors className="w-5 h-5 text-indigo-700 rotate-90" />
+                <span>Record Table Cutting Output</span>
+              </h3>
+              <button
+                onClick={() => setIsCuttingModalOpen(false)}
+                className="text-stone-400 hover:text-stone-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCuttingEntry} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Garment Style <span className="text-rose-600">*</span></label>
+                <select
+                  required
+                  value={cuttingForm.style_id}
+                  onChange={(e) => setCuttingForm(prev => ({ ...prev, style_id: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none focus:border-indigo-700"
+                >
+                  <option value="">Select Style...</option>
+                  {garmentStyles
+                    .filter(st => st.requires_cutting !== false)
+                    .map(st => (
+                      <option key={st.id} value={st.id}>{st.style_code} - {st.name}</option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Cut Type</label>
+                  <select
+                    value={cuttingForm.cut_type}
+                    onChange={(e) => setCuttingForm(prev => ({ ...prev, cut_type: e.target.value as 'bulk' | 'sample' }))}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
+                  >
+                    <option value="bulk">Bulk Cutting</option>
+                    <option value="sample">Sample Cutting</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Entry Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={cuttingForm.entry_date}
+                    onChange={(e) => setCuttingForm(prev => ({ ...prev, entry_date: e.target.value }))}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Cut Pieces Completed <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  placeholder="e.g. 500"
+                  value={cuttingForm.pieces_cut}
+                  onChange={(e) => setCuttingForm(prev => ({ ...prev, pieces_cut: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-2.5 text-lg font-black text-stone-900 focus:outline-none focus:border-indigo-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1">Table / Layers Info</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Table 1, 40 layers"
+                  value={cuttingForm.tables_layers}
+                  onChange={(e) => setCuttingForm(prev => ({ ...prev, tables_layers: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium text-stone-900 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1">Notes / Remarks</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Front/Back panels cut"
+                  value={cuttingForm.notes}
+                  onChange={(e) => setCuttingForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium text-stone-900 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCuttingModalOpen(false)}
+                  className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-2xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingCutting}
+                  className="px-5 py-2.5 bg-indigo-800 hover:bg-indigo-900 text-white font-bold rounded-2xl text-xs shadow-xs"
+                >
+                  {submittingCutting ? 'Saving...' : 'Save Cutting Output'}
                 </button>
               </div>
             </form>
