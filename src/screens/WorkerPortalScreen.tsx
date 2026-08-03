@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserCheck, Clock, Pause, Square, Scissors, TrendingUp, CheckCircle2, 
   Zap, Trophy, Calendar, Crown, DollarSign, LogOut, Key, ShieldAlert,
@@ -22,6 +22,35 @@ export const WorkerPortalScreen: React.FC = () => {
 
   // Portal Menu Tab Navigation
   const [activityTab, setActivityTab] = useState<'sewing' | 'finishing' | 'cutting'>('sewing');
+
+  // Draggable Navigation Bar State & Handlers
+  const navRef = useRef<HTMLDivElement>(null);
+  const [isNavDragging, setIsNavDragging] = useState(false);
+  const [navStartX, setNavStartX] = useState(0);
+  const [navScrollLeft, setNavScrollLeft] = useState(0);
+
+  const handleNavMouseDown = (e: React.MouseEvent) => {
+    if (!navRef.current) return;
+    setIsNavDragging(true);
+    setNavStartX(e.pageX - navRef.current.offsetLeft);
+    setNavScrollLeft(navRef.current.scrollLeft);
+  };
+
+  const handleNavMouseLeave = () => {
+    setIsNavDragging(false);
+  };
+
+  const handleNavMouseUp = () => {
+    setIsNavDragging(false);
+  };
+
+  const handleNavMouseMove = (e: React.MouseEvent) => {
+    if (!isNavDragging || !navRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - navRef.current.offsetLeft;
+    const walk = (x - navStartX) * 1.5;
+    navRef.current.scrollLeft = navScrollLeft - walk;
+  };
 
   // Portal Data State
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
@@ -666,58 +695,20 @@ export const WorkerPortalScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. ACTIVITY NAVIGATION MENU BAR */}
-      <div className="bg-white border border-stone-200 rounded-3xl p-2 shadow-xs flex items-center gap-2 overflow-x-auto">
-        <button
-          onClick={() => setActivityTab('sewing')}
-          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 ${
-            activityTab === 'sewing'
-              ? 'bg-amber-800 text-white shadow-xs'
-              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/60'
-          }`}
-        >
-          <Scissors className="w-4 h-4" />
-          <span>Sewing Activity</span>
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-            activityTab === 'sewing' ? 'bg-amber-900/60 text-amber-100' : 'bg-stone-200 text-stone-700'
-          }`}>
-            {assignedWorks.length}
+      {/* Active Tab Section Header Indicator */}
+      <div className="flex items-center justify-between bg-white border border-stone-200 rounded-2xl p-3 px-4 shadow-2xs">
+        <div className="flex items-center space-x-2">
+          {activityTab === 'sewing' && <Scissors className="w-4 h-4 text-amber-800" />}
+          {activityTab === 'finishing' && <Layers className="w-4 h-4 text-purple-700" />}
+          {activityTab === 'cutting' && <Scissors className="w-4 h-4 text-indigo-700 rotate-90" />}
+          <span className="text-xs font-black text-stone-900 uppercase tracking-wider">
+            {activityTab} Activity View
           </span>
-        </button>
-
-        <button
-          onClick={() => setActivityTab('finishing')}
-          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 ${
-            activityTab === 'finishing'
-              ? 'bg-purple-800 text-white shadow-xs'
-              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/60'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Finishing Activity</span>
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-            activityTab === 'finishing' ? 'bg-purple-900/60 text-purple-100' : 'bg-stone-200 text-stone-700'
-          }`}>
-            {myFinishingEntries.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActivityTab('cutting')}
-          className={`flex-1 min-w-[140px] py-3 px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 ${
-            activityTab === 'cutting'
-              ? 'bg-indigo-800 text-white shadow-xs'
-              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/60'
-          }`}
-        >
-          <Scissors className="w-4 h-4 rotate-90" />
-          <span>Cutting Activity</span>
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-            activityTab === 'cutting' ? 'bg-indigo-900/60 text-indigo-100' : 'bg-stone-200 text-stone-700'
-          }`}>
-            {myCuttingEntries.length}
-          </span>
-        </button>
+        </div>
+        <div className="flex items-center space-x-1.5 text-[11px] font-bold text-stone-500">
+          <span>Swipe/Tap bottom bar to switch</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+        </div>
       </div>
 
       {/* 4. SEWING ACTIVITY CONTENT */}
@@ -1845,6 +1836,70 @@ export const WorkerPortalScreen: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 3. MOBILE APP BOTTOM ACTIVITY NAVIGATION BAR (DRAGGABLE & FIXED AT BOTTOM) */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 shadow-2xl px-3 py-2.5 sm:py-3 sm:px-6">
+        <div
+          ref={navRef}
+          onMouseDown={handleNavMouseDown}
+          onMouseLeave={handleNavMouseLeave}
+          onMouseUp={handleNavMouseUp}
+          onMouseMove={handleNavMouseMove}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          className="max-w-xl mx-auto flex items-center gap-2 overflow-x-auto cursor-grab active:cursor-grabbing select-none py-0.5"
+        >
+          <button
+            onClick={() => setActivityTab('sewing')}
+            className={`flex-1 min-w-[135px] sm:min-w-[160px] py-2.5 px-3 sm:px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 shrink-0 ${
+              activityTab === 'sewing'
+                ? 'bg-amber-800 text-white shadow-md ring-2 ring-amber-400/50 scale-[1.02]'
+                : 'bg-stone-100/90 hover:bg-stone-200/80 text-stone-700 border border-stone-200/60'
+            }`}
+          >
+            <Scissors className="w-4 h-4" />
+            <span className="truncate">Sewing Activity</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+              activityTab === 'sewing' ? 'bg-amber-900/70 text-amber-100 font-bold' : 'bg-stone-300/80 text-stone-800'
+            }`}>
+              {assignedWorks.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActivityTab('finishing')}
+            className={`flex-1 min-w-[135px] sm:min-w-[160px] py-2.5 px-3 sm:px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 shrink-0 ${
+              activityTab === 'finishing'
+                ? 'bg-purple-800 text-white shadow-md ring-2 ring-purple-400/50 scale-[1.02]'
+                : 'bg-stone-100/90 hover:bg-stone-200/80 text-stone-700 border border-stone-200/60'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span className="truncate">Finishing Activity</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+              activityTab === 'finishing' ? 'bg-purple-900/70 text-purple-100 font-bold' : 'bg-stone-300/80 text-stone-800'
+            }`}>
+              {myFinishingEntries.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActivityTab('cutting')}
+            className={`flex-1 min-w-[135px] sm:min-w-[160px] py-2.5 px-3 sm:px-4 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 shrink-0 ${
+              activityTab === 'cutting'
+                ? 'bg-indigo-800 text-white shadow-md ring-2 ring-indigo-400/50 scale-[1.02]'
+                : 'bg-stone-100/90 hover:bg-stone-200/80 text-stone-700 border border-stone-200/60'
+            }`}
+          >
+            <Scissors className="w-4 h-4 rotate-90" />
+            <span className="truncate">Cutting Activity</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+              activityTab === 'cutting' ? 'bg-indigo-900/70 text-indigo-100 font-bold' : 'bg-stone-300/80 text-stone-800'
+            }`}>
+              {myCuttingEntries.length}
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
