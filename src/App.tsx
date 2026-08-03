@@ -13,6 +13,7 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { WorkerPortalScreen } from './screens/WorkerPortalScreen';
 import { DailySetupScreen } from './screens/DailySetupScreen';
 import { QuickEntryScreen } from './screens/QuickEntryScreen';
+import { CuttingScreen } from './screens/CuttingScreen';
 import { FinishingScreen } from './screens/FinishingScreen';
 import { BulkGridScreen } from './screens/BulkGridScreen';
 import { RateBidsScreen } from './screens/RateBidsScreen';
@@ -179,6 +180,7 @@ export default function App() {
             {activeScreen === 'dashboard' && <DashboardScreen />}
             {activeScreen === 'dailySetup' && <DailySetupScreen role={role} />}
             {activeScreen === 'quickEntry' && <QuickEntryScreen role={role} />}
+            {activeScreen === 'cutting' && <CuttingScreen role={role} />}
             {activeScreen === 'finishing' && <FinishingScreen role={role} onNavigate={(scr) => setActiveScreen(scr as ScreenId)} />}
             {activeScreen === 'bulkGrid' && <BulkGridScreen role={role} onNavigate={(scr) => setActiveScreen(scr)} />}
             {activeScreen === 'rateBids' && <RateBidsScreen role={role} />}

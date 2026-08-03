@@ -260,6 +260,47 @@ export interface PayrollLine {
   worker?: Worker;
 }
 
+export type CutType = 'bulk' | 'sample';
+
+export interface CuttingEntry {
+  id: string;
+  entry_date: string;
+  style_id: string;
+  cut_type: CutType;
+  pieces_cut: number;
+  tables_layers?: string | null;
+  worker_id?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  // Joined / computed for UI
+  style_code?: string;
+  style_name?: string;
+  worker_name?: string;
+}
+
+export type SampleType = 'Proto' | 'Fit' | 'Size Set' | 'PP' | 'Photo' | 'Salesman' | 'TOP' | 'Counter';
+export type SampleStatus = 'Pending' | 'Cutting' | 'Sewing' | 'Submitted' | 'Approved' | 'Rejected' | 'Revision';
+
+export interface GarmentSample {
+  id: string;
+  style_id: string;
+  sample_type: SampleType;
+  status: SampleStatus;
+  qty: number;
+  size?: string | null;
+  colour?: string | null;
+  requested_date: string;
+  submitted_date?: string | null;
+  buyer_feedback?: string | null;
+  photo_url?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  // Joined / computed for UI
+  style_code?: string;
+  style_name?: string;
+  buyer_name?: string;
+}
+
 export interface FactorySettings {
   id: string;
   factory_name: string;

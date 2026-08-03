@@ -2,8 +2,12 @@ import {
   Worker, GarmentStyle, GarmentProcess, ProductionEntry, 
   AttendanceRecord, Adjustment, PayrollPeriod, PayrollLine, 
   FactorySettings, UserRole, DailyAssignment, RateBid,
-  UserAccount, DeliveryReport, FinishingStage, FinishingEntry
+  UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
+  CuttingEntry, GarmentSample
 } from '../types';
+import { 
+  INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
+} from './store';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { showErrorToast } from './toast';
 
@@ -42,7 +46,7 @@ class DataService {
   };
 
   private workers: Worker[] = [];
-  private styles: GarmentStyle[] = [];
+  private styles: GarmentStyle[] = INITIAL_STYLES;
   private processes: GarmentProcess[] = [];
   private productionEntries: ProductionEntry[] = [];
   private attendance: AttendanceRecord[] = [];
@@ -53,6 +57,8 @@ class DataService {
   private deliveries: DeliveryReport[] = [];
   private finishingStages: FinishingStage[] = [];
   private finishingEntries: FinishingEntry[] = [];
+  private cuttingEntries: CuttingEntry[] = INITIAL_CUTTING_ENTRIES;
+  private samples: GarmentSample[] = INITIAL_SAMPLES;
   private finishingListeners: Set<() => void> = new Set();
   private payrollPeriod: PayrollPeriod = {
     id: 'pp-2026-w31',
@@ -919,6 +925,160 @@ class DataService {
 
   public async deleteDelivery(id: string): Promise<void> {
     this.deliveries = this.deliveries.filter(d => d.id !== id);
+  }
+
+  // --- CUTTING ENTRIES ---
+  public async getCuttingEntries(styleId?: string): Promise<CuttingEntry[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.from('cutting_entries').select('*').order('entry_date', { ascending: false });
+        if (!error && data) {
+          this.cuttingEntries = data as CuttingEntry[];
+        }
+      } catch (e) {
+        console.warn('Supabase cutting_entries query failed, using local store:', e);
+      }
+    }
+
+    const stylesMap = new Map(this.styles.map(s => [s.id, s]));
+    const workersMap = new Map(this.workers.map(w => [w.id, w]));
+
+    const result = this.cuttingEntries.map(c => {
+      const s = stylesMap.get(c.style_id);
+      const w = c.worker_id ? workersMap.get(c.worker_id) : undefined;
+      return {
+        ...c,
+        style_code: s?.style_code || '',
+        style_name: s?.name || '',
+        worker_name: w?.full_name || '',
+      };
+    });
+
+    if (styleId) {
+      return result.filter(c => c.style_id === styleId);
+    }
+    return result;
+  }
+
+  public async saveCuttingEntry(entry: Partial<CuttingEntry>): Promise<CuttingEntry> {
+    const id = entry.id || crypto.randomUUID();
+    const newEntry: CuttingEntry = {
+      id,
+      entry_date: entry.entry_date || getLocalDateString(),
+      style_id: entry.style_id!,
+      cut_type: entry.cut_type || 'bulk',
+      pieces_cut: Number(entry.pieces_cut || 0),
+      tables_layers: entry.tables_layers || null,
+      worker_id: entry.worker_id || null,
+      notes: entry.notes || null,
+      created_at: entry.created_at || new Date().toISOString(),
+    };
+
+    const idx = this.cuttingEntries.findIndex(c => c.id === id);
+    if (idx >= 0) {
+      this.cuttingEntries[idx] = newEntry;
+    } else {
+      this.cuttingEntries.unshift(newEntry);
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('cutting_entries').upsert([newEntry]);
+      } catch (e) {
+        console.warn('Error saving cutting entry to Supabase:', e);
+      }
+    }
+
+    return newEntry;
+  }
+
+  public async deleteCuttingEntry(id: string): Promise<void> {
+    this.cuttingEntries = this.cuttingEntries.filter(c => c.id !== id);
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('cutting_entries').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Error deleting cutting entry from Supabase:', e);
+      }
+    }
+  }
+
+  // --- SAMPLES ---
+  public async getSamples(styleId?: string): Promise<GarmentSample[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.from('samples').select('*').order('created_at', { ascending: false });
+        if (!error && data) {
+          this.samples = data as GarmentSample[];
+        }
+      } catch (e) {
+        console.warn('Supabase samples query failed, using local store:', e);
+      }
+    }
+
+    const stylesMap = new Map(this.styles.map(s => [s.id, s]));
+
+    const result = this.samples.map(s => {
+      const st = stylesMap.get(s.style_id);
+      return {
+        ...s,
+        style_code: st?.style_code || '',
+        style_name: st?.name || '',
+        buyer_name: st?.buyer_name || '',
+      };
+    });
+
+    if (styleId) {
+      return result.filter(s => s.style_id === styleId);
+    }
+    return result;
+  }
+
+  public async saveSample(sample: Partial<GarmentSample>): Promise<GarmentSample> {
+    const id = sample.id || crypto.randomUUID();
+    const newSample: GarmentSample = {
+      id,
+      style_id: sample.style_id!,
+      sample_type: sample.sample_type || 'PP',
+      status: sample.status || 'Pending',
+      qty: Number(sample.qty || 1),
+      size: sample.size || null,
+      colour: sample.colour || null,
+      requested_date: sample.requested_date || getLocalDateString(),
+      submitted_date: sample.submitted_date || null,
+      buyer_feedback: sample.buyer_feedback || null,
+      photo_url: sample.photo_url || null,
+      notes: sample.notes || null,
+      created_at: sample.created_at || new Date().toISOString(),
+    };
+
+    const idx = this.samples.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      this.samples[idx] = newSample;
+    } else {
+      this.samples.unshift(newSample);
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('samples').upsert([newSample]);
+      } catch (e) {
+        console.warn('Error saving sample to Supabase:', e);
+      }
+    }
+
+    return newSample;
+  }
+
+  public async deleteSample(id: string): Promise<void> {
+    this.samples = this.samples.filter(s => s.id !== id);
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('samples').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Error deleting sample from Supabase:', e);
+      }
+    }
   }
 
   // --- ATTENDANCE & PUNCH CLOCK ---

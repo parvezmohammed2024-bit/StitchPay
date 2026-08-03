@@ -12,6 +12,7 @@ export type ScreenId =
   | 'workerPortal'
   | 'dailySetup'
   | 'quickEntry' 
+  | 'cutting'
   | 'finishing'
   | 'rateBids'
   | 'bulkGrid' 
@@ -37,6 +38,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
     { id: 'dashboard' as ScreenId, label: t('navDashboard'), icon: LayoutDashboard, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'dailySetup' as ScreenId, label: 'Daily Line Setup', icon: Workflow, roles: ['admin', 'supervisor'] },
     { id: 'quickEntry' as ScreenId, label: t('navQuickEntry'), icon: Zap, roles: ['admin', 'supervisor'] },
+    { id: 'cutting' as ScreenId, label: 'Cutting Board', icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'finishing' as ScreenId, label: 'Finishing', icon: Layers, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'rateBids' as ScreenId, label: 'Rate Approvals', icon: BadgePercent, roles: ['admin', 'supervisor'] },
     { id: 'styles' as ScreenId, label: t('navStyles'), icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
@@ -60,6 +62,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
 
   // Items for "More" sheet
   const moreSheetItems = [
+    { id: 'cutting' as ScreenId, label: 'Cutting Board', icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'styles' as ScreenId, label: 'Styles & Processes', icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'bulkGrid' as ScreenId, label: 'Bulk Grid', icon: Table, roles: ['admin', 'supervisor'] },
     { id: 'attendance' as ScreenId, label: 'Attendance', icon: CalendarCheck, roles: ['admin', 'supervisor', 'accounts'] },
