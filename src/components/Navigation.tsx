@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, Zap, Scissors, Users, Table, 
   CalendarCheck, Banknote, BarChart3, Settings,
-  Workflow, BadgePercent, Layers, MoreHorizontal, X, LogOut, ChevronRight
+  Workflow, BadgePercent, Layers, MoreHorizontal, X, LogOut, ChevronRight, Building2
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { UserRole } from '../types';
@@ -10,6 +10,7 @@ import { UserRole } from '../types';
 export type ScreenId = 
   | 'dashboard' 
   | 'workerPortal'
+  | 'mgmtPortal'
   | 'dailySetup'
   | 'quickEntry' 
   | 'cutting'

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="100" fill="#FAFAF9"/>
+  <circle cx="256" cy="256" r="220" fill="#2D28C8" />
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#1D19A0" stroke-width="12" />
+  <circle cx="256" cy="256" r="170" fill="#3832E0" stroke="#221CB0" stroke-width="8" />
+  <!-- Holes -->
+  <circle cx="196" cy="196" r="26" fill="#FFFFFF" />
+  <circle cx="316" cy="196" r="26" fill="#FFFFFF" />
+  <circle cx="196" cy="316" r="26" fill="#FFFFFF" />
+  <circle cx="316" cy="316" r="26" fill="#FFFFFF" />
+  <!-- Thread X -->
+  <line x1="196" y1="196" x2="316" y2="316" stroke="#C26E00" stroke-width="28" stroke-linecap="round" />
+  <line x1="316" y1="196" x2="196" y2="316" stroke="#C26E00" stroke-width="28" stroke-linecap="round" />
+</svg>

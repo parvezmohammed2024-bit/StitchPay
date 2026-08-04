@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Download, TrendingUp, AlertTriangle, FileSpreadsheet, PackageCheck } from 'lucide-react';
+import { BarChart3, Download, TrendingUp, AlertTriangle, FileSpreadsheet, PackageCheck, DollarSign } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
-import { ProductionEntry, GarmentStyle, Worker, FactorySettings } from '../types';
+import { ProductionEntry, GarmentStyle, Worker, FactorySettings, UserRole } from '../types';
 import { StyleReportScreen } from './StyleReportScreen';
+import { FinancialsReportView } from '../components/FinancialsReportView';
 
-type ReportTab = 'style_report' | 'overview';
+type ReportTab = 'style_report' | 'overview' | 'financials';
 
-export const ReportsScreen: React.FC = () => {
+interface ReportsScreenProps {
+  role?: UserRole;
+}
+
+export const ReportsScreen: React.FC<ReportsScreenProps> = ({ role }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ReportTab>('style_report');
 
@@ -16,6 +21,9 @@ export const ReportsScreen: React.FC = () => {
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
+
+  const currentRole = role || dataService.getRole();
+  const isAdmin = currentRole === 'admin';
 
   useEffect(() => {
     loadReportsData();
@@ -85,7 +93,7 @@ export const ReportsScreen: React.FC = () => {
   return (
     <div className="space-y-6 pb-24 max-w-6xl mx-auto">
       {/* Top Report Module Tabs */}
-      <div className="flex items-center space-x-2 bg-stone-200/60 p-1.5 rounded-2xl max-w-md print:hidden">
+      <div className="flex items-center space-x-2 bg-stone-200/60 p-1.5 rounded-2xl max-w-lg print:hidden">
         <button
           onClick={() => setActiveTab('style_report')}
           className={`flex-1 flex items-center justify-center space-x-2 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
@@ -109,9 +117,25 @@ export const ReportsScreen: React.FC = () => {
           <BarChart3 className="w-4 h-4 text-emerald-700" />
           <span>Factory Overview</span>
         </button>
+
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab('financials')}
+            className={`flex-1 flex items-center justify-center space-x-2 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'financials'
+                ? 'bg-white text-emerald-950 shadow-2xs'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 text-emerald-700" />
+            <span>Financials</span>
+          </button>
+        )}
       </div>
 
-      {activeTab === 'style_report' ? (
+      {activeTab === 'financials' && isAdmin ? (
+        <FinancialsReportView currencySymbol={currencySymbol} />
+      ) : activeTab === 'style_report' ? (
         <StyleReportScreen />
       ) : (
         <div className="space-y-6">

@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { Navigation, ScreenId } from './components/Navigation';
 import { UserRoleManagerModal } from './components/UserRoleManagerModal';
 import { ToastContainer } from './components/ToastContainer';
+import { FooterCredit } from './components/FooterCredit';
 import { LanguageContext, Language, translations } from './lib/i18n';
 import { dataService } from './lib/dataService';
 import { UserRole, FactorySettings, UserAccount, Worker } from './types';
@@ -23,6 +24,7 @@ import { AttendanceScreen } from './screens/AttendanceScreen';
 import { PayrollRunScreen } from './screens/PayrollRunScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { ManagementPortalScreen } from './screens/ManagementPortalScreen';
 
 export default function App() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>('dashboard');
@@ -98,6 +100,24 @@ export default function App() {
     pathname.includes('/worker') || 
     pathname.includes('#worker') || 
     pathname.includes('?worker');
+
+  const isMgmtRoute = 
+    pathname.includes('/management') || 
+    pathname.includes('#management') || 
+    pathname.includes('?management') ||
+    pathname.includes('/mgmt') || 
+    pathname.includes('#mgmt') || 
+    pathname.includes('?mgmt');
+
+  // DEDICATED MANAGEMENT PORTAL ROUTE (/management)
+  if (isMgmtRoute) {
+    return (
+      <LanguageContext.Provider value={{ lang, setLang, t }}>
+        <ToastContainer />
+        <ManagementPortalScreen />
+      </LanguageContext.Provider>
+    );
+  }
 
   // DEDICATED WORKER ROUTE (/worker)
   if (isWorkerRoute) {
@@ -188,8 +208,11 @@ export default function App() {
             {activeScreen === 'workers' && <WorkersScreen role={role} />}
             {activeScreen === 'attendance' && <AttendanceScreen role={role} />}
             {activeScreen === 'payroll' && <PayrollRunScreen role={role} />}
-            {activeScreen === 'reports' && <ReportsScreen />}
+            {activeScreen === 'reports' && <ReportsScreen role={role} />}
+            {activeScreen === 'mgmtPortal' && <ManagementPortalScreen />}
             {activeScreen === 'settings' && <SettingsScreen role={role} />}
+
+            <FooterCredit hasBottomNav={true} />
           </main>
         </div>
       </div>

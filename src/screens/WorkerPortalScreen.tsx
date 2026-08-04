@@ -9,8 +9,41 @@ import { dataService } from '../lib/dataService';
 import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess, CuttingEntry, FinishingEntry, FinishingStage, FactorySettings } from '../types';
 import { RateBiddingModal } from '../components/RateBiddingModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
+import { FooterCredit } from '../components/FooterCredit';
 
 export const WorkerPortalScreen: React.FC = () => {
+  // PWA Install Prompt State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallDismissed, setIsInstallDismissed] = useState<boolean>(() => {
+    return localStorage.getItem('stitchpay_pwa_dismissed') === 'true';
+  });
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const choiceResult = await deferredPrompt.userChoice;
+    if (choiceResult?.outcome === 'accepted') {
+      console.log('PWA installation accepted');
+    }
+    setDeferredPrompt(null);
+  };
+
+  const handleDismissInstall = () => {
+    localStorage.setItem('stitchpay_pwa_dismissed', 'true');
+    setIsInstallDismissed(true);
+  };
+
   // Session Worker State
   const [currentWorker, setCurrentWorker] = useState<Worker | null>(null);
 
@@ -424,95 +457,129 @@ export const WorkerPortalScreen: React.FC = () => {
   // --- WORKER PIN LOGIN SCREEN ---
   if (!currentWorker) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white border border-stone-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mx-auto shadow-xs">
-              <UserCheck className="w-8 h-8" />
-            </div>
-            <h1 className="text-2xl font-black text-stone-900 tracking-tight">Worker Portal</h1>
-            <p className="text-xs text-stone-600">Enter your Mobile Number and 4-digit PIN to access your account</p>
-          </div>
-
-          {loginError && (
-            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 text-xs text-rose-800 font-medium flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 text-rose-700 shrink-0" />
-              <span>{loginError}</span>
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-4">
+          {/* PWA INSTALL APP BANNER */}
+          {deferredPrompt && !isInstallDismissed && (
+            <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white rounded-3xl p-4 shadow-lg flex items-center justify-between gap-3 border border-indigo-700 animate-fade-in">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20">
+                  <img src="/icon-192.png" alt="StitchPay" className="w-7 h-7 rounded-xl" />
+                </div>
+                <div>
+                  <div className="text-xs font-black tracking-wide">Install StitchPay App</div>
+                  <div className="text-[11px] text-indigo-200">Fast instant offline access on your phone</div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2 shrink-0">
+                <button
+                  onClick={handleInstallPWA}
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+                >
+                  Install
+                </button>
+                <button
+                  onClick={handleDismissInstall}
+                  className="p-1.5 text-indigo-200 hover:text-white rounded-lg transition-colors"
+                  title="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1.5 uppercase tracking-wider">
-                Mobile Number
-              </label>
-              <div className="relative">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  required
-                  value={phoneInput}
-                  onChange={(e) => setPhoneInput(e.target.value)}
-                  placeholder="e.g. 0123456789 or +60123456789"
-                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-stone-900 placeholder-stone-400 focus:outline-none focus:border-indigo-600"
-                />
+          <div className="bg-white border border-stone-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mx-auto shadow-xs">
+                <UserCheck className="w-8 h-8" />
               </div>
+              <h1 className="text-2xl font-black text-stone-900 tracking-tight">Worker Portal</h1>
+              <p className="text-xs text-stone-600">Enter your Mobile Number and 4-digit PIN to access your account</p>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1.5 uppercase tracking-wider">
-                4-Digit PIN
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  required
-                  maxLength={4}
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="e.g. 1111"
-                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-lg font-mono tracking-widest font-bold text-stone-900 placeholder-stone-400 focus:outline-none focus:border-indigo-600"
-                />
+            {loginError && (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 text-xs text-rose-800 font-medium flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-rose-700 shrink-0" />
+                <span>{loginError}</span>
               </div>
-            </div>
+            )}
 
-            <button
-              type="submit"
-              disabled={loggingIn}
-              className="w-full py-3.5 px-6 rounded-2xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-sm shadow-xs transition-all active:scale-98 flex items-center justify-center space-x-2"
-            >
-              {loggingIn ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Verifying PIN...</span>
-                </>
-              ) : (
-                <>
-                  <span>Sign In to Worker Portal</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Test Credentials Box */}
-          <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-1.5 text-xs text-stone-600">
-            <div className="font-bold text-stone-800 flex items-center space-x-1.5">
-              <Key className="w-3.5 h-3.5 text-amber-800" />
-              <span>Test Credentials:</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-              <div className="bg-white p-2 rounded-xl border border-stone-200">
-                <span className="text-stone-500 block">Worker 1:</span>
-                <span className="font-mono text-amber-800 font-bold">W-001</span> / <span className="font-mono text-amber-800 font-bold">1111</span>
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1.5 uppercase tracking-wider">
+                  Mobile Number
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    required
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    placeholder="e.g. 0123456789 or +60123456789"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-stone-900 placeholder-stone-400 focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
               </div>
-              <div className="bg-white p-2 rounded-xl border border-stone-200">
-                <span className="text-stone-500 block">Worker 2:</span>
-                <span className="font-mono text-amber-800 font-bold">W-002</span> / <span className="font-mono text-amber-800 font-bold">2222</span>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1.5 uppercase tracking-wider">
+                  4-Digit PIN
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    required
+                    maxLength={4}
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    placeholder="e.g. 1111"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-lg font-mono tracking-widest font-bold text-stone-900 placeholder-stone-400 focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loggingIn}
+                className="w-full py-3.5 px-6 rounded-2xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-sm shadow-xs transition-all active:scale-98 flex items-center justify-center space-x-2"
+              >
+                {loggingIn ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Verifying PIN...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In to Worker Portal</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Test Credentials Box */}
+            <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-1.5 text-xs text-stone-600">
+              <div className="font-bold text-stone-800 flex items-center space-x-1.5">
+                <Key className="w-3.5 h-3.5 text-amber-800" />
+                <span>Test Credentials:</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                <div className="bg-white p-2 rounded-xl border border-stone-200">
+                  <span className="text-stone-500 block">Worker 1:</span>
+                  <span className="font-mono text-amber-800 font-bold">W-001</span> / <span className="font-mono text-amber-800 font-bold">1111</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-stone-200">
+                  <span className="text-stone-500 block">Worker 2:</span>
+                  <span className="font-mono text-amber-800 font-bold">W-002</span> / <span className="font-mono text-amber-800 font-bold">2222</span>
+                </div>
               </div>
             </div>
           </div>
+
+          <FooterCredit />
         </div>
       </div>
     );
@@ -588,7 +655,37 @@ export const WorkerPortalScreen: React.FC = () => {
   });
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-28 animate-fade-in">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-12 animate-fade-in">
+      {/* PWA INSTALL APP BANNER */}
+      {deferredPrompt && !isInstallDismissed && (
+        <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white rounded-3xl p-4 shadow-lg flex items-center justify-between gap-3 border border-indigo-700 animate-fade-in">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20">
+              <img src="/icon-192.png" alt="StitchPay" className="w-7 h-7 rounded-xl" />
+            </div>
+            <div>
+              <div className="text-xs font-black tracking-wide">Install StitchPay App</div>
+              <div className="text-[11px] text-indigo-200">Add to home screen for fast instant offline access</div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              onClick={handleInstallPWA}
+              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+            >
+              Install
+            </button>
+            <button
+              onClick={handleDismissInstall}
+              className="p-1.5 text-indigo-200 hover:text-white rounded-lg transition-colors"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. WORKER ACCOUNT HEADER & LOGOUT */}
       <div className="bg-white border border-stone-200 rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
@@ -1945,6 +2042,9 @@ export const WorkerPortalScreen: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* FOOTER CREDIT */}
+      <FooterCredit hasBottomNav={true} />
 
       {/* 3. MOBILE APP BOTTOM ACTIVITY NAVIGATION BAR (DRAGGABLE & FIXED AT BOTTOM) */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 shadow-2xl px-3 py-2.5 sm:py-3 sm:px-6">

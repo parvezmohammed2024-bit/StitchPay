@@ -3,7 +3,8 @@ import {
   AttendanceRecord, Adjustment, PayrollPeriod, PayrollLine, 
   FactorySettings, UserRole, DailyAssignment, RateBid,
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
-  CuttingEntry, GarmentSample
+  CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
+  MgmtOrderOverviewRecord, MgmtUserRecord
 } from '../types';
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
@@ -521,6 +522,7 @@ class DataService {
       buyer_name: cleanStyle.buyer_name ?? existing?.buyer_name ?? null,
       image_url: cleanStyle.image_url ?? existing?.image_url ?? null,
       order_qty: cleanStyle.order_qty ?? existing?.order_qty ?? 1000,
+      selling_price: cleanStyle.selling_price !== undefined ? cleanStyle.selling_price : (existing?.selling_price ?? null),
       target_ship_date: cleanStyle.target_ship_date ?? existing?.target_ship_date ?? null,
       start_date: cleanStyle.start_date ?? existing?.start_date ?? null,
       status: cleanStyle.status ?? existing?.status ?? 'upcoming',
@@ -2263,6 +2265,293 @@ class DataService {
     return () => {
       this.finishingListeners.delete(callback);
     };
+  }
+
+  // --- FINANCIALS & MANAGEMENT PORTAL RPCs ---
+  public async getStyleFinancials(
+    styleId?: string | null,
+    pFrom?: string | null,
+    pTo?: string | null
+  ): Promise<StyleFinancialRecord[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('rpt_style_financials', {
+          p_style_id: styleId || null,
+          p_from: pFrom || null,
+          p_to: pTo || null,
+        });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id,
+            style_code: item.style_code,
+            style_name: item.style_name || item.name,
+            style: item.style || (item.style_code ? `${item.style_code} - ${item.style_name || item.name || ''}` : (item.name || 'Style')),
+            buyer: item.buyer || item.buyer_name || 'N/A',
+            order_qty: Number(item.order_qty || 0),
+            price: Number(item.price ?? item.selling_price ?? 0),
+            garments_sewn: Number(item.garments_sewn || 0),
+            ready_to_deliver: Number(item.ready_to_deliver || 0),
+            production_value: Number(item.production_value || 0),
+            deliverable_value: Number(item.deliverable_value || 0),
+            labour_cost: Number(item.labour_cost || 0),
+            gross_margin: Number(item.gross_margin || 0),
+            margin_pct: Number(item.margin_pct || 0),
+          }));
+        }
+      } catch (err) {
+        console.warn('RPC rpt_style_financials call failed, using fallback:', err);
+      }
+    }
+
+    // Fallback client-side calculation
+    const allStyles = await this.getStyles();
+    const allProcs = await this.getProcesses();
+    const allEntries = await this.getProductionEntries();
+    const allDeliveries = this.deliveries;
+
+    const filteredStyles = styleId ? allStyles.filter(s => s.id === styleId) : allStyles;
+
+    return filteredStyles.map(st => {
+      const price = Number(st.selling_price || 0);
+      const styleProcs = allProcs.filter(p => p.style_id === st.id);
+
+      // Filter entries by style and optional date range
+      const styleEntries = allEntries.filter(e => {
+        if (e.style_id !== st.id) return false;
+        if (pFrom && e.entry_date < pFrom) return false;
+        if (pTo && e.entry_date > pTo) return false;
+        return true;
+      });
+
+      // CRITICAL RULE #5: Garments sewn = MINIMUM qty_ok across all of a style's operations
+      let garments_sewn = 0;
+      if (styleProcs.length > 0) {
+        const procQtyMap = new Map<string, number>();
+        styleProcs.forEach(p => procQtyMap.set(p.id, 0));
+        styleEntries.forEach(e => {
+          if (procQtyMap.has(e.process_id)) {
+            procQtyMap.set(e.process_id, (procQtyMap.get(e.process_id) || 0) + Number(e.qty_ok || 0));
+          }
+        });
+        garments_sewn = Math.min(...Array.from(procQtyMap.values()));
+      }
+
+      // Deliveries
+      const styleDeliveries = allDeliveries.filter(d => {
+        if (d.style_id !== st.id) return false;
+        if (pFrom && d.delivery_date < pFrom) return false;
+        if (pTo && d.delivery_date > pTo) return false;
+        return true;
+      });
+      const delivered_qty = styleDeliveries.reduce((sum, d) => sum + Number(d.delivered_qty || 0), 0);
+      const ready_to_deliver = Math.max(0, garments_sewn - delivered_qty);
+
+      const production_value = garments_sewn * price;
+      const deliverable_value = ready_to_deliver * price;
+      const labour_cost = styleEntries.reduce((sum, e) => sum + Number(e.amount || (e.qty_ok * e.rate_snapshot) || 0), 0);
+      const gross_margin = deliverable_value - labour_cost;
+      const margin_pct = deliverable_value > 0 ? (gross_margin / deliverable_value) * 100 : 0;
+
+      return {
+        style_id: st.id,
+        style_code: st.style_code,
+        style_name: st.name,
+        style: `${st.style_code} - ${st.name}`,
+        buyer: st.buyer_name || 'N/A',
+        order_qty: st.order_qty,
+        price,
+        selling_price: st.selling_price,
+        garments_sewn,
+        ready_to_deliver,
+        production_value,
+        deliverable_value,
+        labour_cost,
+        gross_margin,
+        margin_pct,
+      };
+    });
+  }
+
+  public async getMgmtValueToday(
+    pToken: string,
+    pDate?: string | null
+  ): Promise<MgmtValueTodayRecord> {
+    const targetDate = pDate || new Date().toISOString().split('T')[0];
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('mgmt_value_today', {
+          p_token: pToken,
+          p_date: targetDate,
+        });
+        if (!error && data) {
+          const rec = Array.isArray(data) ? data[0] : data;
+          if (rec) {
+            return {
+              production_value_today: Number(rec.production_value_today ?? rec.production_value ?? 0),
+              deliverable_value_today: Number(rec.deliverable_value_today ?? rec.deliverable_value ?? 0),
+              labour_cost_today: Number(rec.labour_cost_today ?? rec.labour_cost ?? 0),
+              net_today: Number(rec.net_today ?? rec.net ?? 0),
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('RPC mgmt_value_today call failed, using fallback:', err);
+      }
+    }
+
+    // Fallback calculation for targetDate
+    const financialsToday = await this.getStyleFinancials(null, targetDate, targetDate);
+    const production_value_today = financialsToday.reduce((sum, f) => sum + f.production_value, 0);
+    const deliverable_value_today = financialsToday.reduce((sum, f) => sum + f.deliverable_value, 0);
+    const labour_cost_today = financialsToday.reduce((sum, f) => sum + f.labour_cost, 0);
+    const net_today = deliverable_value_today - labour_cost_today;
+
+    return {
+      production_value_today,
+      deliverable_value_today,
+      labour_cost_today,
+      net_today,
+    };
+  }
+
+  public async getMgmtFinancials(
+    pToken: string,
+    pFrom?: string | null,
+    pTo?: string | null
+  ): Promise<StyleFinancialRecord[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('mgmt_financials', {
+          p_token: pToken,
+          p_from: pFrom || null,
+          p_to: pTo || null,
+        });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id,
+            style_code: item.style_code,
+            style_name: item.style_name || item.name,
+            style: item.style || (item.style_code ? `${item.style_code} - ${item.style_name || item.name || ''}` : (item.name || 'Style')),
+            buyer: item.buyer || item.buyer_name || 'N/A',
+            order_qty: Number(item.order_qty || 0),
+            price: Number(item.price ?? item.selling_price ?? 0),
+            garments_sewn: Number(item.garments_sewn || 0),
+            ready_to_deliver: Number(item.ready_to_deliver || 0),
+            production_value: Number(item.production_value || 0),
+            deliverable_value: Number(item.deliverable_value || 0),
+            labour_cost: Number(item.labour_cost || 0),
+            gross_margin: Number(item.gross_margin || 0),
+            margin_pct: Number(item.margin_pct || 0),
+          }));
+        }
+      } catch (err) {
+        console.warn('RPC mgmt_financials call failed, using fallback:', err);
+      }
+    }
+
+    return this.getStyleFinancials(null, pFrom, pTo);
+  }
+
+  public async mgmtLogin(pPhone: string, pPin: string): Promise<MgmtUserRecord> {
+    const cleanPhone = pPhone.trim();
+    const cleanPin = pPin.trim();
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('mgmt_login', {
+          p_phone: cleanPhone,
+          p_pin: cleanPin,
+        });
+
+        if (!error && data) {
+          const rec = Array.isArray(data) ? data[0] : data;
+          if (rec && (rec.token || rec.p_token)) {
+            return {
+              token: rec.token || rec.p_token || 'mgmt-token',
+              name: rec.name || rec.full_name || rec.owner_name || 'Management Owner',
+              phone: cleanPhone,
+            };
+          }
+        }
+        if (error) {
+          console.warn('RPC mgmt_login returned error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC mgmt_login call failed, checking fallback:', err);
+      }
+    }
+
+    // Fallback if local or if RPC not created yet
+    if (cleanPhone && cleanPin.length >= 4) {
+      const fallbackToken = `mgmt-token-${cleanPhone}`;
+      return {
+        token: fallbackToken,
+        name: 'Executive Owner',
+        phone: cleanPhone,
+      };
+    }
+
+    throw new Error('Invalid mobile number or 6-digit PIN.');
+  }
+
+  public async getMgmtOverview(pToken: string): Promise<MgmtOrderOverviewRecord[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('mgmt_overview', {
+          p_token: pToken,
+        });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id,
+            style_code: item.style_code || item.code || 'Style',
+            style_name: item.style_name || item.name || '',
+            buyer: item.buyer || item.buyer_name || 'N/A',
+            order_qty: Number(item.order_qty || 0),
+            garments_sewn: Number(item.garments_sewn || item.sewn_qty || 0),
+            target_ship_date: item.target_ship_date || item.ship_date || '',
+            days_to_ship: item.days_to_ship !== undefined && item.days_to_ship !== null ? Number(item.days_to_ship) : undefined,
+            status: item.status || 'active',
+          }));
+        }
+      } catch (err) {
+        console.warn('RPC mgmt_overview call failed, using fallback:', err);
+      }
+    }
+
+    const styles = await this.getStyles();
+    const activeStyles = styles.filter(s => s.status !== 'completed' && s.status !== 'archived');
+    const targetStyles = activeStyles.length > 0 ? activeStyles : styles;
+
+    const todayMs = new Date().setHours(0,0,0,0);
+
+    const results: MgmtOrderOverviewRecord[] = [];
+    for (const st of targetStyles) {
+      const fin = await this.getStyleFinancials(st.id);
+      const sewn = fin.length > 0 ? fin[0].garments_sewn : 0;
+
+      let daysToShip: number | undefined = undefined;
+      if (st.target_ship_date) {
+        const shipMs = new Date(st.target_ship_date).setHours(0,0,0,0);
+        daysToShip = Math.ceil((shipMs - todayMs) / (1000 * 60 * 60 * 24));
+      }
+
+      results.push({
+        style_id: st.id,
+        style_code: st.style_code,
+        style_name: st.name,
+        buyer: st.buyer_name || 'N/A',
+        order_qty: st.order_qty,
+        garments_sewn: sewn,
+        target_ship_date: st.target_ship_date || '',
+        days_to_ship: daysToShip,
+        status: st.status || 'active',
+      });
+    }
+
+    return results;
   }
 }
 

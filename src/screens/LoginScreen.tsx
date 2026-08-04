@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, KeyRound, ArrowRight, Shirt, AlertCircle, ShieldCheck } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { UserAccount } from '../types';
+import { FooterCredit } from '../components/FooterCredit';
 
 interface LoginScreenProps {
   onAuthSuccess: (user: UserAccount) => void;
@@ -141,19 +142,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
 
         {/* Footer info */}
-        <div className="text-center">
-          <a
-            href="/worker"
-            onClick={(e) => {
-              e.preventDefault();
-              window.history.pushState({}, '', '/worker');
-              window.dispatchEvent(new Event('popstate'));
-            }}
-            className="inline-flex items-center space-x-1.5 text-xs text-indigo-700 hover:text-indigo-800 font-semibold transition-colors cursor-pointer"
-          >
-            <span>Are you a factory worker? Sign in here</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </a>
+        <div className="text-center space-y-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 text-xs">
+            <a
+              href="/worker"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState({}, '', '/worker');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="inline-flex items-center space-x-1 text-indigo-700 hover:text-indigo-900 font-semibold transition-colors cursor-pointer"
+            >
+              <span>Worker portal</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+
+            <span className="hidden sm:inline text-stone-300">•</span>
+
+            <a
+              href="/management"
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState({}, '', '/management');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="inline-flex items-center space-x-1 text-emerald-800 hover:text-emerald-950 font-bold transition-colors cursor-pointer"
+            >
+              <span>Management sign in</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+          </div>
+
+          <FooterCredit />
         </div>
       </div>
     </div>

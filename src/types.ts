@@ -53,6 +53,7 @@ export interface GarmentStyle {
   buyer_name: string | null;
   image_url: string | null;
   order_qty: number;
+  selling_price?: number | null;
   target_ship_date: string | null;
   start_date?: string | null;
   status: 'upcoming' | 'active' | 'completed' | 'archived';
@@ -65,6 +66,50 @@ export interface GarmentStyle {
   delivered_pieces?: number;
   remaining_pieces?: number;
   total_labour_cost?: number;
+}
+
+export interface StyleFinancialRecord {
+  style_id?: string;
+  style_code?: string;
+  style_name?: string;
+  style?: string;
+  buyer?: string | null;
+  buyer_name?: string | null;
+  order_qty: number;
+  price?: number;
+  selling_price?: number | null;
+  garments_sewn: number;
+  ready_to_deliver: number;
+  production_value: number;
+  deliverable_value: number;
+  labour_cost: number;
+  gross_margin: number;
+  margin_pct: number;
+}
+
+export interface MgmtValueTodayRecord {
+  production_value_today: number;
+  deliverable_value_today: number;
+  labour_cost_today: number;
+  net_today: number;
+}
+
+export interface MgmtOrderOverviewRecord {
+  style_id?: string;
+  style_code: string;
+  style_name?: string;
+  buyer: string;
+  order_qty: number;
+  garments_sewn: number;
+  target_ship_date?: string;
+  days_to_ship?: number;
+  status?: string;
+}
+
+export interface MgmtUserRecord {
+  token: string;
+  name: string;
+  phone?: string;
 }
 
 export interface GarmentProcess {

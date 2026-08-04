@@ -90,6 +90,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       style_code: '',
       buyer_name: '',
       order_qty: 10000,
+      selling_price: null,
       start_date: new Date().toISOString().split('T')[0],
       target_ship_date: '',
       status: 'upcoming',
@@ -107,6 +108,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       style_code: st.style_code,
       buyer_name: st.buyer_name || '',
       order_qty: st.order_qty,
+      selling_price: st.selling_price !== undefined ? st.selling_price : null,
       start_date: st.start_date || '',
       target_ship_date: st.target_ship_date || '',
       status: st.status,
@@ -724,6 +726,18 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
+
+              {/* ADMIN ONLY: Selling Price and Order Value */}
+              {isOwnerAdmin && st.selling_price !== undefined && st.selling_price !== null && (
+                <div className="flex items-center justify-between text-xs font-mono bg-emerald-50/70 border border-emerald-200/80 px-2.5 py-1.5 rounded-xl">
+                  <span className="text-[11px] font-sans font-semibold text-emerald-950">
+                    Price: {currencySymbol} {Number(st.selling_price).toFixed(2)}
+                  </span>
+                  <span className="font-bold text-emerald-800 text-[11px]">
+                    Order Val: {currencySymbol} {((st.order_qty || 0) * Number(st.selling_price)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Daily Output Pace Comparison (Required vs Actual 7-Day) */}
@@ -1765,6 +1779,30 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   />
                 </div>
               </div>
+
+              {/* ADMIN ONLY: Selling Price & Total Order Value */}
+              {isOwnerAdmin && (
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 space-y-2">
+                  <div>
+                    <label className="text-xs font-bold text-emerald-950 block">Selling Price per Piece ({currencySymbol})</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Optional (leave blank if unknown)"
+                      value={styleForm.selling_price !== undefined && styleForm.selling_price !== null ? styleForm.selling_price : ''}
+                      onChange={e => setStyleForm({ ...styleForm, selling_price: e.target.value === '' ? null : parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 text-sm text-stone-900 font-mono mt-1 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-900 pt-1 border-t border-emerald-200/80">
+                    <span>Resulting Order Value:</span>
+                    <span className="font-mono text-sm text-emerald-800">
+                      {currencySymbol} {((styleForm.order_qty || 0) * (styleForm.selling_price || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
