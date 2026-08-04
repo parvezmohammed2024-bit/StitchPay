@@ -18,7 +18,7 @@ export const PayslipModal: React.FC<PayslipModalProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
-  const currency = settings?.currency_symbol || '৳';
+  const currency = settings?.currency_symbol || 'MYR';
   const worker = line.worker;
 
   const handleWhatsAppShare = () => {

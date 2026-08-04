@@ -97,7 +97,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
                 type="text"
                 value={settings.currency_symbol}
                 onChange={e => setSettings({ ...settings, currency_symbol: e.target.value })}
-                placeholder="৳ or RM"
+                placeholder="e.g. MYR, RM, $, €"
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1 font-mono font-bold"
               />
             </div>

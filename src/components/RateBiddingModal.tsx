@@ -7,6 +7,7 @@ interface RateBiddingModalProps {
   onClose: () => void;
   assignment: DailyAssignment | null;
   onSubmitBid: (assignmentId: string, proposedRate: number, reason: string) => Promise<void>;
+  currencySymbol?: string;
 }
 
 export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
@@ -14,6 +15,7 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
   onClose,
   assignment,
   onSubmitBid,
+  currencySymbol = 'MYR',
 }) => {
   const [proposedRate, setProposedRate] = useState<string>(
     assignment ? String(assignment.agreed_rate) : ''
@@ -28,7 +30,7 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
     e.preventDefault();
     const rateNum = parseFloat(proposedRate);
     if (isNaN(rateNum) || rateNum <= 0) {
-      alert('Please enter a valid rate amount in BDT');
+      alert('Please enter a valid rate amount');
       return;
     }
 
@@ -76,12 +78,12 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
               <div className="text-[11px] text-stone-600">Style: {assignment.style_name} ({assignment.style_code})</div>
             </div>
             <span className="text-[10px] bg-emerald-50 text-emerald-800 font-mono font-bold px-2.5 py-1 rounded-full border border-emerald-200">
-              Approved: ৳{assignment.agreed_rate}/pc
+              Approved: {currencySymbol}{assignment.agreed_rate}/pc
             </span>
           </div>
           <div className="text-xs text-stone-600 flex justify-between pt-1">
             <span>Target Volume: <strong className="text-stone-900">{assignment.target_qty || 250} pcs</strong></span>
-            <span>Target Earning: <strong className="text-amber-700 font-bold">৳{(((assignment.target_qty || 250) * (assignment.agreed_rate || 0)) || 0).toFixed(0)}</strong></span>
+            <span>Target Earning: <strong className="text-amber-700 font-bold">{currencySymbol}{(((assignment.target_qty || 250) * (assignment.agreed_rate || 0)) || 0).toFixed(0)}</strong></span>
           </div>
         </div>
 
@@ -94,10 +96,10 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                Proposed Bid Rate per Piece (৳ BDT)
+                Proposed Bid Rate per Piece ({currencySymbol})
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-amber-700 font-black text-sm">৳</span>
+                <span className="absolute left-3.5 top-2.5 text-amber-700 font-black text-sm">{currencySymbol}</span>
                 <input
                   type="number"
                   step="0.1"
@@ -109,7 +111,7 @@ export const RateBiddingModal: React.FC<RateBiddingModalProps> = ({
                 />
               </div>
               <p className="text-[10px] text-stone-500 mt-1">
-                Current factory standard rate is ৳{assignment.agreed_rate}/pc.
+                Current factory standard rate is {currencySymbol}{assignment.agreed_rate}/pc.
               </p>
             </div>
 

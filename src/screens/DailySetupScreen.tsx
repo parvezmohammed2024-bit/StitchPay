@@ -2,24 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Copy, Sparkles, AlertTriangle, Users, Layers, 
   DollarSign, Plus, Trash2, CheckCircle2, RefreshCw, X, Eye, ArrowRight,
-  TrendingUp, UserCheck, Search, Info, FileSpreadsheet, Download
+  TrendingUp, UserCheck, Search, Info, FileSpreadsheet, Download,
+  Scissors, Clock
 } from 'lucide-react';
 import { dataService, getLocalDateString } from '../lib/dataService';
 import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
-import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole } from '../types';
+import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, CuttingEntry, ProductionEntry } from '../types';
 import { WorkerAvatar } from '../components/WorkerAvatar';
+import { isStyleUnlockedForSewing, getStyleSewingAvailability } from '../lib/cuttingGate';
 
 interface DailySetupScreenProps {
   role?: UserRole;
   onProposeRate?: (workerId: string, processId: string, currentRate: number) => void;
+  onNavigate?: (screen: string) => void;
 }
 
-export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProposeRate }) => {
+export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProposeRate, onNavigate }) => {
   const [selectedDate, setSelectedDate] = useState<string>(getLocalDateString());
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
   const [processes, setProcesses] = useState<GarmentProcess[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [assignments, setAssignments] = useState<DailyAssignment[]>([]);
+  const [cuttingEntries, setCuttingEntries] = useState<CuttingEntry[]>([]);
+  const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [selectedStyleIds, setSelectedStyleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -57,12 +62,14 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      const [allStyles, allProcesses, allWorkers, dailyList, setts] = await Promise.all([
+      const [allStyles, allProcesses, allWorkers, dailyList, setts, cutEntries, prodEntries] = await Promise.all([
         dataService.getStyles(),
         dataService.getProcesses(),
         dataService.getWorkers(),
         dataService.getDailyAssignments(selectedDate),
         dataService.getSettings(),
+        dataService.getCuttingEntries(),
+        dataService.getProductionEntries(),
       ]);
 
       const activeStyles = allStyles.filter(s => !s.status || s.status.toLowerCase() === 'active');
@@ -74,10 +81,15 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
       setWorkers(activeWorkers);
       setAssignments(dailyList);
       setSettings(setts);
+      setCuttingEntries(cutEntries);
+      setProductionEntries(prodEntries);
 
-      // Auto-select all active styles so new styles and all operation lines are immediately visible for assigning workers
-      if (activeStyles.length > 0) {
-        setSelectedStyleIds(activeStyles.map(s => s.id));
+      // Auto-select all selectable (unlocked) active styles so new unlocked styles and all operation lines are immediately visible
+      const selectableStyles = activeStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
+      if (selectableStyles.length > 0) {
+        setSelectedStyleIds(selectableStyles.map(s => s.id));
+      } else {
+        setSelectedStyleIds([]);
       }
     } catch (err) {
       console.error('Error loading Daily Setup data:', err);
@@ -362,10 +374,13 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
               Select one or multiple styles to configure processes
             </span>
             <button
-              onClick={() => setSelectedStyleIds(styles.map(s => s.id))}
+              onClick={() => {
+                const selectable = styles.filter(s => isStyleUnlockedForSewing(s, cuttingEntries));
+                setSelectedStyleIds(selectable.map(s => s.id));
+              }}
               className="text-indigo-700 hover:text-indigo-800 font-semibold transition"
             >
-              Select All
+              Select All Ready
             </button>
             <span className="text-stone-300">|</span>
             <button
@@ -381,27 +396,75 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
           <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-center text-stone-600 text-xs">
             No active styles found. Create styles in <span className="text-amber-800 font-semibold">Styles & Processes</span> to configure operations.
           </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {styles.map(style => {
-              const isSelected = selectedStyleIds.includes(style.id);
-              return (
-                <button
-                  key={style.id}
-                  onClick={() => handleToggleStyle(style.id)}
-                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-all ${
-                    isSelected
-                      ? 'bg-amber-100 text-amber-900 border-amber-300 font-bold shadow-xs'
-                      : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200'
-                  }`}
-                >
-                  <span className="font-bold">{style.style_code}</span>
-                  <span className="text-xs opacity-75">({style.name})</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        ) : (() => {
+          const selectableStyles = styles.filter(s => isStyleUnlockedForSewing(s, cuttingEntries));
+          const awaitingCuttingStyles = styles.filter(s => !isStyleUnlockedForSewing(s, cuttingEntries));
+
+          return (
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {selectableStyles.map(style => {
+                  const isSelected = selectedStyleIds.includes(style.id);
+                  const avail = getStyleSewingAvailability(style, cuttingEntries, processes, productionEntries);
+                  const figureLabel = avail.requiresCutting
+                    ? `${avail.bulkCutTotal.toLocaleString()} cut / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`
+                    : `${(style.order_qty || 0).toLocaleString()} order / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`;
+
+                  return (
+                    <button
+                      key={style.id}
+                      onClick={() => handleToggleStyle(style.id)}
+                      className={`flex flex-col items-start px-3.5 py-2 rounded-xl text-xs border transition-all ${
+                        isSelected
+                          ? 'bg-amber-100 text-amber-900 border-amber-300 font-bold shadow-xs'
+                          : 'bg-stone-100 text-stone-700 border-stone-200 hover:bg-stone-200'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-sm">{style.style_code}</span>
+                        <span className="text-[11px] opacity-80">({style.name})</span>
+                      </div>
+                      <span className="text-[10px] opacity-90 mt-0.5 font-mono">
+                        {figureLabel}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* MUTED SECTION: AWAITING CUTTING */}
+              {awaitingCuttingStyles.length > 0 && (
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-2 mt-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-1.5 font-semibold text-stone-600">
+                      <Clock className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Awaiting cutting ({awaitingCuttingStyles.length})</span>
+                    </div>
+                    {onNavigate && (
+                      <button
+                        onClick={() => onNavigate('cutting')}
+                        className="text-xs text-indigo-700 hover:text-indigo-800 font-bold flex items-center space-x-1 transition"
+                      >
+                        <span>Go to Cutting Screen</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {awaitingCuttingStyles.map(st => (
+                      <div key={st.id} className="bg-stone-200/70 border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-xs">
+                        <Scissors className="w-3.5 h-3.5 text-stone-600" />
+                        <span className="font-bold">{st.style_code}</span>
+                        <span className="text-stone-600">({st.name})</span>
+                        <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-medium">0 pcs cut</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* SUMMARY BAR */}
@@ -433,7 +496,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
           <div>
             <div className="text-xs text-stone-600 font-medium">Est. Piece Target Wage Cost</div>
             <div className="text-xl font-bold text-amber-800">
-              {settings?.currency_symbol || '৳'}{estimatedPieceWageCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {settings?.currency_symbol || 'MYR'}{estimatedPieceWageCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               {salariedAssignmentsCount > 0 && (
                 <span className="text-[11px] font-normal text-stone-500 block">
                   ({salariedAssignmentsCount} salaried worker{salariedAssignmentsCount > 1 ? 's' : ''} assigned)
@@ -458,9 +521,16 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
             .filter(p => p.style_id === styleId)
             .sort((a, b) => a.seq_no - b.seq_no);
 
+          const avail = getStyleSewingAvailability(style, cuttingEntries, processes, productionEntries);
+          const styleAssignments = assignments.filter(a => a.style_id === styleId);
+          const maxTarget = styleAssignments.length > 0 ? Math.max(...styleAssignments.map(a => Number(a.target_qty || 0))) : 0;
+          const totalTarget = styleAssignments.reduce((sum, a) => sum + Number(a.target_qty || 0), 0);
+          const targetVal = maxTarget > 0 ? maxTarget : totalTarget;
+          const isTargetExceeding = styleAssignments.length > 0 && targetVal > avail.availableToSew;
+
           return (
             <div key={styleId} className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex justify-between items-center border-b border-stone-200 pb-3">
+              <div className="flex justify-between items-center border-b border-stone-200 pb-3 flex-wrap gap-2">
                 <div>
                   <div className="text-lg font-bold text-stone-900 flex items-center space-x-2">
                     <span className="text-amber-800">{style.style_code}</span>
@@ -470,7 +540,23 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                     Sequence order processes for this style
                   </p>
                 </div>
+
+                <div className="text-xs font-mono font-semibold text-stone-700 bg-stone-100 px-3 py-1.5 rounded-xl border border-stone-200">
+                  {avail.requiresCutting
+                    ? `${avail.bulkCutTotal.toLocaleString()} cut / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`
+                    : `${(style.order_qty || 0).toLocaleString()} order / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`}
+                </div>
               </div>
+
+              {/* TARGET WARNING IF TARGETS EXCEED AVAILABLE PIECES */}
+              {isTargetExceeding && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 flex items-center space-x-2 text-xs font-medium">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    Only <strong>{avail.availableToSew}</strong> pieces are cut and unsewn — targets total <strong>{targetVal}</strong>.
+                  </span>
+                </div>
+              )}
 
               {/* PROCESSES SEQUENCE */}
               <div className="space-y-4">
@@ -502,7 +588,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                             <div className="text-base font-semibold text-stone-900 flex items-center space-x-2">
                               <span>{proc.name}</span>
                               <span className="text-xs text-stone-600 bg-stone-200 px-2 py-0.5 rounded-md font-mono">
-                                Standard Rate: {settings?.currency_symbol || '৳'}{(proc.rate || 0).toFixed(2)}
+                                Standard Rate: {settings?.currency_symbol || 'MYR'}{(proc.rate || 0).toFixed(2)}
                               </span>
                             </div>
                             <div className="text-xs text-stone-500">
@@ -568,18 +654,18 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                                     <div className="text-xs text-stone-600 mt-0.5 flex items-center space-x-2">
                                       {worker?.pay_type === 'monthly_salary' ? (
                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300">
-                                          Monthly Salaried ({settings?.currency_symbol || '৳'}{(worker.monthly_salary || 0).toLocaleString()}/mo)
+                                          Monthly Salaried ({settings?.currency_symbol || 'MYR'}{(worker.monthly_salary || 0).toLocaleString()}/mo)
                                         </span>
                                       ) : (
                                         <>
                                           <span>Agreed Rate:</span>
                                           <span className={`font-semibold ${isRateBidded ? 'text-amber-800' : 'text-stone-900'}`}>
-                                            {settings?.currency_symbol || '৳'}{(assign.agreed_rate || 0).toFixed(2)}
+                                            {settings?.currency_symbol || 'MYR'}{(assign.agreed_rate || 0).toFixed(2)}
                                           </span>
                                           {isRateBidded && (
                                             <span 
                                               className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded"
-                                              title={`Standard process rate is ${settings?.currency_symbol || '৳'}${(proc.rate || 0).toFixed(2)}`}
+                                              title={`Standard process rate is ${settings?.currency_symbol || 'MYR'}${(proc.rate || 0).toFixed(2)}`}
                                             >
                                               Rate Bidded
                                             </span>
@@ -841,7 +927,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                         {p?.name} → <span className="text-amber-800">{w?.full_name}</span>
                       </div>
                       <div className="text-stone-600 font-mono">
-                        {settings?.currency_symbol || '৳'}{(item.agreed_rate || 0).toFixed(2)}/pc
+                        {settings?.currency_symbol || 'MYR'}{(item.agreed_rate || 0).toFixed(2)}/pc
                       </div>
                     </div>
                   );
@@ -888,12 +974,12 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
             <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 text-xs space-y-1">
               <div className="text-stone-600">Worker: <strong className="text-stone-900">{proposeRateModal.workerName}</strong></div>
               <div className="text-stone-600">Operation: <strong className="text-stone-900">{proposeRateModal.processName}</strong></div>
-              <div className="text-stone-600">Standard Rate: <strong className="text-emerald-800">{settings?.currency_symbol || '৳'}{(proposeRateModal.currentRate || 0).toFixed(2)}</strong></div>
+              <div className="text-stone-600">Standard Rate: <strong className="text-emerald-800">{settings?.currency_symbol || 'MYR'}{(proposeRateModal.currentRate || 0).toFixed(2)}</strong></div>
             </div>
 
             <div>
               <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">
-                Proposed Piece Rate ({settings?.currency_symbol || '৳'})
+                Proposed Piece Rate ({settings?.currency_symbol || 'MYR'})
               </label>
               <input
                 type="number"

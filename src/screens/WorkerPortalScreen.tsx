@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { dataService } from '../lib/dataService';
-import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess, CuttingEntry, FinishingEntry, FinishingStage } from '../types';
+import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess, CuttingEntry, FinishingEntry, FinishingStage, FactorySettings } from '../types';
 import { RateBiddingModal } from '../components/RateBiddingModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 
@@ -53,6 +53,8 @@ export const WorkerPortalScreen: React.FC = () => {
   };
 
   // Portal Data State
+  const [settings, setSettings] = useState<FactorySettings | null>(null);
+  const currencySymbol = settings?.currency_symbol || 'MYR';
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [monthlyAttendanceCount, setMonthlyAttendanceCount] = useState<number>(0);
   const [assignedWorks, setAssignedWorks] = useState<DailyAssignment[]>([]);
@@ -109,8 +111,12 @@ export const WorkerPortalScreen: React.FC = () => {
   const initSession = async () => {
     setLoading(true);
     const savedWorkerId = sessionStorage.getItem('stitchpay_worker_id');
-    const allWrks = await dataService.getWorkers();
+    const [allWrks, factorySet] = await Promise.all([
+      dataService.getWorkers(),
+      dataService.getSettings(),
+    ]);
     setWorkersList(allWrks);
+    setSettings(factorySet);
 
     if (savedWorkerId) {
       const match = allWrks.find(w => w.id === savedWorkerId);
@@ -185,7 +191,7 @@ export const WorkerPortalScreen: React.FC = () => {
 
     const [
       wrkList, attTodayList, allAttList, assignList, entryList,
-      stylesList, finishingList, cuttingList, stagesList
+      stylesList, finishingList, cuttingList, stagesList, factorySet
     ] = await Promise.all([
       dataService.getWorkers(),
       dataService.getAttendance(todayStr),
@@ -196,9 +202,11 @@ export const WorkerPortalScreen: React.FC = () => {
       dataService.getFinishingEntries(),
       dataService.getCuttingEntries(),
       dataService.getFinishingStages(),
+      dataService.getSettings(),
     ]);
 
     setWorkersList(wrkList);
+    setSettings(factorySet);
     setAllEntries(entryList);
     setGarmentStyles(stylesList);
     setAllFinishingStages(stagesList);
@@ -284,7 +292,7 @@ export const WorkerPortalScreen: React.FC = () => {
     const assignment = assignedWorks.find(a => a.id === assignmentId);
     if (assignment) {
       assignment.agreed_rate = proposedRate;
-      setClockMessage(`Submitted rate bid of ৳${proposedRate}/pc for ${assignment.process_name}`);
+      setClockMessage(`Submitted rate bid of ${currencySymbol}${proposedRate}/pc for ${assignment.process_name}`);
       setTimeout(() => setClockMessage(null), 5000);
     }
   };
@@ -793,11 +801,11 @@ export const WorkerPortalScreen: React.FC = () => {
                             <>
                               <span>•</span>
                               <span className="text-emerald-800 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                                Rate: ৳{agreedRate}/pc
+                                Rate: {currencySymbol}{agreedRate}/pc
                               </span>
                               <span>•</span>
                               <span className="text-amber-800 font-bold bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-300">
-                                Earned: ৳{opAmountEarned.toLocaleString()}
+                                Earned: {currencySymbol}{opAmountEarned.toLocaleString()}
                               </span>
                             </>
                           ) : (
@@ -848,13 +856,13 @@ export const WorkerPortalScreen: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
                     <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Today's Earnings</span>
-                    <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">৳{todayEarningsBDT.toLocaleString()}</span>
+                    <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">{currencySymbol}{todayEarningsBDT.toLocaleString()}</span>
                     <span className="text-[10px] text-stone-500">{todayOutputPcs} pcs today</span>
                   </div>
 
                   <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
                     <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Running Total (Pay Period)</span>
-                    <span className="text-xl font-black text-indigo-700 mt-0.5 font-mono block">৳{totalPeriodEarningsBDT.toLocaleString()}</span>
+                    <span className="text-xl font-black text-indigo-700 mt-0.5 font-mono block">{currencySymbol}{totalPeriodEarningsBDT.toLocaleString()}</span>
                     <span className="text-[10px] text-stone-500">Current period total</span>
                   </div>
 
@@ -866,7 +874,7 @@ export const WorkerPortalScreen: React.FC = () => {
 
                   <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
                     <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Net Payable Amount</span>
-                    <span className="text-xl font-black text-emerald-800 mt-0.5 font-mono block">৳{netReceivableBDT.toLocaleString()}</span>
+                    <span className="text-xl font-black text-emerald-800 mt-0.5 font-mono block">{currencySymbol}{netReceivableBDT.toLocaleString()}</span>
                     <span className="text-[10px] text-stone-500">After advance deductions</span>
                   </div>
                 </div>
@@ -875,7 +883,7 @@ export const WorkerPortalScreen: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs">
                     <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Fixed Monthly Salary</span>
-                    <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">৳{(currentWorker.monthly_salary || 0).toLocaleString()}</span>
+                    <span className="text-xl font-black text-amber-800 mt-0.5 font-mono block">{currencySymbol}{(currentWorker.monthly_salary || 0).toLocaleString()}</span>
                     <span className="text-[10px] text-stone-500">Fixed Monthly Rate</span>
                   </div>
 
@@ -928,7 +936,7 @@ export const WorkerPortalScreen: React.FC = () => {
             <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
               <div className="text-xs font-bold text-stone-700 flex items-center justify-between">
                 <span>Last 7 Days Production Trend</span>
-                <span className="text-[10px] text-stone-500 font-mono">Output Pieces {isPieceRateWorker ? '& Earnings (৳ BDT)' : 'Daily'}</span>
+                <span className="text-[10px] text-stone-500 font-mono">Output Pieces {isPieceRateWorker ? `& Earnings (${currencySymbol})` : 'Daily'}</span>
               </div>
 
               <div className="h-56 w-full pt-2">
@@ -952,7 +960,7 @@ export const WorkerPortalScreen: React.FC = () => {
                       labelStyle={{ color: '#1c1917', fontWeight: 'bold' }}
                     />
                     {isPieceRateWorker && (
-                      <Area type="monotone" dataKey="earnings" name="Earnings (৳)" stroke="#047857" fillOpacity={1} fill="url(#colorEarnings)" />
+                      <Area type="monotone" dataKey="earnings" name={`Earnings (${currencySymbol})`} stroke="#047857" fillOpacity={1} fill="url(#colorEarnings)" />
                     )}
                     <Area type="monotone" dataKey="pcs" name="Pieces (Pcs)" stroke="#4338CA" fillOpacity={1} fill="url(#colorPcs)" />
                   </AreaChart>
@@ -987,7 +995,7 @@ export const WorkerPortalScreen: React.FC = () => {
                       <td className="py-3 px-3 font-bold text-stone-900">{day.dateFormatted}</td>
                       <td className="py-3 px-3 font-mono text-indigo-800 font-bold">{day.pcs} pcs</td>
                       {isPieceRateWorker && (
-                        <td className="py-3 px-3 font-mono text-emerald-800 font-bold">৳{day.earnings.toLocaleString()}</td>
+                        <td className="py-3 px-3 font-mono text-emerald-800 font-bold">{currencySymbol}{day.earnings.toLocaleString()}</td>
                       )}
                       <td className="py-3 px-3 text-stone-600">
                         {day.entries.length > 0 ? (
@@ -1057,7 +1065,7 @@ export const WorkerPortalScreen: React.FC = () => {
                     {item.worker.pay_type !== 'monthly_salary' && (
                       <div className="flex justify-between">
                         <span className="text-stone-600">Total Pay:</span>
-                        <strong className="text-emerald-800 font-mono">৳{item.totalAmt.toLocaleString()}</strong>
+                        <strong className="text-emerald-800 font-mono">{currencySymbol}{item.totalAmt.toLocaleString()}</strong>
                       </div>
                     )}
                   </div>
@@ -1610,6 +1618,7 @@ export const WorkerPortalScreen: React.FC = () => {
         onClose={() => setBiddingAssignment(null)}
         assignment={biddingAssignment}
         onSubmitBid={handleSubmitBid}
+        currencySymbol={currencySymbol}
       />
 
       {/* Production Output Log Modal (Sewing) */}
@@ -1625,7 +1634,7 @@ export const WorkerPortalScreen: React.FC = () => {
               <div className="text-amber-800 font-bold">{selectedWork.process_name}</div>
               <div className="text-stone-800">Style: {selectedWork.style_name}</div>
               {isPieceRateWorker && (
-                <div className="text-stone-600">Approved Rate: ৳{selectedWork.agreed_rate} per piece</div>
+                <div className="text-stone-600">Approved Rate: {currencySymbol}{selectedWork.agreed_rate} per piece</div>
               )}
             </div>
 

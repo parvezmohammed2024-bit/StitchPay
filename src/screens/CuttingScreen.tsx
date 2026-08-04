@@ -201,6 +201,11 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
       return;
     }
 
+    const selectedStyle = styles.find(s => s.id === cutForm.style_id);
+    const styleCode = selectedStyle?.style_code || 'Style';
+    const prevBulkCut = bulkCutMap.get(cutForm.style_id) || 0;
+    const isFirstBulkCut = (cutForm.cut_type === 'bulk' || !cutForm.cut_type) && qty > 0 && prevBulkCut === 0;
+
     try {
       await dataService.saveCuttingEntry({
         style_id: cutForm.style_id,
@@ -212,11 +217,16 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
         notes: cutForm.notes || null,
       });
 
-      showSuccessToast(
-        cutForm.cut_type === 'sample' 
-          ? `Sample cutting output recorded (${qty} pcs)` 
-          : `Bulk cutting output recorded (${qty} pcs)`
-      );
+      if (isFirstBulkCut) {
+        showSuccessToast(`${styleCode} is now available for line setup.`);
+      } else {
+        showSuccessToast(
+          cutForm.cut_type === 'sample' 
+            ? `Sample cutting output recorded (${qty} pcs)` 
+            : `Bulk cutting output recorded (${qty} pcs)`
+        );
+      }
+
       setIsCutModalOpen(false);
       setCutForm({
         style_id: '',

@@ -35,8 +35,8 @@ class DataService {
     id: 'default-settings-01',
     factory_name: 'StitchPay Garments Ltd.',
     logo_url: null,
-    currency_code: 'BDT',
-    currency_symbol: '৳',
+    currency_code: 'MYR',
+    currency_symbol: 'MYR',
     pay_cycle: 'weekly',
     week_start_day: 'Saturday',
     rework_pay_percent: 50,
@@ -2010,36 +2010,30 @@ class DataService {
   public async applyDefaultFinishingStages(styleId: string, hasButtons: boolean): Promise<FinishingStage[]> {
     if (isSupabaseConfigured) {
       try {
-        const { error } = await supabase.rpc('apply_default_finishing_stages', {
-          p_style_id: styleId,
-          p_has_buttons: hasButtons,
-        });
-        if (!error) {
-          const fetched = await this.getFinishingStages(styleId);
-          if (fetched && fetched.length > 0) return fetched;
-        }
-        console.warn('Supabase RPC apply_default_finishing_stages error or empty, using fallback:', error);
+        // Cleanly remove existing stages for this style to avoid unique constraint violations on (style_id, name)
+        await supabase.from('finishing_stages').delete().eq('style_id', styleId);
       } catch (err) {
-        console.warn('RPC call failed, using fallback:', err);
+        console.warn('Error deleting existing finishing_stages before applying defaults:', err);
       }
     }
 
     // Standard fallback definitions
     const defaultDefs = [
-      { code: 'thread_cut', name: 'Thread Cutting', seq: 1 },
+      { code: 'received', name: 'Received from Sewing', seq: 1 },
+      { code: 'thread_cut', name: 'Thread Cutting', seq: 2 },
       ...(hasButtons
         ? [
-            { code: 'buttonhole', name: 'Buttonhole', seq: 2 },
-            { code: 'button_attach', name: 'Button Attach', seq: 3 },
+            { code: 'buttonhole', name: 'Buttonhole', seq: 3 },
+            { code: 'button_attach', name: 'Button Attach', seq: 4 },
           ]
         : []),
-      { code: 'ironing', name: 'Ironing & Pressing', seq: 4 },
-      { code: 'qc', name: 'Quality Control (QC)', seq: 5 },
-      { code: 'packing', name: 'Folding & Packing', seq: 6 },
-      { code: 'ready', name: 'Ready to Deliver', seq: 7 },
+      { code: 'ironing', name: 'Ironing & Pressing', seq: 5 },
+      { code: 'qc', name: 'Quality Control (QC)', seq: 6 },
+      { code: 'packing', name: 'Folding & Packing', seq: 7 },
+      { code: 'ready', name: 'Ready to Deliver', seq: 8 },
     ];
 
-    // Replace existing stages for this style
+    // Replace existing stages for this style in local memory
     this.finishingStages = this.finishingStages.filter(s => s.style_id !== styleId);
 
     const newStages: FinishingStage[] = defaultDefs.map((def, idx) => ({

@@ -53,6 +53,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
     const fw = workers.filter(w => w.section && w.section.toLowerCase().includes('finish'));
     return fw.length > 0 ? fw : workers;
   }, [workers]);
+
   const [sewingProcesses, setSewingProcesses] = useState<GarmentProcess[]>([]);
   const [sewingEntries, setSewingEntries] = useState<ProductionEntry[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
@@ -72,6 +73,24 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const [confirmOutOfSeq, setConfirmOutOfSeq] = useState<boolean>(false);
   const [savingEntries, setSavingEntries] = useState<boolean>(false);
 
+  // Quick Single Stage Log Modal State
+  const [isQuickLogOpen, setIsQuickLogOpen] = useState<boolean>(false);
+  const [quickLogStyle, setQuickLogStyle] = useState<GarmentStyle | null>(null);
+  const [quickLogStage, setQuickLogStage] = useState<FinishingStage | null>(null);
+  const [quickLogStageIdx, setQuickLogStageIdx] = useState<number>(0);
+  const [quickLogPrevStageName, setQuickLogPrevStageName] = useState<string>('');
+  const [quickLogPrevCumulative, setQuickLogPrevCumulative] = useState<number>(0);
+  const [quickLogCurrentCumulative, setQuickLogCurrentCumulative] = useState<number>(0);
+  const [quickLogWipWaiting, setQuickLogWipWaiting] = useState<number>(0);
+  const [quickLogQtyOk, setQuickLogQtyOk] = useState<string>('');
+  const [quickLogQtyRework, setQuickLogQtyRework] = useState<string>('0');
+  const [quickLogQtyReject, setQuickLogQtyReject] = useState<string>('0');
+  const [quickLogWorkerId, setQuickLogWorkerId] = useState<string>('');
+  const [quickLogShift, setQuickLogShift] = useState<'day' | 'night'>('day');
+  const [quickLogNotes, setQuickLogNotes] = useState<string>('');
+  const [quickLogConfirmExceed, setQuickLogConfirmExceed] = useState<boolean>(false);
+  const [quickLogSaving, setQuickLogSaving] = useState<boolean>(false);
+
   // Dispatch / Delivery Modal State
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState<boolean>(false);
   const [dispatchStyleId, setDispatchStyleId] = useState<string>('');
@@ -90,7 +109,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const loadData = async () => {
     setLoading(true);
     try {
-      const [stList, stgList, entList, delList, wrkList, prodEntries, setRes] = await Promise.all([
+      const [stList, stgList, entList, delList, wrkList, prodEntries, setRes, procList] = await Promise.all([
         dataService.getStyles(),
         dataService.getFinishingStages(),
         dataService.getFinishingEntries(),
@@ -98,6 +117,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         dataService.getWorkers(),
         dataService.getProductionEntries(),
         dataService.getSettings(),
+        dataService.getProcesses(),
       ]);
 
       setStyles(stList);
@@ -107,6 +127,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       setWorkers(wrkList);
       setSewingEntries(prodEntries);
       setSettings(setRes);
+      setSewingProcesses(procList);
 
       // Auto initialize default stages if any active style lacks stages
       const activeStyles = stList.filter(s => s.status === 'active' || s.status === 'upcoming');
@@ -138,7 +159,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       : activeStyles.filter(s => s.id === selectedStyleId);
 
     return targetStyles.map(style => {
-      // 1. Get active finishing stages for this style
+      // 1. Get active finishing stages for this style sorted by seq_no
       const styleStages = allStages
         .filter(stg => stg.style_id === style.id && stg.is_active !== false)
         .sort((a, b) => a.seq_no - b.seq_no);
@@ -149,8 +170,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         styleEntries = styleEntries.filter(e => e.entry_date === filterDate);
       }
 
-      // 3. Compute cumulative metrics per stage
-      let maxGap = -1;
+      // 3. Compute cumulative output & WIP waiting per stage
+      let maxWaiting = 0;
       let bottleneckStageId: string | null = null;
       let prevCumulative = 0;
 
@@ -162,11 +183,13 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
 
         let wipWaiting = 0;
         if (idx === 0) {
+          // Stage 1 (Received from Sewing) has no waiting figure — it is the input pool
           wipWaiting = 0;
         } else {
+          // WAITING = previous stage cumulative total minus this stage cumulative total
           wipWaiting = Math.max(0, prevCumulative - cumulativeQty);
-          if (wipWaiting > maxGap && wipWaiting > 0) {
-            maxGap = wipWaiting;
+          if (wipWaiting > maxWaiting) {
+            maxWaiting = wipWaiting;
             bottleneckStageId = stage.id;
           }
         }
@@ -182,30 +205,33 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         };
       });
 
-      // Mark bottleneck
+      // Mark bottleneck in amber if maxWaiting > 0
       const stageSummaries = summariesWithoutBottleneck.map(s => ({
         ...s,
-        isBottleneck: s.stage.id === bottleneckStageId,
+        isBottleneck: maxWaiting > 0 && s.stage.id === bottleneckStageId,
       }));
 
-      // Received from sewing = stage 1 cumulative output (or 0 if no stages)
+      // Stage 1 cumulative output is Received from Sewing
       const receivedFromSewing = stageSummaries.length > 0 ? stageSummaries[0].cumulativeQty : 0;
 
-      // Calculate sewing completed garments (MINIMUM qty_ok across sewing processes)
-      const styleSewingEntries = sewingEntries.filter(e => e.style_id === style.id);
-      const processTotalsMap = new Map<string, number>();
-      styleSewingEntries.forEach(e => {
-        const cur = processTotalsMap.get(e.process_id) || 0;
-        processTotalsMap.set(e.process_id, cur + (e.qty_ok || 0));
-      });
-
+      // Sewing completed = MINIMUM qty_ok across all of that style's sewing processes, NOT the sum
+      const styleProcesses = sewingProcesses.filter(p => p.style_id === style.id);
       let sewingCompletedQty = 0;
-      if (processTotalsMap.size > 0) {
-        sewingCompletedQty = Math.min(...Array.from(processTotalsMap.values()));
+
+      if (styleProcesses.length > 0) {
+        const processTotals = styleProcesses.map(proc => {
+          return sewingEntries
+            .filter(e => e.style_id === style.id && e.process_id === proc.id)
+            .reduce((sum, e) => sum + (e.qty_ok || 0), 0);
+        });
+        sewingCompletedQty = Math.min(...processTotals);
+      } else {
+        const styleSewingEntries = sewingEntries.filter(e => e.style_id === style.id);
+        sewingCompletedQty = styleSewingEntries.reduce((sum, e) => sum + (e.qty_ok || 0), 0);
       }
 
-      // Skip reconciliation warning for pre-cut styles (requires_cutting = false)
-      const sewingWarning = style.requires_cutting !== false && (receivedFromSewing > sewingCompletedQty && sewingCompletedQty > 0);
+      // Reconcile warning: Trigger if receivedFromSewing > sewingCompletedQty
+      const sewingWarning = style.requires_cutting !== false && (receivedFromSewing > sewingCompletedQty && sewingCompletedQty >= 0);
 
       // Final ready to deliver stage (last stage in pipeline)
       const readyStageSummary = stageSummaries.length > 0 ? stageSummaries[stageSummaries.length - 1] : null;
@@ -216,13 +242,14 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       const totalDispatchedQty = styleDeliveries.reduce((sum, d) => sum + (d.delivered_qty || 0), 0);
       const remainingBalance = Math.max(0, style.order_qty - totalDispatchedQty);
 
+      // Completion percentage of received
       const completionPercent = receivedFromSewing > 0 
         ? Math.min(100, Math.round((readyToDeliverQty / receivedFromSewing) * 100)) 
         : 0;
 
       const totalRework = stageSummaries.reduce((sum, s) => sum + s.totalRework, 0);
       const totalReject = stageSummaries.reduce((sum, s) => sum + s.totalReject, 0);
-      const inReworkCount = totalRework; // Sent for rework, pending re-inspection
+      const inReworkCount = totalRework;
 
       return {
         style,
@@ -240,9 +267,106 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         inReworkCount,
       };
     });
-  }, [styles, allStages, allEntries, deliveries, sewingEntries, selectedStyleId, filterDate]);
+  }, [styles, allStages, allEntries, deliveries, sewingProcesses, sewingEntries, selectedStyleId, filterDate]);
 
-  // Open Daily Entry Form
+  // Open Quick Stage Modal
+  const handleOpenQuickStageModal = (
+    style: GarmentStyle,
+    stage: FinishingStage,
+    stageIdx: number,
+    stageSummaries: StageWipSummary[],
+    sewingCompletedQty: number
+  ) => {
+    setQuickLogStyle(style);
+    setQuickLogStage(stage);
+    setQuickLogStageIdx(stageIdx);
+
+    const currentCum = stageSummaries[stageIdx]?.cumulativeQty || 0;
+    setQuickLogCurrentCumulative(currentCum);
+
+    if (stageIdx === 0) {
+      setQuickLogPrevStageName('Sewing Output');
+      setQuickLogPrevCumulative(sewingCompletedQty);
+      setQuickLogWipWaiting(0);
+      setQuickLogQtyOk('');
+    } else {
+      const prevSummary = stageSummaries[stageIdx - 1];
+      setQuickLogPrevStageName(prevSummary.stage.name);
+      setQuickLogPrevCumulative(prevSummary.cumulativeQty);
+      const waiting = Math.max(0, prevSummary.cumulativeQty - currentCum);
+      setQuickLogWipWaiting(waiting);
+      setQuickLogQtyOk(waiting > 0 ? String(waiting) : '');
+    }
+
+    setQuickLogQtyRework('0');
+    setQuickLogQtyReject('0');
+    setQuickLogWorkerId('');
+    setQuickLogShift('day');
+    setQuickLogNotes('');
+    setQuickLogConfirmExceed(false);
+    setIsQuickLogOpen(true);
+  };
+
+  // Submit Quick Single Stage Entry
+  const handleSaveQuickStageEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickLogStyle || !quickLogStage) return;
+
+    const qtyOk = Number(quickLogQtyOk || 0);
+    const qtyRework = Number(quickLogQtyRework || 0);
+    const qtyReject = Number(quickLogQtyReject || 0);
+
+    if (qtyOk <= 0 && qtyRework <= 0 && qtyReject <= 0) {
+      showErrorToast('Please enter output quantity.');
+      return;
+    }
+
+    const newCumulative = quickLogCurrentCumulative + qtyOk;
+    let isExceeding = false;
+    let warningMsg = '';
+
+    if (quickLogStageIdx > 0) {
+      if (newCumulative > quickLogPrevCumulative) {
+        isExceeding = true;
+        warningMsg = `${quickLogStage.name} cannot exceed the ${quickLogPrevCumulative} pieces received (${quickLogPrevStageName})`;
+      }
+    } else {
+      if (quickLogStyle.requires_cutting !== false && quickLogPrevCumulative > 0 && newCumulative > quickLogPrevCumulative) {
+        isExceeding = true;
+        warningMsg = `Received from Sewing (${newCumulative} pcs) cannot exceed actual sewing output (${quickLogPrevCumulative} pcs)`;
+      }
+    }
+
+    if (isExceeding && !quickLogConfirmExceed) {
+      showErrorToast(warningMsg);
+      return;
+    }
+
+    setQuickLogSaving(true);
+    try {
+      await dataService.saveFinishingEntries([{
+        style_id: quickLogStyle.id,
+        stage_id: quickLogStage.id,
+        worker_id: quickLogWorkerId || null,
+        entry_date: getLocalDateString(),
+        shift: quickLogShift,
+        qty_ok: qtyOk,
+        qty_rework: qtyRework,
+        qty_reject: qtyReject,
+        note: quickLogNotes || null,
+      }]);
+
+      showSuccessToast(`Logged ${qtyOk} pcs output for ${quickLogStage.name}.`);
+      setIsQuickLogOpen(false);
+      await loadData();
+    } catch (err: any) {
+      showErrorToast(`Failed to save output: ${err.message || String(err)}`);
+    } finally {
+      setQuickLogSaving(false);
+    }
+  };
+
+  // Open Daily Entry Form Modal
   const handleOpenEntryModal = (styleId?: string) => {
     const targetId = styleId || (styles.length > 0 ? styles[0].id : '');
     setEntryFormStyleId(targetId);
@@ -298,9 +422,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
     const entriesToSave: Partial<FinishingEntry>[] = [];
     let validationIssue: string | null = null;
 
-    // Calculate existing cumulative output per stage
     const styleEntries = allEntries.filter(e => e.style_id === entryFormStyleId);
-
     let prevStageTotal = Infinity;
 
     for (let i = 0; i < targetStages.length; i++) {
@@ -319,7 +441,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       // Validation check against previous stage
       if (i > 0 && newCumulative > prevStageTotal) {
         const prevStgName = targetStages[i - 1].name;
-        validationIssue = `Stage cumulative output for "${stg.name}" (${newCumulative} pcs) would exceed previous stage "${prevStgName}" (${prevStageTotal} pcs).`;
+        validationIssue = `${stg.name} cannot exceed the ${prevStageTotal} pieces received (${prevStgName})`;
       }
       prevStageTotal = newCumulative;
 
@@ -515,7 +637,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         </div>
 
         <div className="text-stone-500 italic text-[11px]">
-          💡 Note: Finishing output is tracking-only; staff wages are managed via their worker pay type.
+          💡 Note: Finishing output is tracking-only; staff wages are managed via worker pay types.
         </div>
       </div>
 
@@ -554,11 +676,11 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                   </div>
                 </div>
 
-                {/* SUMMARY NUMBERS */}
+                {/* SUMMARY NUMBERS IN HEADER */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase block">Received (Sewing)</span>
-                    <span className="text-sm font-black text-stone-900">{summary.receivedFromSewing.toLocaleString()} pcs</span>
+                  <div className="bg-indigo-50/70 border border-indigo-200 p-2.5 rounded-2xl text-center">
+                    <span className="text-[10px] font-bold text-indigo-700 uppercase block">Received (Sewing)</span>
+                    <span className="text-sm font-black text-indigo-950">{summary.receivedFromSewing.toLocaleString()} pcs</span>
                   </div>
 
                   <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-2xl text-center">
@@ -566,14 +688,14 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                     <span className="text-sm font-black text-emerald-900">{summary.readyToDeliverQty.toLocaleString()} pcs</span>
                   </div>
 
-                  <div className="bg-sky-50 border border-sky-200 p-2.5 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-sky-700 uppercase block">Dispatched</span>
-                    <span className="text-sm font-black text-sky-900">{summary.totalDispatchedQty.toLocaleString()} pcs</span>
+                  <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-2xl text-center">
+                    <span className="text-[10px] font-bold text-amber-800 uppercase block">Finishing Progress</span>
+                    <span className="text-sm font-black text-amber-900">{summary.completionPercent}%</span>
                   </div>
 
-                  <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-amber-800 uppercase block">Order Balance</span>
-                    <span className="text-sm font-black text-amber-900">{summary.remainingBalance.toLocaleString()} pcs</span>
+                  <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-2xl text-center">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase block">Order Balance</span>
+                    <span className="text-sm font-black text-stone-900">{summary.remainingBalance.toLocaleString()} pcs</span>
                   </div>
                 </div>
               </div>
@@ -588,86 +710,143 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                 </div>
               )}
 
-              {/* HORIZONTAL STAGE PIPELINE FLOW */}
+              {/* PIPELINE STAGES LIST */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-stone-600 px-1">
-                  <span>Finishing Stage Pipeline Flow</span>
-                  <span className="text-indigo-700 font-bold">Overall Progress: {summary.completionPercent}%</span>
+                <div className="flex items-center justify-between text-xs font-bold text-stone-700 px-1">
+                  <span className="flex items-center space-x-2">
+                    <Layers className="w-4 h-4 text-indigo-700" />
+                    <span>Finishing Stage Pipeline Flow</span>
+                  </span>
+                  <span className="text-stone-500 font-normal text-[11px]">
+                    Overall Progress: <strong className="text-stone-900 font-bold">{summary.completionPercent}% of received</strong>
+                  </span>
                 </div>
 
-                <div className="overflow-x-auto pb-3 pt-1">
-                  <div className="flex items-stretch min-w-[700px] gap-2">
-                    {summary.stageSummaries.map((stgSummary, idx) => {
-                      return (
-                        <React.Fragment key={stgSummary.stage.id}>
-                          {/* STAGE CARD */}
-                          <div className={`flex-1 rounded-2xl p-3 border transition-all relative flex flex-col justify-between ${
-                            stgSummary.isBottleneck 
-                              ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-400/50 shadow-xs' 
-                              : 'bg-stone-50 border-stone-200'
-                          }`}>
-                            {/* Bottleneck Badge */}
-                            {stgSummary.isBottleneck && (
-                              <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs flex items-center space-x-1">
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>Bottleneck</span>
-                              </div>
-                            )}
+                {/* PIPELINE ROWS */}
+                <div className="space-y-2">
+                  {summary.stageSummaries.map((stgSummary, idx) => {
+                    const isFirstStage = idx === 0;
+                    const prevCumulative = isFirstStage ? summary.receivedFromSewing : summary.stageSummaries[idx - 1].cumulativeQty;
+                    const progressPct = !isFirstStage && prevCumulative > 0 
+                      ? Math.min(100, Math.round((stgSummary.cumulativeQty / prevCumulative) * 100))
+                      : 100;
 
-                            <div>
-                              <div className="flex items-center justify-between text-[11px] font-bold text-stone-500 mb-1">
-                                <span>Stage {idx + 1}</span>
-                                <span className="font-mono text-[9px] bg-white px-1.5 py-0.5 rounded border border-stone-200">
-                                  {stgSummary.stage.code}
-                                </span>
-                              </div>
-                              <h4 className="font-black text-stone-900 text-xs truncate" title={stgSummary.stage.name}>
+                    return (
+                      <div
+                        key={stgSummary.stage.id}
+                        className={`p-3.5 rounded-2xl border transition-all ${
+                          isFirstStage
+                            ? 'bg-indigo-50/40 border-indigo-200/80'
+                            : stgSummary.isBottleneck
+                            ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-400/50 shadow-xs'
+                            : 'bg-stone-50/80 border-stone-200'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          {/* STAGE INFO & DONE / WAITING NUMBERS */}
+                          <div className="flex-1 space-y-1.5">
+                            <div className="flex items-center space-x-2.5">
+                              <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
+                                isFirstStage 
+                                  ? 'bg-indigo-600 text-white' 
+                                  : stgSummary.isBottleneck 
+                                  ? 'bg-amber-600 text-white' 
+                                  : 'bg-stone-200 text-stone-700'
+                              }`}>
+                                {idx + 1}
+                              </span>
+
+                              <h4 className="font-bold text-stone-900 text-sm">
                                 {stgSummary.stage.name}
                               </h4>
+
+                              {isFirstStage && (
+                                <span className="bg-indigo-100 text-indigo-800 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border border-indigo-200">
+                                  Input Pool
+                                </span>
+                              )}
+
+                              {stgSummary.isBottleneck && (
+                                <span className="bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs flex items-center space-x-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  <span>Bottleneck</span>
+                                </span>
+                              )}
                             </div>
 
-                            {/* NUMBERS */}
-                            <div className="mt-3 space-y-1.5 pt-2 border-t border-stone-200/60">
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="text-stone-500 font-medium">Done:</span>
-                                <span className="font-mono font-black text-stone-900">{stgSummary.cumulativeQty.toLocaleString()}</span>
+                            {/* METRICS & PROGRESS BAR */}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                              <span className="font-bold text-stone-800">
+                                <span className="font-mono font-black text-sm text-stone-900">{stgSummary.cumulativeQty.toLocaleString()}</span> done
+                              </span>
+
+                              {!isFirstStage && (
+                                <>
+                                  <span className="text-stone-300">·</span>
+                                  <span className={`font-bold ${stgSummary.wipWaiting > 0 ? 'text-amber-900 font-extrabold' : 'text-stone-400'}`}>
+                                    <span className="font-mono">{stgSummary.wipWaiting.toLocaleString()}</span> waiting
+                                  </span>
+
+                                  <span className="text-stone-300">·</span>
+                                  <span className="text-stone-500 font-mono text-[11px]">
+                                    [{progressPct}%]
+                                  </span>
+                                </>
+                              )}
+                            </div>
+
+                            {/* THIN PROGRESS BAR */}
+                            {!isFirstStage && (
+                              <div className="w-full bg-stone-200/80 rounded-full h-1.5 overflow-hidden mt-1">
+                                <div
+                                  className={`h-full transition-all duration-300 ${
+                                    stgSummary.isBottleneck ? 'bg-amber-500' : 'bg-indigo-600'
+                                  }`}
+                                  style={{ width: `${progressPct}%` }}
+                                />
                               </div>
-
-                              {idx > 0 && (
-                                <div className={`flex justify-between items-center text-xs p-1 rounded-lg ${
-                                  stgSummary.isBottleneck ? 'bg-amber-200/60 text-amber-900 font-bold' : 'bg-stone-200/50 text-stone-700'
-                                }`}>
-                                  <span className="text-[10px] font-bold">WIP Waiting:</span>
-                                  <span className="font-mono font-black">{stgSummary.wipWaiting.toLocaleString()}</span>
-                                </div>
-                              )}
-
-                              {/* QC Stats if QC stage */}
-                              {(stgSummary.stage.code === 'qc' || stgSummary.stage.name.toLowerCase().includes('qc')) && (
-                                <div className="text-[10px] space-y-0.5 pt-1 text-stone-600 font-mono">
-                                  <div className="flex justify-between text-amber-800 font-bold">
-                                    <span>Rework:</span>
-                                    <span>{stgSummary.totalRework}</span>
-                                  </div>
-                                  <div className="flex justify-between text-rose-700 font-bold">
-                                    <span>Reject:</span>
-                                    <span>{stgSummary.totalReject}</span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                            )}
                           </div>
 
-                          {/* Arrow Divider */}
-                          {idx < summary.stageSummaries.length - 1 && (
-                            <div className="flex items-center justify-center text-stone-300 px-0.5">
-                              <ArrowRight className="w-4 h-4" />
-                            </div>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
+                          {/* ACTION BUTTON */}
+                          <div className="shrink-0 flex items-center">
+                            {isFirstStage ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenQuickStageModal(summary.style, stgSummary.stage, idx, summary.stageSummaries, summary.sewingCompletedQty)}
+                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Log Received</span>
+                              </button>
+                            ) : stgSummary.wipWaiting > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenQuickStageModal(summary.style, stgSummary.stage, idx, summary.stageSummaries, summary.sewingCompletedQty)}
+                                className={`px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 ${
+                                  stgSummary.isBottleneck
+                                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                                    : 'bg-indigo-700 hover:bg-indigo-800 text-white'
+                                }`}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Log Output</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="px-3.5 py-2 bg-stone-100 border border-stone-200 text-stone-400 font-medium text-xs rounded-xl cursor-not-allowed flex items-center space-x-1.5"
+                              >
+                                <X className="w-3.5 h-3.5 text-stone-300" />
+                                <span>Nothing waiting</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -690,6 +869,155 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* QUICK SINGLE STAGE LOG MODAL */}
+      {isQuickLogOpen && quickLogStage && quickLogStyle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 backdrop-blur-xs p-3">
+          <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl space-y-0">
+            <div className="p-4 sm:p-5 border-b border-stone-200 flex items-center justify-between bg-stone-50/50">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center font-bold">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-stone-900">Log Output — {quickLogStage.name}</h3>
+                  <p className="text-xs text-stone-500">{quickLogStyle.style_code} • {quickLogStyle.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setIsQuickLogOpen(false)} className="p-2 rounded-xl text-stone-400 hover:text-stone-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuickStageEntry} className="p-4 sm:p-6 space-y-4">
+              {/* CONTEXT SUMMARY BOX */}
+              <div className="bg-stone-50 border border-stone-200 p-3 rounded-2xl text-xs space-y-1">
+                <div className="flex justify-between text-stone-600">
+                  <span>Previous Stage ({quickLogPrevStageName}):</span>
+                  <span className="font-mono font-bold text-stone-900">{quickLogPrevCumulative} pcs</span>
+                </div>
+                <div className="flex justify-between text-stone-600">
+                  <span>Current Stage Completed:</span>
+                  <span className="font-mono font-bold text-stone-900">{quickLogCurrentCumulative} pcs</span>
+                </div>
+                {quickLogStageIdx > 0 && (
+                  <div className="flex justify-between text-amber-900 font-bold pt-1 border-t border-stone-200">
+                    <span>Pieces Waiting at this Stage:</span>
+                    <span className="font-mono">{quickLogWipWaiting} pcs</span>
+                  </div>
+                )}
+              </div>
+
+              {/* QUANTITY INPUT */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Completed OK Qty (pcs)</label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="0"
+                  value={quickLogQtyOk}
+                  onChange={(e) => setQuickLogQtyOk(e.target.value)}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono text-sm font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              {/* EXCEED WARNING & CONFIRMATION */}
+              {(() => {
+                const qtyOk = Number(quickLogQtyOk || 0);
+                const newCum = quickLogCurrentCumulative + qtyOk;
+                const isExceeding = quickLogStageIdx > 0 
+                  ? newCum > quickLogPrevCumulative 
+                  : quickLogStyle.requires_cutting !== false && quickLogPrevCumulative > 0 && newCum > quickLogPrevCumulative;
+
+                if (!isExceeding) return null;
+
+                const msg = quickLogStageIdx > 0
+                  ? `${quickLogStage.name} cannot exceed the ${quickLogPrevCumulative} pieces received`
+                  : `Received from Sewing (${newCum} pcs) cannot exceed actual sewing output (${quickLogPrevCumulative} pcs)`;
+
+                return (
+                  <div className="bg-amber-50 border border-amber-300 p-3 rounded-2xl space-y-2 text-xs text-amber-900">
+                    <div className="flex items-start space-x-2 font-bold">
+                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <span>{msg}</span>
+                    </div>
+                    <label className="flex items-center space-x-2 font-bold cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={quickLogConfirmExceed}
+                        onChange={(e) => setQuickLogConfirmExceed(e.target.checked)}
+                        className="w-4 h-4 text-amber-700 rounded border-stone-300"
+                      />
+                      <span>I confirm logging quantity exceeding previous stage</span>
+                    </label>
+                  </div>
+                );
+              })()}
+
+              {/* WORKER & SHIFT */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Worker (Optional)</label>
+                  <select
+                    value={quickLogWorkerId}
+                    onChange={(e) => setQuickLogWorkerId(e.target.value)}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-900"
+                  >
+                    <option value="">Select Worker...</option>
+                    {finishingWorkers.map(w => (
+                      <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Shift</label>
+                  <select
+                    value={quickLogShift}
+                    onChange={(e) => setQuickLogShift(e.target.value as 'day' | 'night')}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-900"
+                  >
+                    <option value="day">Day Shift</option>
+                    <option value="night">Night Shift</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* NOTES */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Notes (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Batch completed"
+                  value={quickLogNotes}
+                  onChange={(e) => setQuickLogNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900"
+                />
+              </div>
+
+              {/* FOOTER */}
+              <div className="pt-2 border-t border-stone-200 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickLogOpen(false)}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={quickLogSaving}
+                  className="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl text-xs shadow-xs flex items-center space-x-1.5"
+                >
+                  {quickLogSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>{quickLogSaving ? 'Saving...' : 'Save Output'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

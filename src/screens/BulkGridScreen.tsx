@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Table, Save, CheckCircle, AlertCircle, Plus, ArrowRight, UserPlus, Info, RefreshCw, Printer } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
-import { GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, DailyAssignment } from '../types';
+import { GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, DailyAssignment, CuttingEntry } from '../types';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { PrintTallySheetModal } from '../components/PrintTallySheetModal';
+import { isStyleUnlockedForSewing } from '../lib/cuttingGate';
 
 type ScreenId = string;
 
@@ -57,17 +58,22 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role, onNavigate
 
   const loadInitialData = async () => {
     setLoadingData(true);
-    const [stList, wList, setRes] = await Promise.all([
+    const [stList, wList, setRes, cutEntries] = await Promise.all([
       dataService.getStyles(),
       dataService.getWorkers(),
       dataService.getSettings(),
+      dataService.getCuttingEntries(),
     ]);
-    setStyles(stList);
+
+    const activeStyles = stList.filter(s => !s.status || s.status.toLowerCase() === 'active');
+    const unlockedStyles = activeStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
+
+    setStyles(unlockedStyles);
     setWorkers(wList);
     setSettings(setRes);
 
-    if (stList.length > 0) {
-      const firstStyleId = stList[0].id;
+    if (unlockedStyles.length > 0) {
+      const firstStyleId = unlockedStyles[0].id;
       setSelectedStyleId(firstStyleId);
       const pList = await dataService.getProcesses(firstStyleId);
       setProcesses(pList);
@@ -219,7 +225,7 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role, onNavigate
     }
   };
 
-  const currencySymbol = settings?.currency_symbol || '৳';
+  const currencySymbol = settings?.currency_symbol || 'MYR';
   const selectedStyleObj = styles.find(s => s.id === selectedStyleId);
 
   return (

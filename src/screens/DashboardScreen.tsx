@@ -170,7 +170,7 @@ export const DashboardScreen: React.FC = () => {
 
   const chartData = isMobile ? fullChartData.slice(7) : fullChartData;
 
-  const currencySymbol = settings?.currency_symbol || '৳';
+  const currencySymbol = settings?.currency_symbol || 'MYR';
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-12 w-full max-w-full overflow-hidden">

@@ -536,7 +536,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
   const historyStyles = styles.filter(s => s.status === 'completed' || s.status === 'archived');
 
   const totalLabourCost = processes.reduce((sum, p) => sum + Number(p.rate || 0), 0);
-  const currencySymbol = settings?.currency_symbol || '৳';
+  const currencySymbol = settings?.currency_symbol || 'MYR';
 
   // RENDER STYLE CARD COMPONENT
   const renderStyleCard = (st: GarmentStyle) => {

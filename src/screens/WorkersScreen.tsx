@@ -364,7 +364,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
     };
   };
 
-  const currencySymbol = settings?.currency_symbol || '৳';
+  const currencySymbol = settings?.currency_symbol || 'MYR';
 
   return (
     <div className="space-y-6 pb-20">

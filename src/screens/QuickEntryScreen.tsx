@@ -8,10 +8,11 @@ import { useTranslation } from '../lib/i18n';
 import { dataService, getLocalDateString } from '../lib/dataService';
 import { 
   GarmentStyle, GarmentProcess, Worker, ProductionEntry, 
-  FactorySettings, UserRole, DailyAssignment 
+  FactorySettings, UserRole, DailyAssignment, CuttingEntry 
 } from '../types';
 import { DuplicateConfirmModal } from '../components/DuplicateConfirmModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
+import { isStyleUnlockedForSewing } from '../lib/cuttingGate';
 
 interface QuickEntryScreenProps {
   role: UserRole;
@@ -69,17 +70,24 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [assignList, stList, procList, wList, entryList, setts] = await Promise.all([
+      const [assignList, stList, procList, wList, entryList, setts, cutEntries] = await Promise.all([
         dataService.getDailyAssignments(entryDate),
         dataService.getStyles(),
         dataService.getProcesses(),
         dataService.getWorkers(),
         dataService.getProductionEntries(),
         dataService.getSettings(),
+        dataService.getCuttingEntries(),
       ]);
 
-      setAssignments(assignList);
-      setStyles(stList.filter(s => !s.status || s.status.toLowerCase() === 'active'));
+      const activeStyles = stList.filter(s => !s.status || s.status.toLowerCase() === 'active');
+      const unlockedStyles = activeStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
+      const unlockedStyleIds = new Set(unlockedStyles.map(s => s.id));
+
+      const validAssignments = assignList.filter(a => unlockedStyleIds.has(a.style_id));
+
+      setAssignments(validAssignments);
+      setStyles(unlockedStyles);
       setProcesses(procList);
       setWorkers(wList);
       setEntries(entryList);
@@ -87,7 +95,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
       // Initialize drafts map with accumulated saved output from today's production entries
       const initialDrafts = new Map<string, AssignmentEntryDraft>();
-      for (const a of assignList) {
+      for (const a of validAssignments) {
         const savedForAssignment = entryList
           .filter(e => e.worker_id === a.worker_id && e.process_id === a.process_id && e.entry_date === entryDate)
           .reduce((sum, e) => sum + e.qty_ok, 0);
@@ -102,7 +110,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
       }
       setDrafts(initialDrafts);
 
-      if (stList.length > 0) setUnplannedStyleId(stList[0].id);
+      if (unlockedStyles.length > 0) setUnplannedStyleId(unlockedStyles[0].id);
       if (procList.length > 0) setUnplannedProcessId(procList[0].id);
       if (wList.length > 0) setUnplannedWorkerId(wList[0].id);
     } catch (err) {
@@ -112,7 +120,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
     }
   };
 
-  const currencySymbol = settings?.currency_symbol || '৳';
+  const currencySymbol = settings?.currency_symbol || 'MYR';
 
   // Helper to update draft qty
   const updateDraftQty = (assignmentId: string, field: 'qty_ok' | 'qty_rework' | 'qty_reject', delta: number) => {

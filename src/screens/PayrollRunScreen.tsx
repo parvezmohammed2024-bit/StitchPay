@@ -76,7 +76,7 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
     await loadPayrollData();
   };
 
-  const currencySymbol = settings?.currency_symbol || '৳';
+  const currencySymbol = settings?.currency_symbol || 'MYR';
   const totalPayrollCost = payrollLines.reduce((sum, l) => sum + l.net_payable, 0);
   const totalPiecesDone = payrollLines.reduce((sum, l) => sum + l.pieces_total, 0);
   const totalTopup = payrollLines.reduce((sum, l) => sum + (l.minimum_wage_topup || 0), 0);
@@ -179,7 +179,7 @@ export const PayrollRunScreen: React.FC<PayrollRunScreenProps> = ({ role }) => {
         <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between">
           <span className="text-xs text-stone-600 uppercase font-bold tracking-wider">Min Wage Top-up Total</span>
           <div className="text-2xl font-black text-amber-800 font-mono tracking-tight mt-1 tabular-nums">
-            {currencySymbol}{totalTopup.toFixed(2)}
+            {currencySymbol}{(Number(totalTopup) || 0).toFixed(2)}
           </div>
         </div>
       </div>
