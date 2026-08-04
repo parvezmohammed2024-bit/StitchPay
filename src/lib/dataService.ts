@@ -4,7 +4,7 @@ import {
   FactorySettings, UserRole, DailyAssignment, RateBid,
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
-  MgmtOrderOverviewRecord, MgmtUserRecord
+  MgmtOrderOverviewRecord, MgmtUserRecord, StyleSize, StyleSizeBreakdownRow
 } from '../types';
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
@@ -60,6 +60,7 @@ class DataService {
   private finishingEntries: FinishingEntry[] = [];
   private cuttingEntries: CuttingEntry[] = [];
   private samples: GarmentSample[] = [];
+  private styleSizes: StyleSize[] = [];
   private finishingListeners: Set<() => void> = new Set();
   private payrollPeriod: PayrollPeriod = {
     id: 'pp-2026-w31',
@@ -543,6 +544,126 @@ class DataService {
     }
   }
 
+  // --- STYLE SIZES & BREAKDOWN ---
+  public async getStyleSizes(styleId: string): Promise<StyleSize[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('style_sizes')
+          .select('*')
+          .eq('style_id', styleId)
+          .order('seq_no', { ascending: true });
+        if (!error && data) {
+          return data as StyleSize[];
+        }
+      } catch (err) {
+        console.warn('Error fetching style_sizes:', err);
+      }
+    }
+    return (this.styleSizes || []).filter(s => s.style_id === styleId).sort((a, b) => a.seq_no - b.seq_no);
+  }
+
+  public async saveStyleSizes(styleId: string, sizes: { size: string; order_qty: number; seq_no?: number }[]): Promise<StyleSize[]> {
+    const prepared: StyleSize[] = sizes
+      .filter(s => s.size && s.size.trim().length > 0)
+      .map((s, index) => ({
+        id: crypto.randomUUID(),
+        style_id: styleId,
+        size: s.size.trim(),
+        order_qty: Number(s.order_qty) || 0,
+        seq_no: s.seq_no ?? (index + 1),
+      }));
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('style_sizes').delete().eq('style_id', styleId);
+        if (prepared.length > 0) {
+          const insertPayload = prepared.map(p => ({
+            style_id: p.style_id,
+            size: p.size,
+            seq_no: p.seq_no,
+            order_qty: p.order_qty,
+          }));
+          await supabase.from('style_sizes').insert(insertPayload);
+        }
+      } catch (err) {
+        console.warn('Error saving style_sizes to Supabase:', err);
+      }
+    }
+
+    this.styleSizes = (this.styleSizes || []).filter(s => s.style_id !== styleId).concat(prepared);
+    return prepared;
+  }
+
+  public async getStyleSizeBreakdown(styleId: string): Promise<StyleSizeBreakdownRow[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('rpt_size_breakdown', { p_style_id: styleId });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any, idx: number) => {
+            const orderQty = Number(item.order_qty || item.ordered || 0);
+            const cutQty = Number(item.cut_qty || item.cut || 0);
+            const readyQty = Number(item.ready_qty || item.ready || 0);
+            return {
+              size: item.size || 'N/A',
+              seq_no: item.seq_no !== undefined ? Number(item.seq_no) : (idx + 1),
+              order_qty: orderQty,
+              cut_qty: cutQty,
+              ready_qty: readyQty,
+              cut_balance: item.cut_balance !== undefined ? Number(item.cut_balance) : (orderQty - cutQty),
+              ready_balance: item.ready_balance !== undefined ? Number(item.ready_balance) : (orderQty - readyQty),
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('RPC rpt_size_breakdown failed or unavailable, using fallback:', err);
+      }
+    }
+
+    const sizes = await this.getStyleSizes(styleId);
+    if (sizes.length === 0) return [];
+
+    const cuttingEntries = await this.getCuttingEntries(styleId);
+    const finishingEntries = await this.getFinishingEntries({ styleId });
+
+    const stages = await this.getFinishingStages(styleId);
+    const readyStages = stages.filter(s => s.code === 'ready');
+    const readyStageIds = new Set(readyStages.map(s => s.id));
+
+    const cutMap = new Map<string, number>();
+    cuttingEntries.forEach(c => {
+      if (c.size) {
+        const szKey = c.size.trim().toLowerCase();
+        cutMap.set(szKey, (cutMap.get(szKey) || 0) + Number(c.pieces_cut || 0));
+      }
+    });
+
+    const readyMap = new Map<string, number>();
+    finishingEntries.forEach(f => {
+      if (f.size && f.stage_id && readyStageIds.has(f.stage_id)) {
+        const szKey = f.size.trim().toLowerCase();
+        readyMap.set(szKey, (readyMap.get(szKey) || 0) + Number(f.qty_ok || 0));
+      }
+    });
+
+    return sizes.map(s => {
+      const szKey = s.size.trim().toLowerCase();
+      const cutQty = cutMap.get(szKey) || 0;
+      const readyQty = readyMap.get(szKey) || 0;
+      const orderQty = s.order_qty || 0;
+      return {
+        size: s.size,
+        seq_no: s.seq_no,
+        order_qty: orderQty,
+        cut_qty: cutQty,
+        ready_qty: readyQty,
+        cut_balance: orderQty - cutQty,
+        ready_balance: orderQty - readyQty,
+      };
+    });
+  }
+
   public async getProcesses(styleId?: string): Promise<GarmentProcess[]> {
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.from('processes').select('*').order('seq_no', { ascending: true });
@@ -954,6 +1075,7 @@ class DataService {
             style_id: d.style_id,
             cut_type: d.cut_type || 'bulk',
             pieces_cut: Number(d.qty_cut ?? d.pieces_cut ?? 0),
+            size: d.size || null,
             tables_layers: d.lay_id || d.tables_layers || null,
             worker_id: d.worker_id || null,
             notes: d.note || d.notes || null,
@@ -1011,7 +1133,7 @@ class DataService {
         entry_date: entryDate,
         style_id: entry.style_id,
         lay_id: (entry as any).lay_id || null,
-        size: (entry as any).size || 'ALL',
+        size: entry.size || (entry as any).size || null,
         color: (entry as any).color || null,
         qty_cut: qtyCut,
         qty_reject: qtyReject,
@@ -1042,6 +1164,7 @@ class DataService {
       style_id: entry.style_id!,
       cut_type: cutTypeVal,
       pieces_cut: qtyCut,
+      size: entry.size || (entry as any).size || null,
       tables_layers: entry.tables_layers || null,
       worker_id: entry.worker_id || null,
       notes: notesText,
@@ -2190,6 +2313,7 @@ class DataService {
         shift: entry.shift || 'day',
         entered_by: isValidUUID(entry.entered_by) ? entry.entered_by : null,
         note: entry.note || null,
+        size: entry.size || null,
       });
     }
 
@@ -2222,6 +2346,7 @@ class DataService {
         shift: p.shift,
         entered_by: p.entered_by,
         note: p.note,
+        size: p.size || null,
         created_at: new Date().toISOString(),
       };
       this.finishingEntries.push(newEntry);

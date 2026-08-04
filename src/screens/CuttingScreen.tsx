@@ -7,7 +7,7 @@ import {
 import { dataService } from '../lib/dataService';
 import { 
   GarmentStyle, CuttingEntry, GarmentSample, Worker, 
-  UserRole, SampleType, SampleStatus, CutType 
+  UserRole, SampleType, SampleStatus, CutType, StyleSize, StyleSizeBreakdownRow 
 } from '../types';
 import { showSuccessToast, showErrorToast } from '../lib/toast';
 
@@ -37,11 +37,13 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   const [editingSample, setEditingSample] = useState<GarmentSample | null>(null);
 
   // Cut Form
+  const [availableSizes, setAvailableSizes] = useState<StyleSize[]>([]);
   const [cutForm, setCutForm] = useState({
     style_id: '',
     cut_type: 'bulk' as CutType,
     entry_date: new Date().toISOString().split('T')[0],
     pieces_cut: '',
+    size: '',
     tables_layers: '',
     worker_id: '',
     notes: ''
@@ -189,6 +191,21 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   }, [styles, bulkCutMap, sampleCutMap]);
 
   // Handle Save Cutting Entry
+  useEffect(() => {
+    if (cutForm.style_id) {
+      dataService.getStyleSizes(cutForm.style_id).then(sizes => {
+        setAvailableSizes(sizes);
+        if (sizes.length > 0) {
+          setCutForm(prev => ({ ...prev, size: sizes[0].size }));
+        } else {
+          setCutForm(prev => ({ ...prev, size: '' }));
+        }
+      });
+    } else {
+      setAvailableSizes([]);
+    }
+  }, [cutForm.style_id]);
+
   const handleSaveCutEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cutForm.style_id) {
@@ -212,6 +229,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
         cut_type: cutForm.cut_type,
         entry_date: cutForm.entry_date,
         pieces_cut: qty,
+        size: cutForm.size || null,
         tables_layers: cutForm.tables_layers || null,
         worker_id: cutForm.worker_id || null,
         notes: cutForm.notes || null,
@@ -853,19 +871,48 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   />
                 </div>
 
-                {/* Pieces Cut */}
+                {/* Size Field */}
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Pieces Cut (Qty) *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    placeholder="e.g. 500"
-                    value={cutForm.pieces_cut}
-                    onChange={e => setCutForm(prev => ({ ...prev, pieces_cut: e.target.value }))}
-                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                  />
+                  <label className="block font-bold text-stone-700 mb-1">
+                    Size {availableSizes.length > 0 ? '*' : '(Free Text)'}
+                  </label>
+                  {availableSizes.length > 0 ? (
+                    <select
+                      required
+                      value={cutForm.size || ''}
+                      onChange={e => setCutForm(prev => ({ ...prev, size: e.target.value }))}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                    >
+                      {availableSizes.map(sz => (
+                        <option key={sz.size} value={sz.size}>
+                          {sz.size} (Order: {sz.order_qty} pcs)
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. S, M, L, XL"
+                      value={cutForm.size || ''}
+                      onChange={e => setCutForm(prev => ({ ...prev, size: e.target.value }))}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                    />
+                  )}
                 </div>
+              </div>
+
+              {/* Pieces Cut */}
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">Pieces Cut (Qty) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="e.g. 500"
+                  value={cutForm.pieces_cut}
+                  onChange={e => setCutForm(prev => ({ ...prev, pieces_cut: e.target.value }))}
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1134,6 +1181,17 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, hasPPApprov
   const percent = Math.min(100, Math.round((style.bulk_cut / (style.order_qty || 1)) * 100));
   const piecesPending = Math.max(0, style.order_qty - style.bulk_cut);
 
+  // Size breakdown table state
+  const [sizeBreakdown, setSizeBreakdown] = useState<StyleSizeBreakdownRow[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    dataService.getStyleSizeBreakdown(style.id).then(res => {
+      if (isMounted) setSizeBreakdown(res);
+    });
+    return () => { isMounted = false; };
+  }, [style.id, style.bulk_cut]);
+
   // PP Warning logic: started bulk cutting (or in progress) without approved PP sample!
   const showPPRisk = style.bulk_cut > 0 && !hasPPApproval;
 
@@ -1233,6 +1291,48 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, hasPPApprov
           </div>
         </div>
       </div>
+
+      {/* SIZE BREAKDOWN TABLE (IF EXISTS) */}
+      {sizeBreakdown.length > 0 && (
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 space-y-1.5 text-xs">
+          <div className="text-[10px] font-black text-stone-500 uppercase tracking-wider flex items-center justify-between border-b border-stone-200 pb-1">
+            <span>Size</span>
+            <span>Ordered / Cut / Balance</span>
+          </div>
+          <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5">
+            {sizeBreakdown.map(sb => {
+              const overCut = sb.cut_qty > sb.order_qty ? sb.cut_qty - sb.order_qty : 0;
+              return (
+                <div 
+                  key={sb.size} 
+                  className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${
+                    overCut > 0 ? 'bg-amber-100/80 text-amber-950 font-bold border border-amber-300' : 'bg-white border border-stone-200 text-stone-800'
+                  }`}
+                >
+                  <span className="font-mono font-black text-stone-900 px-1.5 py-0.5 bg-stone-100 border border-stone-300 rounded text-[11px]">
+                    {sb.size}
+                  </span>
+
+                  <div className="flex items-center space-x-2 text-[11px] font-mono">
+                    <span className="text-stone-500">{sb.order_qty} ord</span>
+                    <span className="text-indigo-700 font-bold">{sb.cut_qty} cut</span>
+                    <span className={sb.cut_balance < 0 ? 'text-amber-800 font-extrabold' : 'text-stone-600'}>
+                      {sb.cut_balance} bal
+                    </span>
+                  </div>
+
+                  {overCut > 0 && (
+                    <span className="text-[10px] font-extrabold bg-amber-200/90 text-amber-950 border border-amber-400 px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                      <AlertTriangle className="w-3 h-3 text-amber-700 shrink-0" />
+                      <span>Over-cut by {overCut} pcs</span>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Footer: Sample Cut & Action Button */}
       <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-xs">

@@ -37,6 +37,10 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
   const [sourceStyleId, setSourceStyleId] = useState<string>('');
   const [csvText, setCsvText] = useState('');
 
+  // Size breakdown states
+  const [enableSizeBreakdown, setEnableSizeBreakdown] = useState<boolean>(false);
+  const [sizeRows, setSizeRows] = useState<{ id: string; size: string; order_qty: number }[]>([]);
+
   // Inline date editing on card
   const [editingDateStyleId, setEditingDateStyleId] = useState<string | null>(null);
   const [inlineDates, setInlineDates] = useState<{ start_date: string; target_ship_date: string }>({ start_date: '', target_ship_date: '' });
@@ -97,6 +101,13 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       image_url: null,
       requires_cutting: true,
     });
+    setEnableSizeBreakdown(false);
+    setSizeRows([
+      { id: '1', size: 'S', order_qty: 2500 },
+      { id: '2', size: 'M', order_qty: 3500 },
+      { id: '3', size: 'L', order_qty: 2500 },
+      { id: '4', size: 'XL', order_qty: 1500 },
+    ]);
     setShowStyleModal(true);
   };
 
@@ -114,6 +125,24 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       status: st.status,
       image_url: st.image_url,
       requires_cutting: st.requires_cutting !== false,
+    });
+    dataService.getStyleSizes(st.id).then(existing => {
+      if (existing && existing.length > 0) {
+        setEnableSizeBreakdown(true);
+        setSizeRows(existing.map(s => ({
+          id: s.id || crypto.randomUUID(),
+          size: s.size,
+          order_qty: s.order_qty,
+        })));
+      } else {
+        setEnableSizeBreakdown(false);
+        setSizeRows([
+          { id: '1', size: 'S', order_qty: Math.round(st.order_qty * 0.25) },
+          { id: '2', size: 'M', order_qty: Math.round(st.order_qty * 0.35) },
+          { id: '3', size: 'L', order_qty: Math.round(st.order_qty * 0.25) },
+          { id: '4', size: 'XL', order_qty: Math.round(st.order_qty * 0.15) },
+        ]);
+      }
     });
     setShowStyleModal(true);
   };
@@ -243,6 +272,18 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
         ...styleForm,
         id: editingStyleId || styleForm.id,
       });
+
+      if (enableSizeBreakdown) {
+        const validSizes = sizeRows.filter(r => r.size && r.size.trim().length > 0);
+        await dataService.saveStyleSizes(saved.id, validSizes.map((r, i) => ({
+          size: r.size.trim(),
+          order_qty: Number(r.order_qty) || 0,
+          seq_no: i + 1,
+        })));
+      } else {
+        await dataService.saveStyleSizes(saved.id, []);
+      }
+
       showSuccessToast(editingStyleId ? `Style ${saved.style_code} updated successfully.` : `Style ${saved.style_code} created as ${saved.status}.`);
       setShowStyleModal(false);
       setEditingStyleId(null);
@@ -1838,6 +1879,94 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   <option value="completed">Completed</option>
                   <option value="archived">Archived</option>
                 </select>
+              </div>
+
+              {/* SIZE BREAKDOWN OPTIONAL SECTION */}
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-stone-900 block">Size breakdown</span>
+                    <span className="text-[11px] text-stone-500 block">Optional size breakdown by ratio / order qty</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={enableSizeBreakdown}
+                      onChange={e => setEnableSizeBreakdown(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-700"></div>
+                  </label>
+                </div>
+
+                {enableSizeBreakdown && (
+                  <div className="space-y-2.5 pt-2 border-t border-stone-200">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-stone-600 uppercase tracking-wider px-1">
+                      <span>Size (Label)</span>
+                      <span>Order Qty</span>
+                    </div>
+
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {sizeRows.map((row, idx) => (
+                        <div key={row.id} className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-stone-400 w-4 text-center">{idx + 1}</span>
+                          <input
+                            type="text"
+                            placeholder="Size e.g. S, M, 38"
+                            value={row.size}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setSizeRows(prev => prev.map((r, i) => i === idx ? { ...r, size: val } : r));
+                            }}
+                            className="flex-1 bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-stone-900"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            value={row.order_qty || ''}
+                            onChange={e => {
+                              const val = parseInt(e.target.value) || 0;
+                              setSizeRows(prev => prev.map((r, i) => i === idx ? { ...r, order_qty: val } : r));
+                            }}
+                            className="w-24 bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-stone-900 text-right"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSizeRows(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-stone-400 hover:text-rose-600 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setSizeRows(prev => [...prev, { id: crypto.randomUUID(), size: '', order_qty: 0 }])}
+                        className="text-xs font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Size</span>
+                      </button>
+
+                      <div className="text-xs font-mono font-bold text-stone-800">
+                        Sizes Total: <span className="text-indigo-700">{sizeRows.reduce((sum, r) => sum + (Number(r.order_qty) || 0), 0)}</span>
+                      </div>
+                    </div>
+
+                    {/* Warning if total size quantities don't match order_qty */}
+                    {sizeRows.reduce((sum, r) => sum + (Number(r.order_qty) || 0), 0) !== (styleForm.order_qty || 0) && (
+                      <div className="flex items-center gap-2 text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-2.5 mt-1">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          Sizes total {sizeRows.reduce((sum, r) => sum + (Number(r.order_qty) || 0), 0)} but order qty is {styleForm.order_qty}.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Requires Cutting In-House Toggle */}

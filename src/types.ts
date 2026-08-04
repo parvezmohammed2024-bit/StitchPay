@@ -238,6 +238,7 @@ export interface FinishingEntry {
   shift: 'day' | 'night';
   entered_by?: string | null;
   note?: string | null;
+  size?: string | null;
   created_at?: string;
   // Joined fields for UI
   worker_name?: string;
@@ -314,6 +315,7 @@ export interface CuttingEntry {
   style_id: string;
   cut_type: CutType;
   pieces_cut: number;
+  size?: string | null;
   tables_layers?: string | null;
   worker_id?: string | null;
   notes?: string | null;
@@ -322,6 +324,24 @@ export interface CuttingEntry {
   style_code?: string;
   style_name?: string;
   worker_name?: string;
+}
+
+export interface StyleSize {
+  id?: string;
+  style_id: string;
+  size: string;
+  seq_no: number;
+  order_qty: number;
+}
+
+export interface StyleSizeBreakdownRow {
+  size: string;
+  seq_no?: number;
+  order_qty: number;
+  cut_qty: number;
+  ready_qty: number;
+  cut_balance: number;
+  ready_balance: number;
 }
 
 export type SampleType = 'Proto' | 'Fit' | 'Size Set' | 'PP' | 'Photo' | 'Salesman' | 'TOP' | 'Counter';

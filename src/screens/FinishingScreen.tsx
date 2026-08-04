@@ -8,7 +8,7 @@ import { dataService, getLocalDateString } from '../lib/dataService';
 import { showErrorToast, showSuccessToast } from '../lib/toast';
 import { 
   GarmentStyle, FinishingStage, FinishingEntry, Worker, 
-  DeliveryReport, UserRole, FactorySettings, GarmentProcess, ProductionEntry 
+  DeliveryReport, UserRole, FactorySettings, GarmentProcess, ProductionEntry, StyleSize, StyleSizeBreakdownRow 
 } from '../types';
 import { StyleImage } from '../components/StyleImage';
 
@@ -42,6 +42,61 @@ interface StyleFinishingSummary {
   inReworkCount: number;
 }
 
+const FinishingSizeTable: React.FC<{ styleId: string }> = ({ styleId }) => {
+  const [breakdown, setBreakdown] = useState<StyleSizeBreakdownRow[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    dataService.getStyleSizeBreakdown(styleId).then(rows => {
+      if (isMounted) setBreakdown(rows);
+    });
+    return () => { isMounted = false; };
+  }, [styleId]);
+
+  if (!breakdown || breakdown.length === 0) return null;
+
+  return (
+    <div className="bg-stone-50/80 border border-stone-200 rounded-2xl p-3 space-y-2 text-xs">
+      <div className="flex items-center justify-between border-b border-stone-200 pb-1.5">
+        <span className="font-extrabold text-stone-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+          <Truck className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Ready to Deliver — Size Breakdown</span>
+        </span>
+        <span className="text-[10px] text-stone-500 font-medium">Size / Ordered / Ready / Balance</span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+        {breakdown.map(sb => {
+          const isOverReady = sb.ready_qty > sb.order_qty;
+          return (
+            <div 
+              key={sb.size}
+              className={`p-2 rounded-xl border flex flex-col justify-between font-mono text-xs ${
+                isOverReady 
+                  ? 'bg-amber-50 border-amber-300 text-amber-950 font-bold' 
+                  : 'bg-white border-stone-200 text-stone-800'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-black text-stone-900 bg-stone-100 border border-stone-300 rounded px-1.5 py-0.5 text-[11px]">
+                  {sb.size}
+                </span>
+                <span className="text-[10px] text-stone-400">{sb.order_qty} ord</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 text-[11px]">
+                <span className="text-emerald-700 font-extrabold">{sb.ready_qty} ready</span>
+                <span className={`text-[10px] font-black ${sb.ready_balance < 0 ? 'text-amber-800' : sb.ready_balance === 0 ? 'text-emerald-600' : 'text-stone-500'}`}>
+                  {sb.ready_balance < 0 ? `+${Math.abs(sb.ready_balance)} over` : `${sb.ready_balance} bal`}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNavigate }) => {
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
   const [allStages, setAllStages] = useState<FinishingStage[]>([]);
@@ -68,7 +123,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const [entryDate, setEntryDate] = useState<string>(getLocalDateString());
   const [entryShift, setEntryShift] = useState<'day' | 'night'>('day');
   const [entryNotes, setEntryNotes] = useState<string>('');
-  const [stageInputs, setStageInputs] = useState<Record<string, { qty_ok: string; qty_rework: string; qty_reject: string; worker_id: string }>>({});
+  const [stageInputs, setStageInputs] = useState<Record<string, { qty_ok: string; qty_rework: string; qty_reject: string; worker_id: string; size?: string }>>({});
   const [outOfSeqWarning, setOutOfSeqWarning] = useState<string | null>(null);
   const [confirmOutOfSeq, setConfirmOutOfSeq] = useState<boolean>(false);
   const [savingEntries, setSavingEntries] = useState<boolean>(false);
@@ -88,6 +143,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const [quickLogWorkerId, setQuickLogWorkerId] = useState<string>('');
   const [quickLogShift, setQuickLogShift] = useState<'day' | 'night'>('day');
   const [quickLogNotes, setQuickLogNotes] = useState<string>('');
+  const [quickLogSizes, setQuickLogSizes] = useState<StyleSize[]>([]);
+  const [quickLogSize, setQuickLogSize] = useState<string>('');
   const [quickLogConfirmExceed, setQuickLogConfirmExceed] = useState<boolean>(false);
   const [quickLogSaving, setQuickLogSaving] = useState<boolean>(false);
 
@@ -270,7 +327,18 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   }, [styles, allStages, allEntries, deliveries, sewingProcesses, sewingEntries, selectedStyleId, filterDate]);
 
   // Open Quick Stage Modal
-  const handleOpenQuickStageModal = (
+  const isStageReady = (stage: FinishingStage, styleStages: FinishingStage[]) => {
+    if (stage.code === 'ready' || stage.name.toLowerCase().includes('ready')) return true;
+    const activeStages = styleStages
+      .filter(s => s.style_id === stage.style_id && s.is_active !== false)
+      .sort((a, b) => a.seq_no - b.seq_no);
+    if (activeStages.length > 0 && activeStages[activeStages.length - 1].id === stage.id) {
+      return true;
+    }
+    return false;
+  };
+
+  const handleOpenQuickStageModal = async (
     style: GarmentStyle,
     stage: FinishingStage,
     stageIdx: number,
@@ -296,6 +364,17 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       const waiting = Math.max(0, prevSummary.cumulativeQty - currentCum);
       setQuickLogWipWaiting(waiting);
       setQuickLogQtyOk(waiting > 0 ? String(waiting) : '');
+    }
+
+    // Check if ready stage for size breakdown
+    const isReady = isStageReady(stage, allStages);
+    if (isReady) {
+      const sizes = await dataService.getStyleSizes(style.id);
+      setQuickLogSizes(sizes);
+      setQuickLogSize(sizes.length > 0 ? sizes[0].size : '');
+    } else {
+      setQuickLogSizes([]);
+      setQuickLogSize('');
     }
 
     setQuickLogQtyRework('0');
@@ -342,6 +421,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       return;
     }
 
+    const isReady = isStageReady(quickLogStage, allStages);
+
     setQuickLogSaving(true);
     try {
       await dataService.saveFinishingEntries([{
@@ -353,6 +434,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         qty_ok: qtyOk,
         qty_rework: qtyRework,
         qty_reject: qtyReject,
+        size: isReady ? (quickLogSize || null) : null,
         note: quickLogNotes || null,
       }]);
 
@@ -366,6 +448,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
     }
   };
 
+  const [entryStyleSizes, setEntryStyleSizes] = useState<StyleSize[]>([]);
+
   // Open Daily Entry Form Modal
   const handleOpenEntryModal = (styleId?: string) => {
     const targetId = styleId || (styles.length > 0 ? styles[0].id : '');
@@ -376,16 +460,25 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
     setOutOfSeqWarning(null);
     setConfirmOutOfSeq(false);
 
-    // Initialize inputs for target style stages
-    const targetStages = allStages
-      .filter(s => s.style_id === targetId && s.is_active !== false)
-      .sort((a, b) => a.seq_no - b.seq_no);
+    dataService.getStyleSizes(targetId).then(sizes => {
+      setEntryStyleSizes(sizes);
+      const targetStages = allStages
+        .filter(s => s.style_id === targetId && s.is_active !== false)
+        .sort((a, b) => a.seq_no - b.seq_no);
 
-    const initialInputs: Record<string, { qty_ok: string; qty_rework: string; qty_reject: string; worker_id: string }> = {};
-    targetStages.forEach(stg => {
-      initialInputs[stg.id] = { qty_ok: '', qty_rework: '', qty_reject: '', worker_id: '' };
+      const initialInputs: Record<string, { qty_ok: string; qty_rework: string; qty_reject: string; worker_id: string; size?: string }> = {};
+      targetStages.forEach(stg => {
+        const isReady = isStageReady(stg, targetStages);
+        initialInputs[stg.id] = { 
+          qty_ok: '', 
+          qty_rework: '', 
+          qty_reject: '', 
+          worker_id: '',
+          size: isReady && sizes.length > 0 ? sizes[0].size : '' 
+        };
+      });
+      setStageInputs(initialInputs);
     });
-    setStageInputs(initialInputs);
 
     setIsEntryModalOpen(true);
   };
@@ -396,15 +489,25 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
     setOutOfSeqWarning(null);
     setConfirmOutOfSeq(false);
 
-    const targetStages = allStages
-      .filter(s => s.style_id === styleId && s.is_active !== false)
-      .sort((a, b) => a.seq_no - b.seq_no);
+    dataService.getStyleSizes(styleId).then(sizes => {
+      setEntryStyleSizes(sizes);
+      const targetStages = allStages
+        .filter(s => s.style_id === styleId && s.is_active !== false)
+        .sort((a, b) => a.seq_no - b.seq_no);
 
-    const initialInputs: Record<string, { qty_ok: string; qty_rework: string; qty_reject: string; worker_id: string }> = {};
-    targetStages.forEach(stg => {
-      initialInputs[stg.id] = { qty_ok: '', qty_rework: '', qty_reject: '', worker_id: '' };
+      const initialInputs: Record<string, { qty_ok: string; qty_rework: string; qty_reject: string; worker_id: string; size?: string }> = {};
+      targetStages.forEach(stg => {
+        const isReady = isStageReady(stg, targetStages);
+        initialInputs[stg.id] = { 
+          qty_ok: '', 
+          qty_rework: '', 
+          qty_reject: '', 
+          worker_id: '',
+          size: isReady && sizes.length > 0 ? sizes[0].size : '' 
+        };
+      });
+      setStageInputs(initialInputs);
     });
-    setStageInputs(initialInputs);
   };
 
   // Submit Daily Finishing Entry
@@ -446,6 +549,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       prevStageTotal = newCumulative;
 
       if (qtyOk > 0 || qtyRework > 0 || qtyReject > 0) {
+        const isReady = isStageReady(stg, targetStages);
         entriesToSave.push({
           style_id: entryFormStyleId,
           stage_id: stg.id,
@@ -455,6 +559,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
           qty_ok: qtyOk,
           qty_rework: qtyRework,
           qty_reject: qtyReject,
+          size: isReady ? (inp.size || null) : null,
           note: entryNotes || null,
           entered_by: null,
         });
@@ -850,6 +955,9 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                 </div>
               </div>
 
+              {/* SIZE BREAKDOWN TABLE (FOR READY TO DELIVER) */}
+              <FinishingSizeTable styleId={summary.style.id} />
+
               {/* QC & REWORK SUMMARY BAR */}
               <div className="bg-stone-50 border border-stone-200 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex items-center space-x-4">
@@ -910,18 +1018,50 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                 )}
               </div>
 
-              {/* QUANTITY INPUT */}
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Completed OK Qty (pcs)</label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="0"
-                  value={quickLogQtyOk}
-                  onChange={(e) => setQuickLogQtyOk(e.target.value)}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono text-sm font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  required
-                />
+              {/* QUANTITY & SIZE INPUT */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Completed OK Qty (pcs) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="0"
+                    value={quickLogQtyOk}
+                    onChange={(e) => setQuickLogQtyOk(e.target.value)}
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-mono text-sm font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+
+                {isStageReady(quickLogStage, allStages) && (
+                  <div>
+                    <label className="block text-xs font-bold text-stone-700 mb-1">
+                      Size {quickLogSizes.length > 0 ? '*' : '(Free Text)'}
+                    </label>
+                    {quickLogSizes.length > 0 ? (
+                      <select
+                        required
+                        value={quickLogSize}
+                        onChange={(e) => setQuickLogSize(e.target.value)}
+                        className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-bold text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        {quickLogSizes.map(sz => (
+                          <option key={sz.size} value={sz.size}>
+                            {sz.size} (Order: {sz.order_qty} pcs)
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="e.g. S, M, L, XL"
+                        value={quickLogSize}
+                        onChange={(e) => setQuickLogSize(e.target.value)}
+                        className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl font-bold text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* EXCEED WARNING & CONFIRMATION */}
@@ -1097,15 +1237,24 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                       .filter(s => s.style_id === entryFormStyleId && s.is_active !== false)
                       .sort((a, b) => a.seq_no - b.seq_no)
                       .map((stg, idx) => {
-                        const inp = stageInputs[stg.id] || { qty_ok: '', qty_rework: '', qty_reject: '', worker_id: '' };
+                        const targetStages = allStages
+                          .filter(s => s.style_id === entryFormStyleId && s.is_active !== false)
+                          .sort((a, b) => a.seq_no - b.seq_no);
+                        const isReady = isStageReady(stg, targetStages);
+                        const inp = stageInputs[stg.id] || { qty_ok: '', qty_rework: '', qty_reject: '', worker_id: '', size: '' };
                         const isQc = stg.code === 'qc' || stg.name.toLowerCase().includes('qc');
 
                         return (
                           <div key={stg.id} className="p-3 bg-stone-50/60 space-y-2">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="font-bold text-stone-900 text-xs">
-                                <span className="text-stone-500 font-mono mr-1.5">{idx + 1}.</span>
+                              <div className="font-bold text-stone-900 text-xs flex items-center space-x-2">
+                                <span className="text-stone-500 font-mono">{idx + 1}.</span>
                                 <span>{stg.name}</span>
+                                {isReady && (
+                                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border border-emerald-200">
+                                    Final / Ready Stage
+                                  </span>
+                                )}
                               </div>
 
                               {/* Worker Assignment Dropdown */}
@@ -1126,7 +1275,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                               </select>
                             </div>
 
-                            {/* Quantity Inputs */}
+                            {/* Quantity & Size Inputs */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                               <div>
                                 <span className="text-[10px] font-bold text-stone-500 block">Completed OK Qty</span>
@@ -1146,6 +1295,45 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                                   className="w-full px-3 py-1.5 bg-white border border-stone-300 rounded-xl font-mono font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                               </div>
+
+                              {isReady && (
+                                <div>
+                                  <span className="text-[10px] font-bold text-stone-600 block">
+                                    Size {entryStyleSizes.length > 0 ? '*' : '(Free Text)'}
+                                  </span>
+                                  {entryStyleSizes.length > 0 ? (
+                                    <select
+                                      value={inp.size || (entryStyleSizes[0]?.size || '')}
+                                      onChange={(e) => {
+                                        setStageInputs({
+                                          ...stageInputs,
+                                          [stg.id]: { ...inp, size: e.target.value }
+                                        });
+                                      }}
+                                      className="w-full px-3 py-1.5 bg-white border border-stone-300 rounded-xl font-bold text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                      {entryStyleSizes.map(sz => (
+                                        <option key={sz.size} value={sz.size}>
+                                          {sz.size} ({sz.order_qty} pcs)
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. S, M, L"
+                                      value={inp.size || ''}
+                                      onChange={(e) => {
+                                        setStageInputs({
+                                          ...stageInputs,
+                                          [stg.id]: { ...inp, size: e.target.value }
+                                        });
+                                      }}
+                                      className="w-full px-3 py-1.5 bg-white border border-stone-300 rounded-xl font-bold text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                  )}
+                                </div>
+                              )}
 
                               {isQc && (
                                 <>

@@ -7,7 +7,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianG
 import * as XLSX from 'xlsx';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { dataService } from '../lib/dataService';
-import { GarmentStyle, GarmentProcess, Worker, FactorySettings, CuttingEntry, ProductionEntry, FinishingEntry } from '../types';
+import { GarmentStyle, GarmentProcess, Worker, FactorySettings, CuttingEntry, ProductionEntry, FinishingEntry, StyleSizeBreakdownRow } from '../types';
 
 export interface StyleReportSummary {
   order_qty: number;
@@ -77,6 +77,7 @@ export const StyleReportScreen: React.FC = () => {
   const [dailyData, setDailyData] = useState<StyleReportDaily[]>([]);
   const [processData, setProcessData] = useState<StyleReportProcess[]>([]);
   const [workerData, setWorkerData] = useState<StyleReportWorker[]>([]);
+  const [sizeBreakdown, setSizeBreakdown] = useState<StyleSizeBreakdownRow[]>([]);
 
   const currencySymbol = settings?.currency_symbol || 'MYR';
 
@@ -276,6 +277,10 @@ export const StyleReportScreen: React.FC = () => {
     setDailyData(dailyRes || []);
     setProcessData(procRes || []);
     setWorkerData(wrkRes || []);
+
+    const sbData = await dataService.getStyleSizeBreakdown(styleId);
+    setSizeBreakdown(sbData || []);
+
     setLoading(false);
   };
 
@@ -509,6 +514,20 @@ export const StyleReportScreen: React.FC = () => {
     }));
     const wsWrk = XLSX.utils.json_to_sheet(wrkSheetData);
     XLSX.utils.book_append_sheet(wb, wsWrk, 'Workers');
+
+    // 5. Size Breakdown Sheet (if present)
+    if (sizeBreakdown && sizeBreakdown.length > 0) {
+      const sbSheetData = sizeBreakdown.map(sb => ({
+        Size: sb.size,
+        'Order Qty': sb.order_qty,
+        'Cut Qty': sb.cut_qty,
+        'Ready to Deliver Qty': sb.ready_qty,
+        'Cut Balance': sb.cut_balance,
+        'Ready Balance': sb.ready_balance,
+      }));
+      const wsSb = XLSX.utils.json_to_sheet(sbSheetData);
+      XLSX.utils.book_append_sheet(wb, wsSb, 'Size Breakdown');
+    }
 
     const fileName = `StitchPay_${selectedStyle.style_code}_${fromStr}_${toStr}.xlsx`;
     XLSX.writeFile(wb, fileName);
@@ -850,6 +869,89 @@ export const StyleReportScreen: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SIZE BREAKDOWN SECTION */}
+      {sizeBreakdown && sizeBreakdown.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-base font-bold text-stone-900 flex items-center space-x-2">
+                <Scissors className="w-4 h-4 text-sky-700" />
+                <span>Size Breakdown Analysis</span>
+              </h3>
+              <p className="text-xs text-stone-500">
+                Size level tracking for Order Qty, Cutting Output, Ready to Deliver & Balances.
+              </p>
+            </div>
+            <div className="text-xs font-bold text-stone-600 bg-stone-100 px-3 py-1 rounded-xl border border-stone-200 self-start sm:self-auto">
+              Total Sizes: {sizeBreakdown.length}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto border border-stone-200 rounded-xl">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-stone-50 border-b border-stone-200 font-bold text-stone-700 text-[10px] uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">Size</th>
+                  <th className="py-3 px-3 text-right">Order Qty</th>
+                  <th className="py-3 px-3 text-right">Cut Qty</th>
+                  <th className="py-3 px-3 text-right">Cut Balance</th>
+                  <th className="py-3 px-3 text-right">Ready to Deliver</th>
+                  <th className="py-3 px-3 text-right">Ready Balance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100 font-mono">
+                {sizeBreakdown.map((sb) => {
+                  const isOverCut = sb.cut_qty > sb.order_qty;
+                  const isOverReady = sb.ready_qty > sb.order_qty;
+                  return (
+                    <tr key={sb.size} className="hover:bg-stone-50/80">
+                      <td className="py-2.5 px-4 font-bold font-sans text-stone-900">
+                        <span className="bg-stone-100 border border-stone-200 px-2 py-0.5 rounded text-xs font-mono font-black">
+                          {sb.size}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold text-stone-900">{sb.order_qty.toLocaleString()}</td>
+                      <td className={`py-2.5 px-3 text-right font-bold ${isOverCut ? 'text-amber-800' : 'text-sky-800'}`}>
+                        {sb.cut_qty.toLocaleString()}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-bold ${sb.cut_balance < 0 ? 'text-amber-800' : sb.cut_balance === 0 ? 'text-emerald-700' : 'text-stone-600'}`}>
+                        {sb.cut_balance < 0 ? `+${Math.abs(sb.cut_balance)} over` : sb.cut_balance.toLocaleString()}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-bold ${isOverReady ? 'text-amber-800' : 'text-emerald-800'}`}>
+                        {sb.ready_qty.toLocaleString()}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-bold ${sb.ready_balance < 0 ? 'text-amber-800' : sb.ready_balance === 0 ? 'text-emerald-700' : 'text-stone-600'}`}>
+                        {sb.ready_balance < 0 ? `+${Math.abs(sb.ready_balance)} over` : sb.ready_balance.toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-stone-50/90 border-t-2 border-stone-200 font-bold text-stone-900 text-xs">
+                <tr>
+                  <td className="py-2.5 px-4 font-bold font-sans">Total</td>
+                  <td className="py-2.5 px-3 text-right font-mono font-black">
+                    {sizeBreakdown.reduce((sum, s) => sum + s.order_qty, 0).toLocaleString()}
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono font-black text-sky-800">
+                    {sizeBreakdown.reduce((sum, s) => sum + s.cut_qty, 0).toLocaleString()}
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono font-black">
+                    {sizeBreakdown.reduce((sum, s) => sum + s.cut_balance, 0).toLocaleString()}
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-800">
+                    {sizeBreakdown.reduce((sum, s) => sum + s.ready_qty, 0).toLocaleString()}
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono font-black">
+                    {sizeBreakdown.reduce((sum, s) => sum + s.ready_balance, 0).toLocaleString()}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div>
       )}
