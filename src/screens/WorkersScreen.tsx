@@ -757,7 +757,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                   </label>
                   <select
                     required
-                    value={workerForm.section}
+                    value={workerForm.section || 'Sewing'}
                     onChange={e => setWorkerForm({ ...workerForm, section: e.target.value })}
                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-900 focus:outline-none focus:border-indigo-600"
                   >
@@ -773,7 +773,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                   </label>
                   <input
                     type="text"
-                    value={workerForm.line_no}
+                    value={workerForm.line_no || ''}
                     onChange={e => setWorkerForm({ ...workerForm, line_no: e.target.value })}
                     placeholder="e.g. Line-01"
                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3.5 py-2.5 text-sm text-stone-900 focus:outline-none focus:border-indigo-600"
@@ -790,7 +790,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                   type="tel"
                   inputMode="numeric"
                   required
-                  value={workerForm.phone}
+                  value={workerForm.phone || ''}
                   onChange={e => setWorkerForm({ ...workerForm, phone: e.target.value })}
                   placeholder="e.g. 0123456789 or +60123456789"
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3.5 py-2.5 text-sm text-stone-900 focus:outline-none focus:border-indigo-600"
@@ -804,7 +804,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                   Pay Type <span className="text-rose-700">*</span>
                 </label>
                 <select
-                  value={workerForm.pay_type}
+                  value={workerForm.pay_type || 'piece_rate'}
                   onChange={e => setWorkerForm({ ...workerForm, pay_type: e.target.value as any })}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-900 font-bold focus:outline-none focus:border-indigo-600"
                 >
@@ -823,7 +823,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                     type="number"
                     required
                     min="1"
-                    value={workerForm.monthly_salary}
+                    value={workerForm.monthly_salary ?? ''}
                     onChange={e => setWorkerForm({ ...workerForm, monthly_salary: parseFloat(e.target.value) || 0 })}
                     placeholder="e.g. 15000"
                     className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-base font-mono font-bold text-amber-900 focus:outline-none focus:border-amber-700"
@@ -840,7 +840,7 @@ export const WorkersScreen: React.FC<WorkersScreenProps> = ({ role }) => {
                   Payment Method
                 </label>
                 <select
-                  value={workerForm.payment_method}
+                  value={workerForm.payment_method || 'mobile_wallet'}
                   onChange={e => setWorkerForm({ ...workerForm, payment_method: e.target.value as any })}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-900 focus:outline-none focus:border-indigo-600"
                 >

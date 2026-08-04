@@ -112,6 +112,14 @@ export interface MgmtUserRecord {
   phone?: string;
 }
 
+export interface TodaySectionRow {
+  section: string;
+  style_code: string;
+  style_name?: string;
+  qty: number;
+  detail?: string | null;
+}
+
 export interface GarmentProcess {
   id: string;
   style_id: string;

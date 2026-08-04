@@ -658,7 +658,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                       <label className="text-[10px] text-stone-600 block font-medium">Start Date</label>
                       <input
                         type="date"
-                        value={inlineDates.start_date}
+                        value={inlineDates.start_date || ''}
                         onChange={e => setInlineDates({ ...inlineDates, start_date: e.target.value })}
                         className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs text-stone-900"
                       />
@@ -667,7 +667,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                       <label className="text-[10px] text-stone-600 block font-medium">Ship Date</label>
                       <input
                         type="date"
-                        value={inlineDates.target_ship_date}
+                        value={inlineDates.target_ship_date || ''}
                         onChange={e => setInlineDates({ ...inlineDates, target_ship_date: e.target.value })}
                         className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1 text-xs text-stone-900"
                       />
@@ -1703,7 +1703,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 <input
                   type="text"
                   required
-                  value={cloneForm.name}
+                  value={cloneForm.name || ''}
                   onChange={e => setCloneForm({ ...cloneForm, name: e.target.value })}
                   placeholder="e.g. Men's Formal Shirt (Repeat Order)"
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1"
@@ -1714,7 +1714,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 <label className="text-xs text-stone-700 font-medium">Buyer Name</label>
                 <input
                   type="text"
-                  value={cloneForm.buyer_name}
+                  value={cloneForm.buyer_name || ''}
                   onChange={e => setCloneForm({ ...cloneForm, buyer_name: e.target.value })}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1"
                 />
@@ -1724,7 +1724,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 <label className="text-xs text-stone-700 font-medium">Order Quantity (pcs)</label>
                 <input
                   type="number"
-                  value={cloneForm.order_qty}
+                  value={cloneForm.order_qty ?? ''}
                   onChange={e => setCloneForm({ ...cloneForm, order_qty: parseInt(e.target.value) || 0 })}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 font-mono mt-1"
                 />

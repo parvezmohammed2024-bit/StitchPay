@@ -922,7 +922,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   <input
                     type="text"
                     placeholder="e.g. Table 1, 100 layers"
-                    value={cutForm.tables_layers}
+                    value={cutForm.tables_layers || ''}
                     onChange={e => setCutForm(prev => ({ ...prev, tables_layers: e.target.value }))}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                   />
@@ -932,7 +932,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">Cutter Operator</label>
                   <select
-                    value={cutForm.worker_id}
+                    value={cutForm.worker_id || ''}
                     onChange={e => setCutForm(prev => ({ ...prev, worker_id: e.target.value }))}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                   >
@@ -952,7 +952,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                 <textarea
                   rows={2}
                   placeholder="Optional notes..."
-                  value={cutForm.notes}
+                  value={cutForm.notes || ''}
                   onChange={e => setCutForm(prev => ({ ...prev, notes: e.target.value }))}
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                 />
@@ -1073,7 +1073,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   <input
                     type="text"
                     placeholder="e.g. M"
-                    value={sampleForm.size}
+                    value={sampleForm.size || ''}
                     onChange={e => setSampleForm(prev => ({ ...prev, size: e.target.value }))}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-amber-500 focus:bg-white"
                   />
@@ -1085,7 +1085,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   <input
                     type="text"
                     placeholder="e.g. Indigo"
-                    value={sampleForm.colour}
+                    value={sampleForm.colour || ''}
                     onChange={e => setSampleForm(prev => ({ ...prev, colour: e.target.value }))}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-amber-500 focus:bg-white"
                   />
@@ -1098,7 +1098,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   <label className="block font-bold text-stone-700 mb-1">Requested Date</label>
                   <input
                     type="date"
-                    value={sampleForm.requested_date}
+                    value={sampleForm.requested_date || ''}
                     onChange={e => setSampleForm(prev => ({ ...prev, requested_date: e.target.value }))}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-amber-500 focus:bg-white"
                   />
@@ -1109,7 +1109,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   <label className="block font-bold text-stone-700 mb-1">Submitted Date</label>
                   <input
                     type="date"
-                    value={sampleForm.submitted_date}
+                    value={sampleForm.submitted_date || ''}
                     onChange={e => setSampleForm(prev => ({ ...prev, submitted_date: e.target.value }))}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-amber-500 focus:bg-white"
                   />
@@ -1122,7 +1122,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                 <textarea
                   rows={2}
                   placeholder="Enter buyer comments, fit adjustments or approval instructions..."
-                  value={sampleForm.buyer_feedback}
+                  value={sampleForm.buyer_feedback || ''}
                   onChange={e => setSampleForm(prev => ({ ...prev, buyer_feedback: e.target.value }))}
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-amber-500 focus:bg-white"
                 />

@@ -85,7 +85,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
               <label className="text-xs font-semibold text-stone-600">Factory Name</label>
               <input
                 type="text"
-                value={settings.factory_name}
+                value={settings.factory_name || ''}
                 onChange={e => setSettings({ ...settings, factory_name: e.target.value })}
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1"
               />
@@ -95,7 +95,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
               <label className="text-xs font-semibold text-stone-600">Currency Symbol</label>
               <input
                 type="text"
-                value={settings.currency_symbol}
+                value={settings.currency_symbol || ''}
                 onChange={e => setSettings({ ...settings, currency_symbol: e.target.value })}
                 placeholder="e.g. MYR, RM, $, €"
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1 font-mono font-bold"
@@ -117,7 +117,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
                 type="number"
                 min="0"
                 max="100"
-                value={settings.rework_pay_percent}
+                value={settings.rework_pay_percent ?? ''}
                 onChange={e => setSettings({ ...settings, rework_pay_percent: parseFloat(e.target.value) || 0 })}
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-amber-800 font-mono font-bold mt-1"
               />
@@ -130,7 +130,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
                 type="number"
                 min="0"
                 max="100"
-                value={settings.reject_pay_percent}
+                value={settings.reject_pay_percent ?? ''}
                 onChange={e => setSettings({ ...settings, reject_pay_percent: parseFloat(e.target.value) || 0 })}
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-rose-700 font-mono font-bold mt-1"
               />
@@ -162,7 +162,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
             <label className="text-xs font-semibold text-stone-600">Minimum Wage per Day ({settings.currency_symbol})</label>
             <input
               type="number"
-              value={settings.minimum_wage_per_day}
+              value={settings.minimum_wage_per_day ?? ''}
               onChange={e => setSettings({ ...settings, minimum_wage_per_day: parseFloat(e.target.value) || 0 })}
               className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-emerald-800 font-mono font-bold mt-1"
             />

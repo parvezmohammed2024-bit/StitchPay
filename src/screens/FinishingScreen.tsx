@@ -1404,7 +1404,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                   <input
                     type="text"
                     placeholder="e.g. Batch #4 thread cutting delayed due to machine maintenance"
-                    value={entryNotes}
+                    value={entryNotes || ''}
                     onChange={(e) => setEntryNotes(e.target.value)}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-900"
                   />
@@ -1506,7 +1506,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                     <input
                       type="text"
                       placeholder="e.g. Dhaka Metro-T-11-2049"
-                      value={dispatchVehicle}
+                      value={dispatchVehicle || ''}
                       onChange={(e) => setDispatchVehicle(e.target.value)}
                       className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-900"
                     />
@@ -1517,7 +1517,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                     <input
                       type="text"
                       placeholder="e.g. Rahim Uddin"
-                      value={dispatchDriver}
+                      value={dispatchDriver || ''}
                       onChange={(e) => setDispatchDriver(e.target.value)}
                       className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-900"
                     />
@@ -1529,7 +1529,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                   <input
                     type="text"
                     placeholder="e.g. Buyer Port Warehouse, Chittagong"
-                    value={dispatchDestination}
+                    value={dispatchDestination || ''}
                     onChange={(e) => setDispatchDestination(e.target.value)}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-900"
                   />

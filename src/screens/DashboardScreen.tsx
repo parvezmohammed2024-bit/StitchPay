@@ -6,35 +6,37 @@ import {
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from 'recharts';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
-import { ProductionEntry, GarmentStyle, Worker, FactorySettings, DailyAssignment, GarmentProcess } from '../types';
+import { ProductionEntry, GarmentStyle, Worker, FactorySettings, DailyAssignment, GarmentProcess, TodaySectionRow } from '../types';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { StyleImage } from '../components/StyleImage';
+import { TodaysPerformanceSection } from '../components/TodaysPerformanceSection';
 
 export const DashboardScreen: React.FC = () => {
   const { t } = useTranslation();
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [entries, setEntries] = useState<ProductionEntry[]>([]);
   const [styles, setStyles] = useState<GarmentStyle[]>([]);
   const [processes, setProcesses] = useState<GarmentProcess[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [assignments, setAssignments] = useState<DailyAssignment[]>([]);
+  const [todaySections, setTodaySections] = useState<TodaySectionRow[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [selectedDate]);
 
   const loadDashboardData = async () => {
     setLoading(true);
-    const [eList, sList, pList, wList, aList, setRes] = await Promise.all([
+    const [eList, sList, pList, wList, aList, setRes, secList] = await Promise.all([
       dataService.getProductionEntries(),
       dataService.getStyles(),
       dataService.getProcesses(),
       dataService.getWorkers(),
-      dataService.getDailyAssignments(todayStr),
+      dataService.getDailyAssignments(selectedDate),
       dataService.getSettings(),
+      dataService.getRptTodaySections(selectedDate),
     ]);
     setEntries(eList);
     setStyles(sList);
@@ -42,10 +44,11 @@ export const DashboardScreen: React.FC = () => {
     setWorkers(wList);
     setAssignments(aList);
     setSettings(setRes);
+    setTodaySections(secList);
     setLoading(false);
   };
 
-  const todayEntries = entries.filter(e => e.entry_date === todayStr);
+  const todayEntries = entries.filter(e => e.entry_date === selectedDate);
 
   const todayPieces = todayEntries.reduce((sum, e) => sum + e.qty_ok, 0);
   const todayWageCost = todayEntries.reduce((sum, e) => sum + e.amount, 0);
@@ -179,8 +182,8 @@ export const DashboardScreen: React.FC = () => {
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
             <span>Production Overview</span>
-            <span className="text-xs font-normal text-stone-600 bg-stone-100 px-2.5 py-1 rounded-full border border-stone-200">
-              {todayStr}
+            <span className="text-xs font-normal text-stone-600 bg-stone-100 px-2.5 py-1 rounded-full border border-stone-200 font-mono">
+              {selectedDate}
             </span>
           </h1>
           <p className="text-xs text-stone-600">Live floor line setup, bottleneck operations & payroll metrics</p>
@@ -248,6 +251,16 @@ export const DashboardScreen: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* TODAY'S PERFORMANCE SECTION */}
+      <TodaysPerformanceSection
+        rows={todaySections}
+        loading={loading}
+        theme="light"
+        title="Today's Performance"
+        selectedDate={selectedDate}
+        onDateChange={setSelectedDate}
+      />
 
       {/* BOTTLENECK ANALYSIS & NOT STARTED WORKERS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

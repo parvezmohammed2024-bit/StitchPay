@@ -1865,7 +1865,7 @@ export const WorkerPortalScreen: React.FC = () => {
                   required
                   min="1"
                   placeholder="e.g. 150"
-                  value={finishingForm.qty_ok}
+                  value={finishingForm.qty_ok ?? ''}
                   onChange={(e) => setFinishingForm(prev => ({ ...prev, qty_ok: e.target.value }))}
                   className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-2.5 text-lg font-black text-stone-900 focus:outline-none focus:border-purple-700"
                 />
@@ -1877,7 +1877,7 @@ export const WorkerPortalScreen: React.FC = () => {
                   <input
                     type="number"
                     min="0"
-                    value={finishingForm.qty_rework}
+                    value={finishingForm.qty_rework ?? ''}
                     onChange={(e) => setFinishingForm(prev => ({ ...prev, qty_rework: e.target.value }))}
                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
                   />
@@ -1887,7 +1887,7 @@ export const WorkerPortalScreen: React.FC = () => {
                   <input
                     type="number"
                     min="0"
-                    value={finishingForm.qty_reject}
+                    value={finishingForm.qty_reject ?? ''}
                     onChange={(e) => setFinishingForm(prev => ({ ...prev, qty_reject: e.target.value }))}
                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none"
                   />
@@ -1899,7 +1899,7 @@ export const WorkerPortalScreen: React.FC = () => {
                 <input
                   type="text"
                   placeholder="e.g. Thread trimming completed for Table 2"
-                  value={finishingForm.note}
+                  value={finishingForm.note || ''}
                   onChange={(e) => setFinishingForm(prev => ({ ...prev, note: e.target.value }))}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium text-stone-900 focus:outline-none"
                 />
@@ -1994,7 +1994,7 @@ export const WorkerPortalScreen: React.FC = () => {
                   required
                   min="1"
                   placeholder="e.g. 500"
-                  value={cuttingForm.pieces_cut}
+                  value={cuttingForm.pieces_cut ?? ''}
                   onChange={(e) => setCuttingForm(prev => ({ ...prev, pieces_cut: e.target.value }))}
                   className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-2.5 text-lg font-black text-stone-900 focus:outline-none focus:border-indigo-700"
                 />
@@ -2005,7 +2005,7 @@ export const WorkerPortalScreen: React.FC = () => {
                 <input
                   type="text"
                   placeholder="e.g. Table 1, 40 layers"
-                  value={cuttingForm.tables_layers}
+                  value={cuttingForm.tables_layers || ''}
                   onChange={(e) => setCuttingForm(prev => ({ ...prev, tables_layers: e.target.value }))}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium text-stone-900 focus:outline-none"
                 />
@@ -2016,7 +2016,7 @@ export const WorkerPortalScreen: React.FC = () => {
                 <input
                   type="text"
                   placeholder="e.g. Front/Back panels cut"
-                  value={cuttingForm.notes}
+                  value={cuttingForm.notes || ''}
                   onChange={(e) => setCuttingForm(prev => ({ ...prev, notes: e.target.value }))}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-medium text-stone-900 focus:outline-none"
                 />

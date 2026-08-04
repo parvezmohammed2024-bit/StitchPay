@@ -511,7 +511,7 @@ export const DeliveriesScreen: React.FC = () => {
                   <input
                     type="text"
                     placeholder="e.g. DHAKA-METRO-TA-1122"
-                    value={vehicleNo}
+                    value={vehicleNo || ''}
                     onChange={(e) => setVehicleNo(e.target.value)}
                     className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                   />
@@ -522,7 +522,7 @@ export const DeliveriesScreen: React.FC = () => {
                   <input
                     type="text"
                     placeholder="e.g. Mohammad Ali"
-                    value={driverName}
+                    value={driverName || ''}
                     onChange={(e) => setDriverName(e.target.value)}
                     className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                   />
@@ -534,7 +534,7 @@ export const DeliveriesScreen: React.FC = () => {
                 <input
                   type="text"
                   placeholder="e.g. Chittagong Port Depot / Apex Warehouse"
-                  value={destination}
+                  value={destination || ''}
                   onChange={(e) => setDestination(e.target.value)}
                   className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 />
@@ -545,7 +545,7 @@ export const DeliveriesScreen: React.FC = () => {
                 <textarea
                   rows={2}
                   placeholder="e.g. Quality inspection certificate attached, carton 1-25"
-                  value={notes}
+                  value={notes || ''}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 ></textarea>

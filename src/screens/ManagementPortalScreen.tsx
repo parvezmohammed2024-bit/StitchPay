@@ -5,8 +5,9 @@ import {
   RefreshCw, LayoutDashboard, BarChart3, AlertCircle, Clock, CheckCircle2, Phone, Lock
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
-import { StyleFinancialRecord, MgmtValueTodayRecord, MgmtOrderOverviewRecord, FactorySettings } from '../types';
+import { StyleFinancialRecord, MgmtValueTodayRecord, MgmtOrderOverviewRecord, FactorySettings, TodaySectionRow } from '../types';
 import { FooterCredit } from '../components/FooterCredit';
+import { TodaysPerformanceSection } from '../components/TodaysPerformanceSection';
 
 export const ManagementPortalScreen: React.FC = () => {
   // Authentication State
@@ -30,6 +31,7 @@ export const ManagementPortalScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [valueToday, setValueToday] = useState<MgmtValueTodayRecord | null>(null);
   const [overviewOrders, setOverviewOrders] = useState<MgmtOrderOverviewRecord[]>([]);
+  const [todaySections, setTodaySections] = useState<TodaySectionRow[]>([]);
 
   // Reports Data State
   const [fromDate, setFromDate] = useState<string>('');
@@ -57,12 +59,14 @@ export const ManagementPortalScreen: React.FC = () => {
     setLoadingData(true);
     try {
       if (activeTab === 'dashboard') {
-        const [todayRes, overviewRes] = await Promise.all([
+        const [todayRes, overviewRes, sectionsRes] = await Promise.all([
           dataService.getMgmtValueToday(userToken, selectedDate),
           dataService.getMgmtOverview(userToken),
+          dataService.getMgmtTodaySections(userToken, selectedDate),
         ]);
         setValueToday(todayRes);
         setOverviewOrders(overviewRes);
+        setTodaySections(sectionsRes);
       } else {
         const finRes = await dataService.getMgmtFinancials(userToken, fromDate || null, toDate || null);
         setFinancials(finRes);
@@ -404,6 +408,16 @@ export const ManagementPortalScreen: React.FC = () => {
                 </p>
               </div>
             </div>
+
+            {/* Today's Performance Section */}
+            <TodaysPerformanceSection
+              rows={todaySections}
+              loading={loadingData}
+              theme="dark"
+              title="Today's Performance"
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+            />
 
             {/* Active Orders List */}
             <div className="bg-stone-800 border border-stone-700/80 rounded-3xl p-5 sm:p-6 shadow-md space-y-4">

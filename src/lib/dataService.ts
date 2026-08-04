@@ -4,7 +4,7 @@ import {
   FactorySettings, UserRole, DailyAssignment, RateBid,
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
-  MgmtOrderOverviewRecord, MgmtUserRecord, StyleSize, StyleSizeBreakdownRow
+  MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow
 } from '../types';
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
@@ -2675,6 +2675,135 @@ class DataService {
         status: st.status || 'active',
       });
     }
+
+    return results;
+  }
+
+  public async getMgmtTodaySections(
+    pToken: string,
+    pDate?: string | null
+  ): Promise<TodaySectionRow[]> {
+    const targetDate = pDate || getLocalDateString();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('mgmt_today_sections', {
+          p_token: pToken,
+          p_date: targetDate,
+        });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            section: item.section || 'Cutting',
+            style_code: item.style_code || item.code || 'Style',
+            style_name: item.style_name || item.name || '',
+            qty: Number(item.qty || item.pieces || 0),
+            detail: item.detail || null,
+          }));
+        }
+      } catch (err) {
+        console.warn('RPC mgmt_today_sections call failed, using fallback:', err);
+      }
+    }
+
+    return this.getFallbackTodaySections(targetDate);
+  }
+
+  public async getRptTodaySections(pDate?: string | null): Promise<TodaySectionRow[]> {
+    const targetDate = pDate || getLocalDateString();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('rpt_today_sections', {
+          p_date: targetDate,
+        });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            section: item.section || 'Cutting',
+            style_code: item.style_code || item.code || 'Style',
+            style_name: item.style_name || item.name || '',
+            qty: Number(item.qty || item.pieces || 0),
+            detail: item.detail || null,
+          }));
+        }
+      } catch (err) {
+        console.warn('RPC rpt_today_sections call failed, using fallback:', err);
+      }
+    }
+
+    return this.getFallbackTodaySections(targetDate);
+  }
+
+  private async getFallbackTodaySections(targetDate: string): Promise<TodaySectionRow[]> {
+    const results: TodaySectionRow[] = [];
+    const styles = await this.getStyles();
+    const styleMap = new Map(styles.map(s => [s.id, s]));
+
+    // 1. Cutting
+    const allCutEntries = await this.getCuttingEntries();
+    const cutEntries = allCutEntries.filter(c => c.entry_date === targetDate);
+    const cutByStyle = new Map<string, { qty: number; sizes: Set<string> }>();
+    cutEntries.forEach(c => {
+      const cur = cutByStyle.get(c.style_id) || { qty: 0, sizes: new Set() };
+      cur.qty += Number(c.pieces_cut || 0);
+      if (c.size) cur.sizes.add(c.size);
+      cutByStyle.set(c.style_id, cur);
+    });
+
+    cutByStyle.forEach((val, styleId) => {
+      const st = styleMap.get(styleId);
+      const sizesStr = Array.from(val.sizes).join(', ');
+      results.push({
+        section: 'Cutting',
+        style_code: st?.style_code || 'Style',
+        style_name: st?.name || '',
+        qty: val.qty,
+        detail: sizesStr ? `Sizes: ${sizesStr}` : null,
+      });
+    });
+
+    // 2. Production (sewing entries)
+    const prodEntries = (await this.getProductionEntries()).filter(e => e.entry_date === targetDate);
+    const prodByStyle = new Map<string, { qty: number; workers: Set<string> }>();
+    prodEntries.forEach(p => {
+      const cur = prodByStyle.get(p.style_id) || { qty: 0, workers: new Set() };
+      cur.qty += Number(p.qty_ok || 0);
+      if (p.worker_id) cur.workers.add(p.worker_id);
+      prodByStyle.set(p.style_id, cur);
+    });
+
+    prodByStyle.forEach((val, styleId) => {
+      const st = styleMap.get(styleId);
+      const workerCount = val.workers.size;
+      results.push({
+        section: 'Production',
+        style_code: st?.style_code || 'Style',
+        style_name: st?.name || '',
+        qty: val.qty,
+        detail: `${workerCount} ${workerCount === 1 ? 'worker' : 'workers'}`,
+      });
+    });
+
+    // 3. Finishing
+    const finEntries = await this.getFinishingEntries({ date: targetDate });
+    const finByStyle = new Map<string, { qty: number; stages: Set<string> }>();
+    finEntries.forEach(f => {
+      const cur = finByStyle.get(f.style_id) || { qty: 0, stages: new Set() };
+      cur.qty += Number(f.qty_ok || 0);
+      if (f.stage_name) cur.stages.add(f.stage_name);
+      finByStyle.set(f.style_id, cur);
+    });
+
+    finByStyle.forEach((val, styleId) => {
+      const st = styleMap.get(styleId);
+      const stagesStr = Array.from(val.stages).join(', ');
+      results.push({
+        section: 'Finishing',
+        style_code: st?.style_code || 'Style',
+        style_name: st?.name || '',
+        qty: val.qty,
+        detail: stagesStr ? `Stages: ${stagesStr}` : null,
+      });
+    });
 
     return results;
   }

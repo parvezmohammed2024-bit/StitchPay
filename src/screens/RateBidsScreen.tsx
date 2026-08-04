@@ -435,7 +435,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
                 Note for Supervisor / Worker
               </label>
               <textarea
-                value={counterModal.note}
+                value={counterModal.note || ''}
                 onChange={(e) => setCounterModal({ ...counterModal, note: e.target.value })}
                 rows={2}
                 placeholder="Reason for counter offer..."
@@ -513,7 +513,7 @@ export const RateBidsScreen: React.FC<RateBidsScreenProps> = ({ role }) => {
             <div>
               <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Reason / Technical Justification</label>
               <textarea
-                value={newBidReason}
+                value={newBidReason || ''}
                 onChange={(e) => setNewBidReason(e.target.value)}
                 rows={3}
                 placeholder="Reason for piece rate bid..."
