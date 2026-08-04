@@ -79,6 +79,7 @@ export interface StyleFinancialRecord {
   price?: number;
   selling_price?: number | null;
   garments_sewn: number;
+  received_in_finishing?: number;
   ready_to_deliver: number;
   production_value: number;
   deliverable_value: number;
@@ -388,3 +389,14 @@ export interface FactorySettings {
   minimum_wage_per_day: number;
   enable_minimum_wage_topup: boolean;
 }
+
+export interface AvailableToReceiveRow {
+  style_id: string;
+  style_code: string;
+  style_name?: string;
+  received_stage_id: string;
+  garments_sewn: number;
+  already_received: number;
+  available: number;
+}
+

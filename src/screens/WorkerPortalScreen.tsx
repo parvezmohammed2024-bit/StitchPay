@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserCheck, Clock, Pause, Square, Scissors, TrendingUp, CheckCircle2, 
   Zap, Trophy, Calendar, Crown, DollarSign, LogOut, Key, ShieldAlert,
-  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check, Lock
+  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check, Lock, PackageCheck
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { dataService } from '../lib/dataService';
@@ -10,6 +10,7 @@ import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyl
 import { RateBiddingModal } from '../components/RateBiddingModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { FooterCredit } from '../components/FooterCredit';
+import { ReceiveFromSewingView } from '../components/ReceiveFromSewingView';
 
 export const WorkerPortalScreen: React.FC = () => {
   // PWA Install Prompt State
@@ -112,6 +113,7 @@ export const WorkerPortalScreen: React.FC = () => {
 
   // Finishing Modal & Form
   const [isFinishingModalOpen, setIsFinishingModalOpen] = useState(false);
+  const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
   const [submittingFinishing, setSubmittingFinishing] = useState(false);
   const [finishingForm, setFinishingForm] = useState({
     style_id: '',
@@ -1207,25 +1209,37 @@ export const WorkerPortalScreen: React.FC = () => {
                 </div>
 
                 {isFinishingWorker ? (
-                  <button
-                    onClick={() => {
-                      setFinishingForm({
-                        style_id: garmentStyles[0]?.id || '',
-                        stage_id: allFinishingStages[0]?.id || '',
-                        entry_date: new Date().toISOString().split('T')[0],
-                        shift: 'day',
-                        qty_ok: '',
-                        qty_rework: '0',
-                        qty_reject: '0',
-                        note: '',
-                      });
-                      setIsFinishingModalOpen(true);
-                    }}
-                    className="bg-purple-800 hover:bg-purple-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2 self-start sm:self-center"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Record Finishing Output</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsReceiveModalOpen(true)}
+                      className="bg-purple-900 hover:bg-purple-950 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2"
+                    >
+                      <PackageCheck className="w-4 h-4 text-purple-200" />
+                      <span>Receive from Sewing</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFinishingForm({
+                          style_id: garmentStyles[0]?.id || '',
+                          stage_id: allFinishingStages[0]?.id || '',
+                          entry_date: new Date().toISOString().split('T')[0],
+                          shift: 'day',
+                          qty_ok: '',
+                          qty_rework: '0',
+                          qty_reject: '0',
+                          note: '',
+                        });
+                        setIsFinishingModalOpen(true);
+                      }}
+                      className="bg-stone-800 hover:bg-stone-900 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-xs transition-all flex items-center space-x-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Record Stage Output</span>
+                    </button>
+                  </div>
                 ) : (
                   <div className="bg-amber-50 text-amber-900 border border-amber-200 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center space-x-1.5 self-start sm:self-center">
                     <Lock className="w-3.5 h-3.5 text-amber-700" />
@@ -2109,6 +2123,30 @@ export const WorkerPortalScreen: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Receive from Sewing Modal */}
+      {isReceiveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white border border-purple-200 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl p-6 space-y-4 my-8 relative max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setIsReceiveModalOpen(false)}
+              className="absolute top-5 right-5 text-stone-400 hover:text-stone-700 p-2 rounded-xl bg-stone-100 transition z-10"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <ReceiveFromSewingView
+              role="worker"
+              workerToken={currentWorker?.id}
+              onSaveComplete={() => {
+                if (currentWorker) loadWorkerData(currentWorker.id);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Calendar, Filter, FileSpreadsheet, Info, TrendingUp, PackageCheck, Truck, AlertCircle } from 'lucide-react';
+import { DollarSign, Calendar, Filter, FileSpreadsheet, Info, TrendingUp, PackageCheck, Truck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { GarmentStyle, StyleFinancialRecord, FactorySettings } from '../types';
 
@@ -14,6 +14,17 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
   const [toDate, setToDate] = useState<string>('');
   const [financials, setFinancials] = useState<StyleFinancialRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Remember toggle state for session
+  const [showPrices, setShowPrices] = useState<boolean>(() => {
+    const saved = sessionStorage.getItem('show_prices');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  const toggleShowPrices = (val: boolean) => {
+    setShowPrices(val);
+    sessionStorage.setItem('show_prices', String(val));
+  };
 
   useEffect(() => {
     dataService.getStyles().then(setStyles);
@@ -57,6 +68,11 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
   };
 
   // Totals calculation
+  const totalOrderQty = financials.reduce((sum, f) => sum + Number(f.order_qty || 0), 0);
+  const totalGarmentsSewn = financials.reduce((sum, f) => sum + Number(f.garments_sewn || 0), 0);
+  const totalReceivedFinishing = financials.reduce((sum, f) => sum + Number(f.received_in_finishing || 0), 0);
+  const totalReadyDeliver = financials.reduce((sum, f) => sum + Number(f.ready_to_deliver || 0), 0);
+
   const totalProductionValue = financials.reduce((sum, f) => sum + Number(f.production_value || 0), 0);
   const totalDeliverableValue = financials.reduce((sum, f) => sum + Number(f.deliverable_value || 0), 0);
   const totalLabourCost = financials.reduce((sum, f) => sum + Number(f.labour_cost || 0), 0);
@@ -64,18 +80,28 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
   const overallMarginPct = totalDeliverableValue > 0 ? (totalGrossMargin / totalDeliverableValue) * 100 : 0;
 
   const handleExportCSV = () => {
-    let csv = 'Style,Buyer,Order Qty,Price per Piece,Garments Sewn,Ready to Deliver,Production Value,Deliverable Value,Labour Cost,Gross Margin,Margin %\n';
-    financials.forEach(f => {
-      const styleName = f.style || `${f.style_code || ''} ${f.style_name || ''}`.trim();
-      const buyer = f.buyer || f.buyer_name || 'N/A';
-      csv += `"${styleName}","${buyer}",${f.order_qty},${f.price || 0},${f.garments_sewn},${f.ready_to_deliver},${f.production_value},${f.deliverable_value},${f.labour_cost},${f.gross_margin},${f.margin_pct.toFixed(2)}%\n`;
-    });
+    let csv = '';
+    if (showPrices) {
+      csv = 'Style,Buyer,Order Qty,Price per Piece,Garments Sewn,Received in Finishing,Ready to Deliver,Production Value,Deliverable Value,Labour Cost,Gross Margin,Margin %\n';
+      financials.forEach(f => {
+        const styleName = f.style || `${f.style_code || ''} ${f.style_name || ''}`.trim();
+        const buyer = f.buyer || f.buyer_name || 'N/A';
+        csv += `"${styleName}","${buyer}",${f.order_qty},${f.price || 0},${f.garments_sewn},${f.received_in_finishing || 0},${f.ready_to_deliver},${f.production_value},${f.deliverable_value},${f.labour_cost},${f.gross_margin},${f.margin_pct.toFixed(2)}%\n`;
+      });
+    } else {
+      csv = 'Style,Buyer,Order Qty,Garments Sewn,Received in Finishing,Ready to Deliver\n';
+      financials.forEach(f => {
+        const styleName = f.style || `${f.style_code || ''} ${f.style_name || ''}`.trim();
+        const buyer = f.buyer || f.buyer_name || 'N/A';
+        csv += `"${styleName}","${buyer}",${f.order_qty},${f.garments_sewn},${f.received_in_finishing || 0},${f.ready_to_deliver}\n`;
+      });
+    }
 
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `style_financials_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `style_${showPrices ? 'financials' : 'production_progress'}_report_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   };
 
@@ -95,70 +121,139 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
           </p>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="flex items-center space-x-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2.5 rounded-xl transition-all text-xs shrink-0 shadow-xs"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-          <span>Export Financials CSV</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {/* Show prices toggle */}
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none px-3.5 py-2 bg-stone-100 hover:bg-stone-200/80 rounded-xl border border-stone-200 transition-colors text-xs font-bold text-stone-700 shadow-2xs">
+            <input
+              type="checkbox"
+              checked={showPrices}
+              onChange={(e) => toggleShowPrices(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="relative w-8 h-4.5 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+            <span className="flex items-center gap-1.5">
+              {showPrices ? <Eye className="w-3.5 h-3.5 text-emerald-600" /> : <EyeOff className="w-3.5 h-3.5 text-stone-400" />}
+              <span>Show prices</span>
+            </span>
+          </label>
+
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center space-x-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2.5 rounded-xl transition-all text-xs shrink-0 shadow-xs cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+            <span>{showPrices ? 'Export Financials CSV' : 'Export Progress CSV'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Top Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Production Value */}
-        <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-stone-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Production Value</span>
-            <PackageCheck className="w-4 h-4 text-indigo-600" />
+      {showPrices ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Production Value */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Production Value</span>
+              <PackageCheck className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="text-2xl font-black font-mono text-stone-900">
+              {currencySymbol} {totalProductionValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-stone-500 flex items-center gap-1">
+              <Info className="w-3 h-3 text-stone-400 shrink-0" />
+              <span>Value of garments produced. Not yet delivered or invoiced.</span>
+            </p>
           </div>
-          <div className="text-2xl font-black font-mono text-stone-900">
-            {currencySymbol} {totalProductionValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <p className="text-[11px] text-stone-500 flex items-center gap-1">
-            <Info className="w-3 h-3 text-stone-400 shrink-0" />
-            <span>Value of garments produced. Not yet delivered or invoiced.</span>
-          </p>
-        </div>
 
-        {/* Deliverable Value */}
-        <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-stone-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Deliverable Value</span>
-            <Truck className="w-4 h-4 text-emerald-600" />
+          {/* Deliverable Value */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Deliverable Value</span>
+              <Truck className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="text-2xl font-black font-mono text-emerald-900">
+              {currencySymbol} {totalDeliverableValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-stone-500">Ready to deliver × price (billable value)</p>
           </div>
-          <div className="text-2xl font-black font-mono text-emerald-900">
-            {currencySymbol} {totalDeliverableValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <p className="text-[11px] text-stone-500">Ready to deliver × price (billable value)</p>
-        </div>
 
-        {/* Labour Cost */}
-        <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-stone-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Labour Cost</span>
-            <DollarSign className="w-4 h-4 text-amber-600" />
+          {/* Labour Cost */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Labour Cost</span>
+              <DollarSign className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="text-2xl font-black font-mono text-amber-900">
+              {currencySymbol} {totalLabourCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-stone-500">Total piece-rate labour cost paid</p>
           </div>
-          <div className="text-2xl font-black font-mono text-amber-900">
-            {currencySymbol} {totalLabourCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <p className="text-[11px] text-stone-500">Total piece-rate labour cost paid</p>
-        </div>
 
-        {/* Gross Margin */}
-        <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-stone-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Gross Margin</span>
-            <TrendingUp className="w-4 h-4 text-sky-600" />
+          {/* Gross Margin */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Gross Margin</span>
+              <TrendingUp className="w-4 h-4 text-sky-600" />
+            </div>
+            <div className={`text-2xl font-black font-mono ${totalGrossMargin >= 0 ? 'text-stone-900' : 'text-rose-600'}`}>
+              {currencySymbol} {totalGrossMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-stone-500">
+              Margin: <span className="font-bold font-mono text-stone-800">{overallMarginPct.toFixed(1)}%</span> (deliverable minus labour)
+            </p>
           </div>
-          <div className={`text-2xl font-black font-mono ${totalGrossMargin >= 0 ? 'text-stone-900' : 'text-rose-600'}`}>
-            {currencySymbol} {totalGrossMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <p className="text-[11px] text-stone-500">
-            Margin: <span className="font-bold font-mono text-stone-800">{overallMarginPct.toFixed(1)}%</span> (deliverable minus labour)
-          </p>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Total Order Qty */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Total Order Qty</span>
+              <PackageCheck className="w-4 h-4 text-stone-600" />
+            </div>
+            <div className="text-2xl font-black font-mono text-stone-900">
+              {totalOrderQty.toLocaleString()} <span className="text-xs font-sans text-stone-500 font-normal">pcs</span>
+            </div>
+            <p className="text-[11px] text-stone-500">Combined target order units</p>
+          </div>
+
+          {/* Total Garments Sewn */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Garments Sewn</span>
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="text-2xl font-black font-mono text-indigo-900">
+              {totalGarmentsSewn.toLocaleString()} <span className="text-xs font-sans text-indigo-600 font-normal">pcs</span>
+            </div>
+            <p className="text-[11px] text-stone-500">Completed sewing operations</p>
+          </div>
+
+          {/* Total Received in Finishing */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Received in Finishing</span>
+              <PackageCheck className="w-4 h-4 text-purple-600" />
+            </div>
+            <div className="text-2xl font-black font-mono text-purple-900">
+              {totalReceivedFinishing.toLocaleString()} <span className="text-xs font-sans text-purple-600 font-normal">pcs</span>
+            </div>
+            <p className="text-[11px] text-stone-500">Entered finishing pipeline</p>
+          </div>
+
+          {/* Total Ready to Deliver */}
+          <div className="bg-white border border-stone-200 p-4 rounded-2xl shadow-xs space-y-1">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Ready to Deliver</span>
+              <Truck className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="text-2xl font-black font-mono text-emerald-900">
+              {totalReadyDeliver.toLocaleString()} <span className="text-xs font-sans text-emerald-600 font-normal">pcs</span>
+            </div>
+            <p className="text-[11px] text-stone-500">Completed all finishing stages</p>
+          </div>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="bg-stone-100 border border-stone-200 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -224,11 +319,35 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
 
       {/* Main Table */}
       <div className="bg-white border border-stone-200 rounded-3xl overflow-hidden shadow-xs">
-        <div className="p-4 border-b border-stone-200 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-stone-900">Garment Style Financial Breakdown</h3>
-          <span className="text-xs text-stone-500">
-            {financials.length} {financials.length === 1 ? 'Style' : 'Styles'} calculated
-          </span>
+        <div className="p-4 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-50/50">
+          <div>
+            <h3 className="text-sm font-bold text-stone-900">Garment Style Financial Breakdown</h3>
+            <p className="text-xs text-stone-600 font-medium mt-0.5 flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 text-stone-500 shrink-0" />
+              <span>Received = entered finishing. Ready = completed all finishing stages and billable.</span>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Show prices toggle in table header */}
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 bg-white hover:bg-stone-100 rounded-xl border border-stone-200 transition-colors text-xs font-bold text-stone-700 shadow-2xs">
+              <input
+                type="checkbox"
+                checked={showPrices}
+                onChange={(e) => toggleShowPrices(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="relative w-8 h-4.5 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
+              <span className="flex items-center gap-1">
+                {showPrices ? <Eye className="w-3.5 h-3.5 text-emerald-600" /> : <EyeOff className="w-3.5 h-3.5 text-stone-400" />}
+                <span>Show prices</span>
+              </span>
+            </label>
+
+            <span className="text-xs text-stone-500 font-medium">
+              {financials.length} {financials.length === 1 ? 'Style' : 'Styles'} calculated
+            </span>
+          </div>
         </div>
 
         {loading ? (
@@ -247,19 +366,22 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
                   <th className="p-3">Style</th>
                   <th className="p-3">Buyer</th>
                   <th className="p-3 text-right">Order Qty</th>
-                  <th className="p-3 text-right">Price ({currencySymbol})</th>
+                  {showPrices && <th className="p-3 text-right">Price ({currencySymbol})</th>}
                   <th className="p-3 text-right">Garments Sewn</th>
+                  <th className="p-3 text-right text-purple-900 bg-purple-50/50">Received in Finishing</th>
                   <th className="p-3 text-right">Ready to Deliver</th>
-                  <th className="p-3 text-right bg-indigo-50/50 text-indigo-950">
-                    <div className="flex items-center justify-end gap-1" title="Value of garments produced. Not yet delivered or invoiced.">
-                      <span>Production Val ({currencySymbol})</span>
-                      <Info className="w-3 h-3 text-indigo-600 shrink-0" />
-                    </div>
-                  </th>
-                  <th className="p-3 text-right bg-emerald-50/50 text-emerald-950">Deliverable Val ({currencySymbol})</th>
-                  <th className="p-3 text-right">Labour Cost ({currencySymbol})</th>
-                  <th className="p-3 text-right font-black text-stone-900">Gross Margin ({currencySymbol})</th>
-                  <th className="p-3 text-right">Margin %</th>
+                  {showPrices && (
+                    <th className="p-3 text-right bg-indigo-50/50 text-indigo-950">
+                      <div className="flex items-center justify-end gap-1" title="Value of garments produced. Not yet delivered or invoiced.">
+                        <span>Production Val ({currencySymbol})</span>
+                        <Info className="w-3 h-3 text-indigo-600 shrink-0" />
+                      </div>
+                    </th>
+                  )}
+                  {showPrices && <th className="p-3 text-right bg-emerald-50/50 text-emerald-950">Deliverable Val ({currencySymbol})</th>}
+                  {showPrices && <th className="p-3 text-right">Labour Cost ({currencySymbol})</th>}
+                  {showPrices && <th className="p-3 text-right font-black text-stone-900">Gross Margin ({currencySymbol})</th>}
+                  {showPrices && <th className="p-3 text-right">Margin %</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200 text-stone-800">
@@ -273,34 +395,49 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
                       <td className="p-3 font-bold text-stone-900 font-mono">{styleDisplay}</td>
                       <td className="p-3 text-stone-600">{buyerDisplay}</td>
                       <td className="p-3 text-right font-mono">{Number(f.order_qty || 0).toLocaleString()} pcs</td>
-                      <td className="p-3 text-right font-mono font-medium">
-                        {price > 0 ? price.toFixed(2) : <span className="text-stone-400 font-normal">—</span>}
-                      </td>
+                      {showPrices && (
+                        <td className="p-3 text-right font-mono font-medium">
+                          {price > 0 ? price.toFixed(2) : <span className="text-stone-400 font-normal">—</span>}
+                        </td>
+                      )}
                       <td className="p-3 text-right font-mono font-bold text-stone-900">
                         {Number(f.garments_sewn || 0).toLocaleString()} pcs
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-purple-900 bg-purple-50/20">
+                        {Number(f.received_in_finishing || 0).toLocaleString()} pcs
                       </td>
                       <td className="p-3 text-right font-mono font-bold text-sky-800">
                         {Number(f.ready_to_deliver || 0).toLocaleString()} pcs
                       </td>
-                      <td className="p-3 text-right font-mono font-bold text-indigo-950 bg-indigo-50/30">
-                        {Number(f.production_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-right font-mono font-black text-emerald-900 bg-emerald-50/30">
-                        {Number(f.deliverable_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-right font-mono text-stone-700">
-                        {Number(f.labour_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className={`p-3 text-right font-mono font-black ${Number(f.gross_margin || 0) >= 0 ? 'text-emerald-800' : 'text-rose-600'}`}>
-                        {Number(f.gross_margin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold">
-                        <span className={`px-2 py-0.5 rounded-md ${
-                          f.margin_pct > 30 ? 'bg-emerald-100 text-emerald-900' : f.margin_pct > 0 ? 'bg-amber-100 text-amber-900' : 'bg-rose-100 text-rose-900'
-                        }`}>
-                          {Number(f.margin_pct || 0).toFixed(1)}%
-                        </span>
-                      </td>
+                      {showPrices && (
+                        <td className="p-3 text-right font-mono font-bold text-indigo-950 bg-indigo-50/30">
+                          {Number(f.production_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      )}
+                      {showPrices && (
+                        <td className="p-3 text-right font-mono font-black text-emerald-900 bg-emerald-50/30">
+                          {Number(f.deliverable_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      )}
+                      {showPrices && (
+                        <td className="p-3 text-right font-mono text-stone-700">
+                          {Number(f.labour_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      )}
+                      {showPrices && (
+                        <td className={`p-3 text-right font-mono font-black ${Number(f.gross_margin || 0) >= 0 ? 'text-emerald-800' : 'text-rose-600'}`}>
+                          {Number(f.gross_margin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      )}
+                      {showPrices && (
+                        <td className="p-3 text-right font-mono font-bold">
+                          <span className={`px-2 py-0.5 rounded-md ${
+                            f.margin_pct > 30 ? 'bg-emerald-100 text-emerald-900' : f.margin_pct > 0 ? 'bg-amber-100 text-amber-900' : 'bg-rose-100 text-rose-900'
+                          }`}>
+                            {Number(f.margin_pct || 0).toFixed(1)}%
+                          </span>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -309,30 +446,43 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
                 <tr className="bg-stone-100 font-bold text-stone-900 border-t-2 border-stone-300">
                   <td colSpan={2} className="p-3 text-sm">Summary Totals</td>
                   <td className="p-3 text-right font-mono">
-                    {financials.reduce((sum, f) => sum + Number(f.order_qty || 0), 0).toLocaleString()} pcs
+                    {totalOrderQty.toLocaleString()} pcs
                   </td>
-                  <td className="p-3 text-right font-mono">—</td>
+                  {showPrices && <td className="p-3 text-right font-mono">—</td>}
                   <td className="p-3 text-right font-mono">
-                    {financials.reduce((sum, f) => sum + Number(f.garments_sewn || 0), 0).toLocaleString()} pcs
+                    {totalGarmentsSewn.toLocaleString()} pcs
                   </td>
-                  <td className="p-3 text-right font-mono">
-                    {financials.reduce((sum, f) => sum + Number(f.ready_to_deliver || 0), 0).toLocaleString()} pcs
-                  </td>
-                  <td className="p-3 text-right font-mono text-indigo-950">
-                    {totalProductionValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="p-3 text-right font-mono text-emerald-900">
-                    {totalDeliverableValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="p-3 text-right font-mono text-stone-800">
-                    {totalLabourCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className={`p-3 text-right font-mono font-black ${totalGrossMargin >= 0 ? 'text-emerald-900' : 'text-rose-600'}`}>
-                    {totalGrossMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <td className="p-3 text-right font-mono text-purple-900 bg-purple-50/30">
+                    {totalReceivedFinishing.toLocaleString()} pcs
                   </td>
                   <td className="p-3 text-right font-mono">
-                    {overallMarginPct.toFixed(1)}%
+                    {totalReadyDeliver.toLocaleString()} pcs
                   </td>
+                  {showPrices && (
+                    <td className="p-3 text-right font-mono text-indigo-950">
+                      {totalProductionValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  )}
+                  {showPrices && (
+                    <td className="p-3 text-right font-mono text-emerald-900">
+                      {totalDeliverableValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  )}
+                  {showPrices && (
+                    <td className="p-3 text-right font-mono text-stone-800">
+                      {totalLabourCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  )}
+                  {showPrices && (
+                    <td className={`p-3 text-right font-mono font-black ${totalGrossMargin >= 0 ? 'text-emerald-900' : 'text-rose-600'}`}>
+                      {totalGrossMargin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  )}
+                  {showPrices && (
+                    <td className="p-3 text-right font-mono">
+                      {overallMarginPct.toFixed(1)}%
+                    </td>
+                  )}
                 </tr>
               </tfoot>
             </table>
@@ -342,3 +492,4 @@ export const FinancialsReportView: React.FC<FinancialsReportViewProps> = ({ curr
     </div>
   );
 };
+

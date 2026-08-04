@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Zap, Calendar, Shirt, Scissors, Plus, Minus, Check, 
   ChevronDown, ChevronUp, AlertCircle, Sparkles, CheckCircle,
-  PlusCircle, Target, TrendingUp, Layers, HelpCircle
+  PlusCircle, Target, TrendingUp, Layers, HelpCircle, PackageCheck, Lock
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService, getLocalDateString } from '../lib/dataService';
@@ -13,9 +13,12 @@ import {
 import { DuplicateConfirmModal } from '../components/DuplicateConfirmModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { isStyleUnlockedForSewing } from '../lib/cuttingGate';
+import { ReceiveFromSewingView } from '../components/ReceiveFromSewingView';
 
 interface QuickEntryScreenProps {
   role: UserRole;
+  workerToken?: string;
+  workerSection?: string;
 }
 
 interface AssignmentEntryDraft {
@@ -26,8 +29,13 @@ interface AssignmentEntryDraft {
   savedQtyOk: number; // accumulated output already saved today
 }
 
-export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
+export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, workerToken: initialWorkerToken, workerSection: initialWorkerSection }) => {
   const { t } = useTranslation();
+
+  // Mode state: 'sewing' | 'receive'
+  const [mode, setMode] = useState<'sewing' | 'receive'>('sewing');
+  const [currentWorker, setCurrentWorker] = useState<Worker | null>(null);
+  const [workerToken, setWorkerToken] = useState<string>(initialWorkerToken || '');
 
   const [entryDate, setEntryDate] = useState<string>(getLocalDateString());
   const [shift, setShift] = useState<'day' | 'night'>('day');
@@ -64,8 +72,34 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
-  }, [entryDate]);
+    checkWorkerAndRole();
+  }, [role]);
+
+  const checkWorkerAndRole = async () => {
+    const savedWorkerId = sessionStorage.getItem('stitchpay_worker_id');
+    const token = initialWorkerToken || savedWorkerId || '';
+    setWorkerToken(token);
+
+    if (savedWorkerId) {
+      const wList = await dataService.getWorkers();
+      const match = wList.find(w => w.id === savedWorkerId);
+      if (match) {
+        setCurrentWorker(match);
+        const sec = (match.section || '').toLowerCase();
+        if (role === 'worker' && sec.includes('finish')) {
+          setMode('receive');
+        }
+      }
+    } else if (role === 'worker' && initialWorkerSection && initialWorkerSection.toLowerCase().includes('finish')) {
+      setMode('receive');
+    }
+  };
+
+  useEffect(() => {
+    if (mode === 'sewing') {
+      loadData();
+    }
+  }, [entryDate, mode]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -162,7 +196,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
   const totalWageValueAccrued = assignments.reduce((sum, a) => {
     const w = workers.find(work => work.id === a.worker_id);
-    if (w?.pay_type === 'monthly_salary') return sum; // Exclude salaried workers from piece-rate wage calculation
+    if (w?.pay_type === 'monthly_salary') return sum;
     const draft = drafts.get(a.id);
     const qty = draft ? draft.qty_ok : 0;
     return sum + (qty * a.agreed_rate);
@@ -192,7 +226,6 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
         procGroups.push({ process: proc, items: procAssigns });
       }
 
-      // Sort process groups by seq_no
       procGroups.sort((a, b) => (a.process?.seq_no || 0) - (b.process?.seq_no || 0));
       groups.push({ style, processes: procGroups });
     }
@@ -200,7 +233,6 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
     return groups;
   }, [assignments, styles, processes]);
 
-  // Save all changed entries
   const handleSaveAll = async () => {
     let savedCount = 0;
     for (const assign of assignments) {
@@ -209,7 +241,6 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
 
       const diffQty = draft.qty_ok - draft.savedQtyOk;
       if (diffQty > 0 || draft.qty_rework > 0 || draft.qty_reject > 0) {
-        // Save entry
         await dataService.saveProductionEntry({
           assignment_id: assign.id,
           entry_date: entryDate,
@@ -220,7 +251,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
           qty_ok: diffQty > 0 ? diffQty : draft.qty_ok,
           qty_rework: draft.qty_rework,
           qty_reject: draft.qty_reject,
-          rate_snapshot: assign.agreed_rate, // uses assignment agreed_rate
+          rate_snapshot: assign.agreed_rate,
         });
         savedCount++;
       }
@@ -234,12 +265,11 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
     }, 4000);
   };
 
-  // Add Unplanned Entry
   const handleCreateUnplannedEntry = async () => {
     if (!unplannedStyleId || !unplannedProcessId || !unplannedWorkerId) return;
     try {
       const proc = processes.find(p => p.id === unplannedProcessId);
-      const newAssign = await dataService.saveDailyAssignment({
+      await dataService.saveDailyAssignment({
         work_date: entryDate,
         style_id: proc?.style_id || unplannedStyleId,
         process_id: unplannedProcessId,
@@ -257,6 +287,29 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
     }
   };
 
+  // Section check for worker role
+  const workerSec = (currentWorker?.section || initialWorkerSection || '').toLowerCase();
+  const isFinishingWorker = role === 'worker' && workerSec.includes('finish');
+  const isNonFinishingWorker = role === 'worker' && !workerSec.includes('finish');
+
+  // If worker is not in finishing section and role === 'worker'
+  if (isNonFinishingWorker) {
+    return (
+      <div className="bg-white border border-stone-200 rounded-3xl p-8 max-w-2xl mx-auto my-8 text-center space-y-4 shadow-sm">
+        <div className="w-12 h-12 bg-amber-100 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto text-amber-800">
+          <Lock className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-black text-stone-900">Quick Entry Access Notice</h2>
+        <p className="text-xs text-stone-600 leading-relaxed">
+          Quick Entry mode is reserved for <strong>Sewing Line Supervisors</strong> (Sewing Output) and <strong>Finishing Workers</strong> (Receive from Sewing).
+        </p>
+        <p className="text-xs text-stone-500">
+          Logged in as <strong>{currentWorker?.full_name || 'Worker'} ({currentWorker?.section || 'Sewing'})</strong>. Please use your Worker Portal to log daily section activities.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-32 max-w-4xl mx-auto">
       {/* Toast Confirmation */}
@@ -267,47 +320,90 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
         </div>
       )}
 
-      {/* Screen Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
-            <Zap className="w-6 h-6 text-amber-700 fill-amber-700" />
-            <span>Plan-Driven Quick Entry</span>
-          </h1>
-          <p className="text-xs text-stone-600">Direct recording against today's assigned line plan</p>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          {/* Unplanned Entry Button */}
+      {/* MODE TOGGLE AT THE TOP: [ Sewing Output ] [ Receive from Sewing ] */}
+      {(role === 'admin' || role === 'supervisor') && (
+        <div className="bg-stone-100 p-1.5 rounded-2xl border border-stone-200/80 flex items-center justify-center max-w-md mx-auto shadow-inner">
           <button
-            onClick={() => setShowUnplannedModal(true)}
-            className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl font-semibold text-xs transition shrink-0"
+            type="button"
+            onClick={() => setMode('sewing')}
+            className={`flex-1 py-2 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-2 ${
+              mode === 'sewing'
+                ? 'bg-white text-amber-900 shadow-sm border border-stone-200/80'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>Unplanned Entry</span>
+            <Zap className="w-4 h-4 text-amber-700 fill-amber-700" />
+            <span>Sewing Output</span>
           </button>
 
-          {/* Shift selector */}
-          <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs shrink-0">
-            <button
-              onClick={() => setShift('day')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                shift === 'day' ? 'bg-amber-800 text-white shadow-xs' : 'text-stone-600'
-              }`}
-            >
-              Day
-            </button>
-            <button
-              onClick={() => setShift('night')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                shift === 'night' ? 'bg-indigo-700 text-white shadow-xs' : 'text-stone-600'
-              }`}
-            >
-              Night
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMode('receive')}
+            className={`flex-1 py-2 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-2 ${
+              mode === 'receive'
+                ? 'bg-purple-900 text-white shadow-sm border border-purple-800'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <PackageCheck className="w-4 h-4 text-purple-300" />
+            <span>Receive from Sewing</span>
+          </button>
         </div>
-      </div>
+      )}
+
+      {/* RENDER RECEIVE MODE FOR FINISHING WORKERS OR WHEN TOGGLED */}
+      {(mode === 'receive' || isFinishingWorker) ? (
+        <ReceiveFromSewingView
+          role={role}
+          workerToken={workerToken}
+          onSaveComplete={() => {
+            if (mode === 'sewing') loadData();
+          }}
+        />
+      ) : (
+        /* EXISTING SEWING OUTPUT SCREEN (UNCHANGED) */
+        <>
+          {/* Screen Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight flex items-center gap-2">
+                <Zap className="w-6 h-6 text-amber-700 fill-amber-700" />
+                <span>Plan-Driven Quick Entry</span>
+              </h1>
+              <p className="text-xs text-stone-600">Direct recording against today's assigned line plan</p>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* Unplanned Entry Button */}
+              <button
+                onClick={() => setShowUnplannedModal(true)}
+                className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl font-semibold text-xs transition shrink-0"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Unplanned Entry</span>
+              </button>
+
+              {/* Shift selector */}
+              <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs shrink-0">
+                <button
+                  onClick={() => setShift('day')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                    shift === 'day' ? 'bg-amber-800 text-white shadow-xs' : 'text-stone-600'
+                  }`}
+                >
+                  Day
+                </button>
+                <button
+                  onClick={() => setShift('night')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                    shift === 'night' ? 'bg-indigo-700 text-white shadow-xs' : 'text-stone-600'
+                  }`}
+                >
+                  Night
+                </button>
+              </div>
+            </div>
+          </div>
 
       {/* RUNNING TOTALS BAR */}
       <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs space-y-3">
@@ -626,6 +722,8 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role }) => {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

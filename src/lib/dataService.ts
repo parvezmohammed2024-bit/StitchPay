@@ -4,7 +4,8 @@ import {
   FactorySettings, UserRole, DailyAssignment, RateBid,
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
-  MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow
+  MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
+  AvailableToReceiveRow
 } from '../types';
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
@@ -2407,22 +2408,40 @@ class DataService {
         });
         if (!error && data) {
           const arr = Array.isArray(data) ? data : [data];
-          return arr.map((item: any) => ({
-            style_id: item.style_id || item.id,
-            style_code: item.style_code,
-            style_name: item.style_name || item.name,
-            style: item.style || (item.style_code ? `${item.style_code} - ${item.style_name || item.name || ''}` : (item.name || 'Style')),
-            buyer: item.buyer || item.buyer_name || 'N/A',
-            order_qty: Number(item.order_qty || 0),
-            price: Number(item.price ?? item.selling_price ?? 0),
-            garments_sewn: Number(item.garments_sewn || 0),
-            ready_to_deliver: Number(item.ready_to_deliver || 0),
-            production_value: Number(item.production_value || 0),
-            deliverable_value: Number(item.deliverable_value || 0),
-            labour_cost: Number(item.labour_cost || 0),
-            gross_margin: Number(item.gross_margin || 0),
-            margin_pct: Number(item.margin_pct || 0),
-          }));
+          return arr.map((item: any) => {
+            const isArr = Array.isArray(item);
+            const style_code = item.style_code || (isArr ? item[0] : '');
+            const style_name = item.style_name || item.name || (isArr ? item[1] : '');
+            const buyer = item.buyer || item.buyer_name || (isArr ? item[2] : 'N/A');
+            const order_qty = Number((item.order_qty ?? (isArr ? item[3] : 0)) || 0);
+            const price = Number((item.price ?? item.selling_price ?? (isArr ? item[4] : 0)) || 0);
+            const garments_sewn = Number((item.garments_sewn ?? (isArr ? item[5] : 0)) || 0);
+            const received_in_finishing = Number((item.received_in_finishing ?? item.received_finishing ?? item.already_received ?? item.qty_received ?? (isArr ? item[6] : 0)) || 0);
+            const ready_to_deliver = Number((item.ready_to_deliver ?? (isArr ? item[7] : 0)) || 0);
+            const production_value = Number((item.production_value ?? (isArr ? item[8] : 0)) || 0);
+            const deliverable_value = Number((item.deliverable_value ?? (isArr ? item[9] : 0)) || 0);
+            const labour_cost = Number((item.labour_cost ?? (isArr ? item[10] : 0)) || 0);
+            const gross_margin = Number((item.gross_margin ?? (isArr ? item[11] : 0)) || 0);
+            const margin_pct = Number((item.margin_pct ?? item.margin_percent ?? (isArr ? item[12] : 0)) || 0);
+
+            return {
+              style_id: item.style_id || item.id || style_code,
+              style_code,
+              style_name,
+              style: item.style || (style_code ? `${style_code} - ${style_name}` : (style_name || 'Style')),
+              buyer,
+              order_qty,
+              price,
+              garments_sewn,
+              received_in_finishing,
+              ready_to_deliver,
+              production_value,
+              deliverable_value,
+              labour_cost,
+              gross_margin,
+              margin_pct,
+            };
+          });
         }
       } catch (err) {
         console.warn('RPC rpt_style_financials call failed, using fallback:', err);
@@ -2433,6 +2452,8 @@ class DataService {
     const allStyles = await this.getStyles();
     const allProcs = await this.getProcesses();
     const allEntries = await this.getProductionEntries();
+    const allFinishingEntries = await this.getFinishingEntries();
+    const allFinishingStages = await this.getFinishingStages();
     const allDeliveries = this.deliveries;
 
     const filteredStyles = styleId ? allStyles.filter(s => s.id === styleId) : allStyles;
@@ -2462,6 +2483,25 @@ class DataService {
         garments_sewn = Math.min(...Array.from(procQtyMap.values()));
       }
 
+      // Received in Finishing = stage_id === receivedStageId (or first finishing stage)
+      const styleStages = allFinishingStages.filter(stg => stg.style_id === st.id);
+      let receivedStage = styleStages.find(stg => (stg.code || '').toLowerCase() === 'received' || stg.seq_no === 1);
+      if (!receivedStage && styleStages.length > 0) {
+        receivedStage = styleStages[0];
+      }
+      const receivedStageId = receivedStage ? receivedStage.id : `received-${st.id}`;
+
+      const styleFinishing = allFinishingEntries.filter(f => {
+        if (f.style_id !== st.id) return false;
+        if (pFrom && f.entry_date < pFrom) return false;
+        if (pTo && f.entry_date > pTo) return false;
+        return true;
+      });
+
+      const received_in_finishing = styleFinishing
+        .filter(f => !receivedStageId || f.stage_id === receivedStageId)
+        .reduce((sum, f) => sum + Number(f.qty_ok || 0), 0);
+
       // Deliveries
       const styleDeliveries = allDeliveries.filter(d => {
         if (d.style_id !== st.id) return false;
@@ -2488,6 +2528,7 @@ class DataService {
         price,
         selling_price: st.selling_price,
         garments_sewn,
+        received_in_finishing,
         ready_to_deliver,
         production_value,
         deliverable_value,
@@ -2554,22 +2595,40 @@ class DataService {
         });
         if (!error && data) {
           const arr = Array.isArray(data) ? data : [data];
-          return arr.map((item: any) => ({
-            style_id: item.style_id || item.id,
-            style_code: item.style_code,
-            style_name: item.style_name || item.name,
-            style: item.style || (item.style_code ? `${item.style_code} - ${item.style_name || item.name || ''}` : (item.name || 'Style')),
-            buyer: item.buyer || item.buyer_name || 'N/A',
-            order_qty: Number(item.order_qty || 0),
-            price: Number(item.price ?? item.selling_price ?? 0),
-            garments_sewn: Number(item.garments_sewn || 0),
-            ready_to_deliver: Number(item.ready_to_deliver || 0),
-            production_value: Number(item.production_value || 0),
-            deliverable_value: Number(item.deliverable_value || 0),
-            labour_cost: Number(item.labour_cost || 0),
-            gross_margin: Number(item.gross_margin || 0),
-            margin_pct: Number(item.margin_pct || 0),
-          }));
+          return arr.map((item: any) => {
+            const isArr = Array.isArray(item);
+            const style_code = item.style_code || (isArr ? item[0] : '');
+            const style_name = item.style_name || item.name || (isArr ? item[1] : '');
+            const buyer = item.buyer || item.buyer_name || (isArr ? item[2] : 'N/A');
+            const order_qty = Number((item.order_qty ?? (isArr ? item[3] : 0)) || 0);
+            const price = Number((item.price ?? item.selling_price ?? (isArr ? item[4] : 0)) || 0);
+            const garments_sewn = Number((item.garments_sewn ?? (isArr ? item[5] : 0)) || 0);
+            const received_in_finishing = Number((item.received_in_finishing ?? item.received_finishing ?? item.already_received ?? item.qty_received ?? (isArr ? item[6] : 0)) || 0);
+            const ready_to_deliver = Number((item.ready_to_deliver ?? (isArr ? item[7] : 0)) || 0);
+            const production_value = Number((item.production_value ?? (isArr ? item[8] : 0)) || 0);
+            const deliverable_value = Number((item.deliverable_value ?? (isArr ? item[9] : 0)) || 0);
+            const labour_cost = Number((item.labour_cost ?? (isArr ? item[10] : 0)) || 0);
+            const gross_margin = Number((item.gross_margin ?? (isArr ? item[11] : 0)) || 0);
+            const margin_pct = Number((item.margin_pct ?? item.margin_percent ?? (isArr ? item[12] : 0)) || 0);
+
+            return {
+              style_id: item.style_id || item.id || style_code,
+              style_code,
+              style_name,
+              style: item.style || (style_code ? `${style_code} - ${style_name}` : (style_name || 'Style')),
+              buyer,
+              order_qty,
+              price,
+              garments_sewn,
+              received_in_finishing,
+              ready_to_deliver,
+              production_value,
+              deliverable_value,
+              labour_cost,
+              gross_margin,
+              margin_pct,
+            };
+          });
         }
       } catch (err) {
         console.warn('RPC mgmt_financials call failed, using fallback:', err);
@@ -2806,6 +2865,142 @@ class DataService {
     });
 
     return results;
+  }
+
+  // ==================== RECEIVE FROM SEWING METHODS ====================
+  public async getRptAvailableToReceive(): Promise<AvailableToReceiveRow[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('rpt_available_to_receive');
+        if (error) {
+          console.error('RPC rpt_available_to_receive error:', error);
+          return this.fallbackAvailableToReceive();
+        }
+        if (data && Array.isArray(data)) {
+          return data.map((item: any) => ({
+            style_id: item.style_id,
+            style_code: item.style_code,
+            style_name: item.style_name || item.name || '',
+            received_stage_id: item.received_stage_id,
+            garments_sewn: Number(item.garments_sewn || 0),
+            already_received: Number(item.already_received || 0),
+            available: Number(item.available || 0),
+          }));
+        }
+        return this.fallbackAvailableToReceive();
+      } catch (err) {
+        console.error('Failed to call rpt_available_to_receive:', err);
+        return this.fallbackAvailableToReceive();
+      }
+    }
+    return this.fallbackAvailableToReceive();
+  }
+
+  public async getWpAvailableToReceive(pToken: string): Promise<AvailableToReceiveRow[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('wp_available_to_receive', { p_token: pToken });
+        if (error) {
+          console.error('RPC wp_available_to_receive error:', error);
+          return this.fallbackAvailableToReceive();
+        }
+        if (data && Array.isArray(data)) {
+          return data.map((item: any) => ({
+            style_id: item.style_id,
+            style_code: item.style_code,
+            style_name: item.style_name || item.name || '',
+            received_stage_id: item.received_stage_id,
+            garments_sewn: Number(item.garments_sewn || 0),
+            already_received: Number(item.already_received || 0),
+            available: Number(item.available || 0),
+          }));
+        }
+        return this.fallbackAvailableToReceive();
+      } catch (err) {
+        console.error('Failed to call wp_available_to_receive:', err);
+        return this.fallbackAvailableToReceive();
+      }
+    }
+    return this.fallbackAvailableToReceive();
+  }
+
+  public async wpLogFinishing(pToken: string, pStageId: string, pQtyOk: number, pNote?: string): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await supabase.rpc('wp_log_finishing', {
+          p_token: pToken,
+          p_stage_id: pStageId,
+          p_qty_ok: pQtyOk,
+          p_note: pNote || null,
+        });
+        if (error) {
+          // If RPC doesn't support p_note, fallback to calling without p_note
+          const { error: retryError } = await supabase.rpc('wp_log_finishing', {
+            p_token: pToken,
+            p_stage_id: pStageId,
+            p_qty_ok: pQtyOk,
+          });
+          if (retryError) {
+            console.error('RPC wp_log_finishing error:', retryError);
+            throw new Error(retryError.message || 'Failed to log finishing entry via worker RPC');
+          }
+        }
+        return true;
+      } catch (err: any) {
+        console.error('Failed to invoke wp_log_finishing:', err);
+        throw err;
+      }
+    }
+    return true;
+  }
+
+  private async fallbackAvailableToReceive(): Promise<AvailableToReceiveRow[]> {
+    const styles = await this.getStyles();
+    const activeStyles = styles.filter(s => !s.status || s.status.toLowerCase() === 'active');
+    const processes = await this.getProcesses();
+    const prodEntries = await this.getProductionEntries();
+    const finishingStages = await this.getFinishingStages();
+    const finishingEntries = await this.getFinishingEntries();
+
+    const rows: AvailableToReceiveRow[] = [];
+
+    for (const style of activeStyles) {
+      const styleStages = finishingStages.filter(st => st.style_id === style.id);
+      let receivedStage = styleStages.find(st => (st.code || '').toLowerCase() === 'received' || st.seq_no === 1);
+      if (!receivedStage && styleStages.length > 0) {
+        receivedStage = styleStages[0];
+      }
+      const receivedStageId = receivedStage ? receivedStage.id : `received-${style.id}`;
+
+      const styleProcs = processes.filter(p => p.style_id === style.id);
+      let garmentsSewn = 0;
+      if (styleProcs.length > 0) {
+        const procQtys = styleProcs.map(proc => {
+          return prodEntries
+            .filter(e => e.style_id === style.id && e.process_id === proc.id)
+            .reduce((sum, e) => sum + (Number(e.qty_ok) || 0), 0);
+        });
+        garmentsSewn = Math.min(...procQtys);
+      }
+
+      const alreadyReceived = finishingEntries
+        .filter(f => f.style_id === style.id && f.stage_id === receivedStageId)
+        .reduce((sum, f) => sum + (Number(f.qty_ok) || 0), 0);
+
+      const available = Math.max(0, garmentsSewn - alreadyReceived);
+
+      rows.push({
+        style_id: style.id,
+        style_code: style.style_code,
+        style_name: style.name,
+        received_stage_id: receivedStageId,
+        garments_sewn: garmentsSewn,
+        already_received: alreadyReceived,
+        available: available,
+      });
+    }
+
+    return rows;
   }
 }
 

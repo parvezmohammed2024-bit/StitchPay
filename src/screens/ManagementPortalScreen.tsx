@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Building2, Calendar, FileSpreadsheet, Info, PackageCheck, 
   Truck, DollarSign, TrendingUp, LogOut, ArrowRight, ShieldCheck, 
-  RefreshCw, LayoutDashboard, BarChart3, AlertCircle, Clock, CheckCircle2, Phone, Lock
+  RefreshCw, LayoutDashboard, BarChart3, AlertCircle, Clock, CheckCircle2, Phone, Lock, Eye, EyeOff
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { StyleFinancialRecord, MgmtValueTodayRecord, MgmtOrderOverviewRecord, FactorySettings, TodaySectionRow } from '../types';
@@ -37,6 +37,15 @@ export const ManagementPortalScreen: React.FC = () => {
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
   const [financials, setFinancials] = useState<StyleFinancialRecord[]>([]);
+  const [showPrices, setShowPrices] = useState<boolean>(() => {
+    const saved = sessionStorage.getItem('show_prices');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  const toggleShowPrices = (val: boolean) => {
+    setShowPrices(val);
+    sessionStorage.setItem('show_prices', String(val));
+  };
 
   // Settings & General Loading
   const [settings, setSettings] = useState<FactorySettings | null>(null);
@@ -133,18 +142,28 @@ export const ManagementPortalScreen: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    let csv = 'Style,Buyer,Order Qty,Price per Piece,Garments Sewn,Ready to Deliver,Production Value,Deliverable Value,Labour Cost,Gross Margin,Margin %\n';
-    financials.forEach(f => {
-      const styleName = f.style || `${f.style_code || ''} ${f.style_name || ''}`.trim();
-      const buyer = f.buyer || f.buyer_name || 'N/A';
-      csv += `"${styleName}","${buyer}",${f.order_qty},${f.price || 0},${f.garments_sewn},${f.ready_to_deliver},${f.production_value},${f.deliverable_value},${f.labour_cost},${f.gross_margin},${f.margin_pct.toFixed(2)}%\n`;
-    });
+    let csv = '';
+    if (showPrices) {
+      csv = 'Style,Buyer,Order Qty,Price per Piece,Garments Sewn,Received in Finishing,Ready to Deliver,Production Value,Deliverable Value,Labour Cost,Gross Margin,Margin %\n';
+      financials.forEach(f => {
+        const styleName = f.style || `${f.style_code || ''} ${f.style_name || ''}`.trim();
+        const buyer = f.buyer || f.buyer_name || 'N/A';
+        csv += `"${styleName}","${buyer}",${f.order_qty},${f.price || 0},${f.garments_sewn},${f.received_in_finishing || 0},${f.ready_to_deliver},${f.production_value},${f.deliverable_value},${f.labour_cost},${f.gross_margin},${f.margin_pct.toFixed(2)}%\n`;
+      });
+    } else {
+      csv = 'Style,Buyer,Order Qty,Garments Sewn,Received in Finishing,Ready to Deliver\n';
+      financials.forEach(f => {
+        const styleName = f.style || `${f.style_code || ''} ${f.style_name || ''}`.trim();
+        const buyer = f.buyer || f.buyer_name || 'N/A';
+        csv += `"${styleName}","${buyer}",${f.order_qty},${f.garments_sewn},${f.received_in_finishing || 0},${f.ready_to_deliver}\n`;
+      });
+    }
 
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `style_financials_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `style_${showPrices ? 'financials' : 'production_progress'}_report_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   };
 
@@ -515,9 +534,28 @@ export const ManagementPortalScreen: React.FC = () => {
                 <p className="text-xs text-stone-400 mt-0.5">
                   Detailed order revenue, piece-rate labour cost, and gross margins
                 </p>
+                <p className="text-xs text-amber-300 font-medium mt-1.5 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>Received = entered finishing. Ready = completed all finishing stages and billable.</span>
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                {/* Show prices toggle */}
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none px-3.5 py-1.5 bg-stone-900 hover:bg-stone-950/80 rounded-2xl border border-stone-700 transition-colors text-xs font-bold text-stone-200">
+                  <input
+                    type="checkbox"
+                    checked={showPrices}
+                    onChange={(e) => toggleShowPrices(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="relative w-8 h-4.5 bg-stone-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-stone-600 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-amber-500"></div>
+                  <span className="flex items-center gap-1.5">
+                    {showPrices ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-stone-400" />}
+                    <span>Show prices</span>
+                  </span>
+                </label>
+
                 {/* Date Inputs */}
                 <div className="flex items-center space-x-2 bg-stone-900 px-3 py-1.5 border border-stone-700 rounded-2xl text-xs font-mono">
                   <Calendar className="w-4 h-4 text-stone-400 shrink-0" />
@@ -563,7 +601,7 @@ export const ManagementPortalScreen: React.FC = () => {
                   className="flex items-center space-x-2 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold px-4 py-2 rounded-xl transition-all text-xs shrink-0 shadow-md cursor-pointer"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
-                  <span>Export CSV</span>
+                  <span>{showPrices ? 'Export Financials CSV' : 'Export Progress CSV'}</span>
                 </button>
               </div>
             </div>
@@ -586,14 +624,15 @@ export const ManagementPortalScreen: React.FC = () => {
                         <th className="p-3.5">Style</th>
                         <th className="p-3.5">Buyer</th>
                         <th className="p-3.5 text-right">Order Qty</th>
-                        <th className="p-3.5 text-right">Price ({currencySymbol})</th>
+                        {showPrices && <th className="p-3.5 text-right">Price ({currencySymbol})</th>}
                         <th className="p-3.5 text-right">Garments Sewn</th>
+                        <th className="p-3.5 text-right text-purple-300 bg-purple-950/40">Received in Finishing</th>
                         <th className="p-3.5 text-right">Ready to Deliver</th>
-                        <th className="p-3.5 text-right text-indigo-300 bg-indigo-950/40">Production Val ({currencySymbol})</th>
-                        <th className="p-3.5 text-right text-emerald-300 bg-emerald-950/40">Deliverable Val ({currencySymbol})</th>
-                        <th className="p-3.5 text-right">Labour Cost ({currencySymbol})</th>
-                        <th className="p-3.5 text-right font-black text-white">Gross Margin ({currencySymbol})</th>
-                        <th className="p-3.5 text-right">Margin %</th>
+                        {showPrices && <th className="p-3.5 text-right text-indigo-300 bg-indigo-950/40">Production Val ({currencySymbol})</th>}
+                        {showPrices && <th className="p-3.5 text-right text-emerald-300 bg-emerald-950/40">Deliverable Val ({currencySymbol})</th>}
+                        {showPrices && <th className="p-3.5 text-right">Labour Cost ({currencySymbol})</th>}
+                        {showPrices && <th className="p-3.5 text-right font-black text-white">Gross Margin ({currencySymbol})</th>}
+                        {showPrices && <th className="p-3.5 text-right">Margin %</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-700/80 text-stone-200">
@@ -607,38 +646,53 @@ export const ManagementPortalScreen: React.FC = () => {
                             <td className="p-3.5 font-bold text-white font-mono">{styleDisplay}</td>
                             <td className="p-3.5 text-stone-400">{buyerDisplay}</td>
                             <td className="p-3.5 text-right font-mono">{Number(f.order_qty || 0).toLocaleString()} pcs</td>
-                            <td className="p-3.5 text-right font-mono font-medium text-amber-300">
-                              {price > 0 ? price.toFixed(2) : <span className="text-stone-500">—</span>}
-                            </td>
+                            {showPrices && (
+                              <td className="p-3.5 text-right font-mono font-medium text-amber-300">
+                                {price > 0 ? price.toFixed(2) : <span className="text-stone-500">—</span>}
+                              </td>
+                            )}
                             <td className="p-3.5 text-right font-mono font-bold text-white">
                               {Number(f.garments_sewn || 0).toLocaleString()} pcs
+                            </td>
+                            <td className="p-3.5 text-right font-mono font-bold text-purple-300 bg-purple-950/20">
+                              {Number(f.received_in_finishing || 0).toLocaleString()} pcs
                             </td>
                             <td className="p-3.5 text-right font-mono font-bold text-sky-300">
                               {Number(f.ready_to_deliver || 0).toLocaleString()} pcs
                             </td>
-                            <td className="p-3.5 text-right font-mono font-bold text-indigo-200 bg-indigo-950/20">
-                              {Number(f.production_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-3.5 text-right font-mono font-black text-emerald-300 bg-emerald-950/20">
-                              {Number(f.deliverable_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-3.5 text-right font-mono text-amber-200">
-                              {Number(f.labour_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className={`p-3.5 text-right font-mono font-black ${Number(f.gross_margin || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {Number(f.gross_margin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-3.5 text-right font-mono font-bold">
-                              <span className={`px-2.5 py-1 rounded-md text-[11px] ${
-                                f.margin_pct > 30 
-                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
-                                  : f.margin_pct > 0 
-                                  ? 'bg-amber-950 text-amber-300 border border-amber-800' 
-                                  : 'bg-rose-950 text-rose-300 border border-rose-800'
-                              }`}>
-                                {Number(f.margin_pct || 0).toFixed(1)}%
-                              </span>
-                            </td>
+                            {showPrices && (
+                              <td className="p-3.5 text-right font-mono font-bold text-indigo-200 bg-indigo-950/20">
+                                {Number(f.production_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            )}
+                            {showPrices && (
+                              <td className="p-3.5 text-right font-mono font-black text-emerald-300 bg-emerald-950/20">
+                                {Number(f.deliverable_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            )}
+                            {showPrices && (
+                              <td className="p-3.5 text-right font-mono text-amber-200">
+                                {Number(f.labour_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            )}
+                            {showPrices && (
+                              <td className={`p-3.5 text-right font-mono font-black ${Number(f.gross_margin || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {Number(f.gross_margin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            )}
+                            {showPrices && (
+                              <td className="p-3.5 text-right font-mono font-bold">
+                                <span className={`px-2.5 py-1 rounded-md text-[11px] ${
+                                  f.margin_pct > 30 
+                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
+                                    : f.margin_pct > 0 
+                                    ? 'bg-amber-950 text-amber-300 border border-amber-800' 
+                                    : 'bg-rose-950 text-rose-300 border border-rose-800'
+                                }`}>
+                                  {Number(f.margin_pct || 0).toFixed(1)}%
+                                </span>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -649,28 +703,41 @@ export const ManagementPortalScreen: React.FC = () => {
                         <td className="p-3.5 text-right font-mono">
                           {financials.reduce((sum, f) => sum + Number(f.order_qty || 0), 0).toLocaleString()} pcs
                         </td>
-                        <td className="p-3.5 text-right font-mono text-stone-500">—</td>
+                        {showPrices && <td className="p-3.5 text-right font-mono text-stone-500">—</td>}
                         <td className="p-3.5 text-right font-mono">
                           {financials.reduce((sum, f) => sum + Number(f.garments_sewn || 0), 0).toLocaleString()} pcs
+                        </td>
+                        <td className="p-3.5 text-right font-mono text-purple-300">
+                          {financials.reduce((sum, f) => sum + Number(f.received_in_finishing || 0), 0).toLocaleString()} pcs
                         </td>
                         <td className="p-3.5 text-right font-mono text-sky-300">
                           {financials.reduce((sum, f) => sum + Number(f.ready_to_deliver || 0), 0).toLocaleString()} pcs
                         </td>
-                        <td className="p-3.5 text-right font-mono text-indigo-300">
-                          {totalProductionVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="p-3.5 text-right font-mono text-emerald-400">
-                          {totalDeliverableVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="p-3.5 text-right font-mono text-amber-300">
-                          {totalLabourCostVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className={`p-3.5 text-right font-mono font-black ${totalGrossMarginVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {totalGrossMarginVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="p-3.5 text-right font-mono">
-                          {totalMarginPctVal.toFixed(1)}%
-                        </td>
+                        {showPrices && (
+                          <td className="p-3.5 text-right font-mono text-indigo-300">
+                            {totalProductionVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        )}
+                        {showPrices && (
+                          <td className="p-3.5 text-right font-mono text-emerald-400">
+                            {totalDeliverableVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        )}
+                        {showPrices && (
+                          <td className="p-3.5 text-right font-mono text-amber-300">
+                            {totalLabourCostVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        )}
+                        {showPrices && (
+                          <td className={`p-3.5 text-right font-mono font-black ${totalGrossMarginVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {totalGrossMarginVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        )}
+                        {showPrices && (
+                          <td className="p-3.5 text-right font-mono">
+                            {totalMarginPctVal.toFixed(1)}%
+                          </td>
+                        )}
                       </tr>
                     </tfoot>
                   </table>
