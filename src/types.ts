@@ -400,3 +400,13 @@ export interface AvailableToReceiveRow {
   available: number;
 }
 
+export interface StyleDailyOutput {
+  id?: string;
+  output_date: string;
+  style_id: string;
+  qty: number;
+  auto_receive: boolean;
+  note?: string | null;
+  created_at?: string;
+}
+

@@ -5,7 +5,7 @@ import {
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
-  AvailableToReceiveRow
+  AvailableToReceiveRow, StyleDailyOutput
 } from '../types';
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
@@ -83,6 +83,7 @@ class DataService {
   private cuttingEntries: CuttingEntry[] = [];
   private samples: GarmentSample[] = [];
   private styleSizes: StyleSize[] = [];
+  private styleDailyOutputs: StyleDailyOutput[] = [];
   private finishingListeners: Set<() => void> = new Set();
   private payrollPeriod: PayrollPeriod = {
     id: 'pp-2026-w31',
@@ -617,6 +618,92 @@ class DataService {
 
     this.styleSizes = (this.styleSizes || []).filter(s => s.style_id !== styleId).concat(prepared);
     return prepared;
+  }
+
+  public async getStyleDailyOutputs(date?: string): Promise<StyleDailyOutput[]> {
+    if (isSupabaseConfigured) {
+      try {
+        let query = supabase.from('style_daily_output').select('*');
+        if (date) {
+          query = query.eq('output_date', date);
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          const fetched: StyleDailyOutput[] = data.map((d: any) => ({
+            id: d.id,
+            output_date: d.output_date,
+            style_id: d.style_id,
+            qty: Number(d.qty || 0),
+            auto_receive: d.auto_receive !== false,
+            note: d.note || null,
+            created_at: d.created_at,
+          }));
+          if (date) {
+            this.styleDailyOutputs = this.styleDailyOutputs
+              .filter(o => o.output_date !== date)
+              .concat(fetched);
+          } else {
+            this.styleDailyOutputs = fetched;
+          }
+          return fetched;
+        }
+      } catch (e) {
+        console.warn('Error fetching style_daily_output from Supabase:', e);
+      }
+    }
+    if (date) {
+      return this.styleDailyOutputs.filter(o => o.output_date === date);
+    }
+    return this.styleDailyOutputs;
+  }
+
+  public async saveStyleDailyOutput(payload: {
+    output_date: string;
+    style_id: string;
+    qty: number;
+    auto_receive?: boolean;
+    note?: string | null;
+  }): Promise<StyleDailyOutput> {
+    const autoReceive = payload.auto_receive !== false;
+    const cleanPayload = sanitizePayload({
+      output_date: payload.output_date,
+      style_id: payload.style_id,
+      qty: Number(payload.qty || 0),
+      auto_receive: autoReceive,
+      note: payload.note || undefined,
+    });
+
+    const outputRecord: StyleDailyOutput = {
+      output_date: payload.output_date,
+      style_id: payload.style_id,
+      qty: Number(payload.qty || 0),
+      auto_receive: autoReceive,
+      note: payload.note || null,
+    };
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('style_daily_output')
+          .upsert(cleanPayload, { onConflict: 'output_date,style_id' })
+          .select();
+
+        if (error) {
+          console.error('Error saving style_daily_output to Supabase:', error);
+          showErrorToast(`Database Error (style_daily_output): ${error.message}`);
+        } else if (data && data.length > 0) {
+          outputRecord.id = data[0].id;
+        }
+      } catch (err) {
+        console.warn('Failed to save style_daily_output to Supabase:', err);
+      }
+    }
+
+    this.styleDailyOutputs = this.styleDailyOutputs
+      .filter(o => !(o.output_date === payload.output_date && o.style_id === payload.style_id))
+      .concat([outputRecord]);
+
+    return outputRecord;
   }
 
   public async getStyleSizeBreakdown(styleId: string): Promise<StyleSizeBreakdownRow[]> {
@@ -2536,9 +2623,18 @@ class DataService {
         return true;
       });
 
-      // CRITICAL RULE #5: Garments sewn = MINIMUM qty_ok across all of a style's operations
+      // Garments sewn: prefer declared output if available, else MINIMUM qty_ok across operations
+      const styleOutputs = this.styleDailyOutputs.filter(o => {
+        if (o.style_id !== st.id) return false;
+        if (pFrom && o.output_date < pFrom) return false;
+        if (pTo && o.output_date > pTo) return false;
+        return true;
+      });
+
       let garments_sewn = 0;
-      if (styleProcs.length > 0) {
+      if (styleOutputs.length > 0) {
+        garments_sewn = styleOutputs.reduce((sum, o) => sum + Number(o.qty || 0), 0);
+      } else if (styleProcs.length > 0) {
         const procQtyMap = new Map<string, number>();
         styleProcs.forEach(p => procQtyMap.set(p.id, 0));
         styleEntries.forEach(e => {

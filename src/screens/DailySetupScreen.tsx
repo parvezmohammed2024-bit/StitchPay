@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { dataService, getLocalDateString } from '../lib/dataService';
 import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
-import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, CuttingEntry, ProductionEntry } from '../types';
+import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, CuttingEntry, ProductionEntry, StyleDailyOutput } from '../types';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { isStyleUnlockedForSewing, getStyleSewingAvailability } from '../lib/cuttingGate';
 
@@ -25,6 +25,10 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const [assignments, setAssignments] = useState<DailyAssignment[]>([]);
   const [cuttingEntries, setCuttingEntries] = useState<CuttingEntry[]>([]);
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
+  const [allDailyOutputs, setAllDailyOutputs] = useState<StyleDailyOutput[]>([]);
+  const [outputValues, setOutputValues] = useState<Record<string, { qty: number; auto_receive: boolean; note?: string }>>({});
+  const [isSavingOutput, setIsSavingOutput] = useState<Record<string, boolean>>({});
+  const [outputSuccessMsg, setOutputSuccessMsg] = useState<Record<string, string | null>>({});
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [selectedStyleIds, setSelectedStyleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -62,7 +66,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      const [allStyles, allProcesses, allWorkers, dailyList, setts, cutEntries, prodEntries] = await Promise.all([
+      const [allStyles, allProcesses, allWorkers, dailyList, setts, cutEntries, prodEntries, dailyOutputs] = await Promise.all([
         dataService.getStyles(),
         dataService.getProcesses(),
         dataService.getWorkers(),
@@ -70,6 +74,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
         dataService.getSettings(),
         dataService.getCuttingEntries(),
         dataService.getProductionEntries(),
+        dataService.getStyleDailyOutputs(),
       ]);
 
       const activeStyles = allStyles.filter(s => !s.status || s.status.toLowerCase() === 'active');
@@ -83,6 +88,19 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
       setSettings(setts);
       setCuttingEntries(cutEntries);
       setProductionEntries(prodEntries);
+      setAllDailyOutputs(dailyOutputs);
+
+      // Initialize output values for selectedDate
+      const nextValues: Record<string, { qty: number; auto_receive: boolean; note?: string }> = {};
+      activeStyles.forEach(style => {
+        const existing = dailyOutputs.find(o => o.style_id === style.id && o.output_date === selectedDate);
+        nextValues[style.id] = {
+          qty: existing ? existing.qty : 0,
+          auto_receive: existing ? existing.auto_receive : true,
+          note: existing?.note || '',
+        };
+      });
+      setOutputValues(nextValues);
 
       // Auto-select all selectable (unlocked) active styles so new unlocked styles and all operation lines are immediately visible
       const selectableStyles = activeStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
@@ -95,6 +113,90 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
       console.error('Error loading Daily Setup data:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Sync output values whenever selectedDate or allDailyOutputs changes
+  useEffect(() => {
+    if (styles.length === 0) return;
+    const nextValues: Record<string, { qty: number; auto_receive: boolean; note?: string }> = {};
+    styles.forEach(style => {
+      const existing = allDailyOutputs.find(o => o.style_id === style.id && o.output_date === selectedDate);
+      nextValues[style.id] = {
+        qty: existing ? existing.qty : 0,
+        auto_receive: existing ? existing.auto_receive : true,
+        note: existing?.note || '',
+      };
+    });
+    setOutputValues(nextValues);
+  }, [selectedDate, allDailyOutputs, styles]);
+
+  const handleOutputQtyChange = (styleId: string, val: string) => {
+    const num = Math.max(0, parseInt(val, 10) || 0);
+    setOutputValues(prev => ({
+      ...prev,
+      [styleId]: {
+        ...prev[styleId],
+        qty: num,
+        auto_receive: prev[styleId]?.auto_receive ?? true,
+      },
+    }));
+  };
+
+  const handleOutputQtyStep = (styleId: string, delta: number) => {
+    setOutputValues(prev => {
+      const current = prev[styleId]?.qty || 0;
+      const nextVal = Math.max(0, current + delta);
+      return {
+        ...prev,
+        [styleId]: {
+          ...prev[styleId],
+          qty: nextVal,
+          auto_receive: prev[styleId]?.auto_receive ?? true,
+        },
+      };
+    });
+  };
+
+  const handleAutoReceiveToggle = (styleId: string, checked: boolean) => {
+    setOutputValues(prev => ({
+      ...prev,
+      [styleId]: {
+        ...prev[styleId],
+        qty: prev[styleId]?.qty || 0,
+        auto_receive: checked,
+      },
+    }));
+  };
+
+  const handleSaveOutput = async (styleId: string, style: GarmentStyle) => {
+    const currentData = outputValues[styleId] || { qty: 0, auto_receive: true };
+    setIsSavingOutput(prev => ({ ...prev, [styleId]: true }));
+    setOutputSuccessMsg(prev => ({ ...prev, [styleId]: null }));
+
+    try {
+      await dataService.saveStyleDailyOutput({
+        output_date: selectedDate,
+        style_id: styleId,
+        qty: currentData.qty,
+        auto_receive: currentData.auto_receive,
+      });
+
+      const refreshedOutputs = await dataService.getStyleDailyOutputs();
+      setAllDailyOutputs(refreshedOutputs);
+
+      setOutputSuccessMsg(prev => ({
+        ...prev,
+        [styleId]: `Saved output of ${currentData.qty} garments for ${style.style_code}`,
+      }));
+
+      setTimeout(() => {
+        setOutputSuccessMsg(prev => ({ ...prev, [styleId]: null }));
+      }, 4000);
+    } catch (err) {
+      console.error('Error saving daily output:', err);
+    } finally {
+      setIsSavingOutput(prev => ({ ...prev, [styleId]: false }));
     }
   };
 
@@ -405,10 +507,10 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
               <div className="flex flex-wrap gap-2">
                 {selectableStyles.map(style => {
                   const isSelected = selectedStyleIds.includes(style.id);
-                  const avail = getStyleSewingAvailability(style, cuttingEntries, processes, productionEntries);
+                  const avail = getStyleSewingAvailability(style, cuttingEntries, processes, productionEntries, allDailyOutputs);
                   const figureLabel = avail.requiresCutting
-                    ? `${avail.bulkCutTotal.toLocaleString()} cut / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`
-                    : `${(style.order_qty || 0).toLocaleString()} order / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`;
+                    ? `${avail.bulkCutTotal.toLocaleString()} cut / ${avail.totalSewn.toLocaleString()} sewn${avail.hasDeclaredOutput ? ' (declared)' : ''} / ${avail.availableToSew.toLocaleString()} available`
+                    : `${(style.order_qty || 0).toLocaleString()} order / ${avail.totalSewn.toLocaleString()} sewn${avail.hasDeclaredOutput ? ' (declared)' : ''} / ${avail.availableToSew.toLocaleString()} available`;
 
                   return (
                     <button
@@ -521,7 +623,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
             .filter(p => p.style_id === styleId)
             .sort((a, b) => a.seq_no - b.seq_no);
 
-          const avail = getStyleSewingAvailability(style, cuttingEntries, processes, productionEntries);
+          const avail = getStyleSewingAvailability(style, cuttingEntries, processes, productionEntries, allDailyOutputs);
           const styleAssignments = assignments.filter(a => a.style_id === styleId);
           const maxTarget = styleAssignments.length > 0 ? Math.max(...styleAssignments.map(a => Number(a.target_qty || 0))) : 0;
           const totalTarget = styleAssignments.reduce((sum, a) => sum + Number(a.target_qty || 0), 0);
@@ -543,8 +645,8 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
 
                 <div className="text-xs font-mono font-semibold text-stone-700 bg-stone-100 px-3 py-1.5 rounded-xl border border-stone-200">
                   {avail.requiresCutting
-                    ? `${avail.bulkCutTotal.toLocaleString()} cut / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`
-                    : `${(style.order_qty || 0).toLocaleString()} order / ${avail.totalSewn.toLocaleString()} sewn / ${avail.availableToSew.toLocaleString()} available`}
+                    ? `${avail.bulkCutTotal.toLocaleString()} cut / ${avail.totalSewn.toLocaleString()} sewn${avail.hasDeclaredOutput ? ' (declared)' : ''} / ${avail.availableToSew.toLocaleString()} available`
+                    : `${(style.order_qty || 0).toLocaleString()} order / ${avail.totalSewn.toLocaleString()} sewn${avail.hasDeclaredOutput ? ' (declared)' : ''} / ${avail.availableToSew.toLocaleString()} available`}
                 </div>
               </div>
 
@@ -734,6 +836,125 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                   );
                 }))}
               </div>
+
+              {/* TOTAL OUTPUT TODAY SECTION */}
+              {(() => {
+                const val = outputValues[styleId] || { qty: 0, auto_receive: true };
+                const hasExistingOutput = allDailyOutputs.some(o => o.style_id === styleId && o.output_date === selectedDate);
+                const isSaving = !!isSavingOutput[styleId];
+                const msg = outputSuccessMsg[styleId];
+
+                // Check validation: Warn if declared output exceeds pieces cut (skip if requires_cutting is false)
+                const requiresCutting = style.requires_cutting !== false;
+                const isExceedingCut = requiresCutting && val.qty > avail.bulkCutTotal;
+
+                return (
+                  <div className="mt-4 pt-4 border-t border-stone-200">
+                    <div className="bg-stone-50 border border-stone-300 rounded-2xl p-4 space-y-3">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-wider text-stone-800 flex items-center space-x-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>Total Output Today</span>
+                            {hasExistingOutput && (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md font-medium normal-case">
+                                Recorded for {selectedDate}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-stone-600 mt-0.5">
+                            Completed garments finished today for this style.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          {/* Stepper Input */}
+                          <div className="flex items-center border border-stone-300 rounded-xl bg-white overflow-hidden shadow-xs">
+                            <button
+                              type="button"
+                              onClick={() => handleOutputQtyStep(styleId, -1)}
+                              className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold transition text-sm select-none"
+                              title="Decrease quantity"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              value={val.qty || ''}
+                              onChange={(e) => handleOutputQtyChange(styleId, e.target.value)}
+                              className="w-20 text-center font-bold text-stone-900 bg-transparent text-sm outline-none px-1"
+                              placeholder="0"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleOutputQtyStep(styleId, 1)}
+                              className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold transition text-sm select-none"
+                              title="Increase quantity"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSaveOutput(styleId, style)}
+                            disabled={isSaving}
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-xs flex items-center space-x-1.5 disabled:opacity-50"
+                          >
+                            {isSaving ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4" />
+                            )}
+                            <span>{hasExistingOutput ? 'Update Output' : 'Save Output'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Validation warning if declared output > pieces cut */}
+                      {isExceedingCut && (
+                        <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-2.5 text-xs flex items-center space-x-2 font-medium">
+                          <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>
+                            You have declared <strong>{val.qty}</strong> garments but only <strong>{avail.bulkCutTotal}</strong> pieces have been cut.
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Success Toast / Feedback */}
+                      {msg && (
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-xl p-2.5 text-xs flex items-center space-x-2 font-medium">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>{msg}</span>
+                        </div>
+                      )}
+
+                      {/* Notes & Helper Text */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-2 border-t border-stone-200/70">
+                        <div className="space-y-0.5">
+                          <p className="text-stone-700 font-medium">
+                            This also records the pieces as received into finishing.
+                          </p>
+                          <p className="text-stone-500 text-[11px]">
+                            Operation entries still determine worker pay. This total only counts finished garments.
+                          </p>
+                        </div>
+
+                        <label className="flex items-center space-x-2 cursor-pointer select-none text-stone-700 font-medium shrink-0 bg-white px-3 py-1.5 rounded-lg border border-stone-200">
+                          <input
+                            type="checkbox"
+                            checked={val.auto_receive}
+                            onChange={(e) => handleAutoReceiveToggle(styleId, e.target.checked)}
+                            className="rounded border-stone-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                          />
+                          <span>Auto-receive in finishing</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })

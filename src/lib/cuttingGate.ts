@@ -1,4 +1,4 @@
-import { GarmentStyle, CuttingEntry, GarmentProcess, ProductionEntry } from '../types';
+import { GarmentStyle, CuttingEntry, GarmentProcess, ProductionEntry, StyleDailyOutput } from '../types';
 
 /**
  * Checks if a style is unlocked and available for sewing / line setup / entry screens.
@@ -26,14 +26,15 @@ export function isStyleUnlockedForSewing(
 /**
  * Calculates cutting and sewing quantities for a style.
  * - totalCutFigure: sum of bulk pieces_cut if requires_cutting = true, OR order_qty if pre-cut.
- * - totalSewn: MINIMUM total qty_ok across the style's sewing processes.
+ * - totalSewn: uses declared output (sum of style_daily_output.qty) if present, otherwise MINIMUM total qty_ok across the style's sewing processes.
  * - availableToSew: Math.max(0, totalCutFigure - totalSewn).
  */
 export function getStyleSewingAvailability(
   style: GarmentStyle,
   cuttingEntries: CuttingEntry[],
   processes: GarmentProcess[],
-  productionEntries: ProductionEntry[]
+  productionEntries: ProductionEntry[],
+  dailyOutputs: StyleDailyOutput[] = []
 ) {
   const styleProcesses = processes.filter(p => String(p.style_id).trim() === String(style.id).trim());
   
@@ -47,9 +48,16 @@ export function getStyleSewingAvailability(
   // Total available ceiling figure (bulk cut if requires_cutting, else order_qty)
   const totalCutFigure = style.requires_cutting ? bulkCutTotal : Number(style.order_qty || 0);
 
-  // Sewn = MINIMUM total qty_ok across that style's sewing processes
+  // Check declared outputs for this style
+  const styleOutputs = dailyOutputs.filter(o => String(o.style_id).trim() === String(style.id).trim());
+  const hasDeclaredOutput = styleOutputs.length > 0;
+  const totalDeclaredOutput = styleOutputs.reduce((sum, o) => sum + Number(o.qty || 0), 0);
+
+  // Sewn = declared output total if exists, else MINIMUM total qty_ok across that style's sewing processes
   let totalSewn = 0;
-  if (styleProcesses.length > 0) {
+  if (hasDeclaredOutput) {
+    totalSewn = totalDeclaredOutput;
+  } else if (styleProcesses.length > 0) {
     const processQtyMap = new Map<string, number>();
     styleProcesses.forEach(p => processQtyMap.set(p.id, 0));
 
@@ -73,6 +81,9 @@ export function getStyleSewingAvailability(
     bulkCutTotal,
     totalCutFigure,
     totalSewn,
+    hasDeclaredOutput,
+    totalDeclaredOutput,
     availableToSew,
   };
 }
+
