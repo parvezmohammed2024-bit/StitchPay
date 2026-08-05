@@ -229,10 +229,10 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
         cut_type: cutForm.cut_type,
         entry_date: cutForm.entry_date,
         pieces_cut: qty,
-        size: cutForm.size || null,
-        tables_layers: cutForm.tables_layers || null,
-        worker_id: cutForm.worker_id || null,
-        notes: cutForm.notes || null,
+        size: cutForm.size || undefined,
+        tables_layers: cutForm.tables_layers || undefined,
+        worker_id: cutForm.worker_id || undefined,
+        notes: cutForm.notes || undefined,
       });
 
       if (isFirstBulkCut) {

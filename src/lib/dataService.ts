@@ -32,6 +32,27 @@ export function cleanUuid(id?: string | null): string {
   return str;
 }
 
+/**
+ * Sanitizes an insert/upsert payload object by removing keys whose values are null, undefined,
+ * or empty strings (or string containing only whitespace).
+ * This ensures columns with database defaults (like size, entered_by, count) are omitted
+ * rather than sent as explicit NULLs, avoiding NOT NULL constraint violations.
+ */
+export function sanitizePayload<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (val === null || val === undefined) {
+      continue;
+    }
+    if (typeof val === 'string' && val.trim() === '') {
+      continue;
+    }
+    clean[key] = val;
+  }
+  return clean;
+}
+
 class DataService {
   private settings: FactorySettings = {
     id: 'default-settings-01',
@@ -459,7 +480,8 @@ class DataService {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('workers').upsert(payload);
+      const cleanPayload = sanitizePayload(payload);
+      const { error } = await supabase.from('workers').upsert(cleanPayload);
       this.handleError(error, 'Error saving worker');
       const refreshed = await this.getWorkers();
       return refreshed.find(w => w.id === id) || payload;
@@ -533,7 +555,8 @@ class DataService {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('styles').upsert(dbPayload);
+      const cleanPayload = sanitizePayload(dbPayload);
+      const { error } = await supabase.from('styles').upsert(cleanPayload);
       this.handleError(error, 'Error saving style');
       const refreshed = await this.getStyles();
       return refreshed.find(s => s.id === id) || (dbPayload as GarmentStyle);
@@ -579,7 +602,7 @@ class DataService {
       try {
         await supabase.from('style_sizes').delete().eq('style_id', styleId);
         if (prepared.length > 0) {
-          const insertPayload = prepared.map(p => ({
+          const insertPayload = prepared.map(p => sanitizePayload({
             style_id: p.style_id,
             size: p.size,
             seq_no: p.seq_no,
@@ -693,7 +716,8 @@ class DataService {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('processes').upsert(payload);
+      const cleanPayload = sanitizePayload(payload);
+      const { error } = await supabase.from('processes').upsert(cleanPayload);
       this.handleError(error, 'Error saving process');
       const refreshed = await this.getProcesses(proc.style_id);
       return refreshed.find(p => p.id === id) || payload;
@@ -961,9 +985,8 @@ class DataService {
     // The database trigger computes both automatically from assignment agreed_rate!
     // Exact schema columns: id, entry_date, worker_id, style_id, process_id, assignment_id, qty_ok, qty_rework, qty_reject, shift, entered_by, note, created_at
     if (isSupabaseConfigured) {
-      const payload: Record<string, any> = {
+      const rawPayload: Record<string, any> = {
         id: entryId,
-        assignment_id: validAssignmentId,
         worker_id: entry.worker_id,
         style_id: entry.style_id,
         process_id: entry.process_id,
@@ -972,9 +995,13 @@ class DataService {
         qty_rework: Number(entry.qty_rework || 0),
         qty_reject: Number(entry.qty_reject || 0),
         shift: entry.shift || 'day',
-        entered_by: isValidUUID(entry.entered_by) ? entry.entered_by : null,
-        note: entry.note || null,
       };
+
+      if (validAssignmentId) rawPayload.assignment_id = validAssignmentId;
+      if (isValidUUID(entry.entered_by)) rawPayload.entered_by = entry.entered_by;
+      if (entry.note) rawPayload.note = entry.note;
+
+      const payload = sanitizePayload(rawPayload);
 
       console.log('[SUPABASE PRODUCTION INSERT PAYLOAD]:', JSON.stringify(payload, null, 2));
 
@@ -1129,21 +1156,34 @@ class DataService {
     if (isSupabaseConfigured) {
       // Exact schema columns:
       // cutting_entries: id, entry_date, style_id, lay_id, size, color, qty_cut, qty_reject, worker_id, shift, note, entered_by, cut_type, created_at
-      const payload: Record<string, any> = {
+      const rawPayload: Record<string, any> = {
         id: entryId,
         entry_date: entryDate,
         style_id: entry.style_id,
-        lay_id: (entry as any).lay_id || null,
-        size: entry.size || (entry as any).size || null,
-        color: (entry as any).color || null,
         qty_cut: qtyCut,
         qty_reject: qtyReject,
-        worker_id: entry.worker_id || null,
         shift: (entry as any).shift || 'day',
-        note: notesText,
-        entered_by: isValidUUID((entry as any).entered_by) ? (entry as any).entered_by : null,
         cut_type: cutTypeVal,
       };
+
+      if ((entry as any).lay_id) rawPayload.lay_id = (entry as any).lay_id;
+
+      // When a style has no size breakdown, OMIT the size field entirely rather than sending an explicit null
+      const rawSize = entry.size || (entry as any).size;
+      if (typeof rawSize === 'string' && rawSize.trim().length > 0 && rawSize.trim().toUpperCase() !== 'ALL') {
+        rawPayload.size = rawSize.trim();
+      }
+
+      if ((entry as any).color) rawPayload.color = (entry as any).color;
+      if (entry.worker_id && isValidUUID(entry.worker_id)) rawPayload.worker_id = entry.worker_id;
+      if (notesText) rawPayload.note = notesText;
+
+      const rawEnteredBy = (entry as any).entered_by;
+      if (isValidUUID(rawEnteredBy)) {
+        rawPayload.entered_by = rawEnteredBy;
+      }
+
+      const payload = sanitizePayload(rawPayload);
 
       console.log('[SUPABASE CUTTING INSERT PAYLOAD]:', JSON.stringify(payload, null, 2));
 
@@ -1266,7 +1306,21 @@ class DataService {
 
     if (isSupabaseConfigured) {
       try {
-        await supabase.from('samples').upsert([newSample]);
+        const payload = sanitizePayload({
+          id: newSample.id,
+          style_id: newSample.style_id,
+          sample_type: newSample.sample_type,
+          status: newSample.status,
+          qty: newSample.qty,
+          size: newSample.size,
+          colour: newSample.colour,
+          requested_date: newSample.requested_date,
+          submitted_date: newSample.submitted_date,
+          buyer_feedback: newSample.buyer_feedback,
+          photo_url: newSample.photo_url,
+          notes: newSample.notes,
+        });
+        await supabase.from('samples').upsert([payload]);
       } catch (e) {
         console.warn('Error saving sample to Supabase:', e);
       }
@@ -1532,7 +1586,8 @@ class DataService {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('attendance').upsert(payload);
+      const cleanPayload = sanitizePayload(payload);
+      const { error } = await supabase.from('attendance').upsert(cleanPayload);
       this.handleError(error, 'Error saving attendance');
       const refreshed = await this.getAttendance(date);
       return refreshed.find(a => a.id === id) || payload;
@@ -1568,7 +1623,8 @@ class DataService {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('adjustments').upsert(newAdj);
+      const cleanPayload = sanitizePayload(newAdj);
+      const { error } = await supabase.from('adjustments').upsert(cleanPayload);
       this.handleError(error, 'Error saving adjustment');
       const refreshed = await this.getAdjustments();
       return refreshed.find(a => a.id === id) || newAdj;
@@ -1732,7 +1788,7 @@ class DataService {
 
       // INSERT PAYLOAD FOR DATABASE:
       // Do NOT send agreed_rate on insert. The database trigger default_agreed_rate populates it from processes.rate automatically!
-      const payload: any = {
+      const rawPayload: any = {
         id: record.id,
         work_date: record.work_date,
         style_id: record.style_id,
@@ -1740,15 +1796,16 @@ class DataService {
         worker_id: record.worker_id,
         target_qty: record.target_qty,
         status: record.status,
-        note: record.note,
       };
+
+      if (record.note) rawPayload.note = record.note;
 
       // Only include agreed_rate if explicitly customized on the item (e.g. from an approved bid)
       if (item.agreed_rate !== undefined && item.agreed_rate !== null) {
-        payload.agreed_rate = Number(item.agreed_rate);
+        rawPayload.agreed_rate = Number(item.agreed_rate);
       }
 
-      payloadsToInsert.push(payload);
+      payloadsToInsert.push(sanitizePayload(rawPayload));
     }
 
     if (isSupabaseConfigured) {
@@ -1918,15 +1975,17 @@ class DataService {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('rate_bids').insert({
+      const payload = sanitizePayload({
         id: newBid.id,
         process_id: newBid.process_id,
         worker_id: newBid.worker_id,
         current_rate: newBid.current_rate,
         proposed_rate: newBid.proposed_rate,
         counter_rate: newBid.counter_rate,
+        reason: newBid.reason,
         status: newBid.status,
       });
+      const { error } = await supabase.from('rate_bids').insert(payload);
       this.handleError(error, 'Error creating rate bid');
       const refreshed = await this.getRateBids();
       return refreshed.find(b => b.id === id) || newBid;
@@ -2302,20 +2361,27 @@ class DataService {
 
     for (const entry of entries) {
       const entryId = entry.id && isValidUUID(entry.id) ? entry.id : crypto.randomUUID();
-      payloads.push({
+      const rawPayload: Record<string, any> = {
         id: entryId,
         entry_date: entry.entry_date || getLocalDateString(),
-        style_id: entry.style_id || null,
-        stage_id: entry.stage_id || null,
-        worker_id: entry.worker_id || null,
         qty_ok: Number(entry.qty_ok || 0),
         qty_rework: Number(entry.qty_rework || 0),
         qty_reject: Number(entry.qty_reject || 0),
         shift: entry.shift || 'day',
-        entered_by: isValidUUID(entry.entered_by) ? entry.entered_by : null,
-        note: entry.note || null,
-        size: entry.size || null,
-      });
+      };
+
+      if (entry.style_id) rawPayload.style_id = entry.style_id;
+      if (entry.stage_id) rawPayload.stage_id = entry.stage_id;
+      if (entry.worker_id && isValidUUID(entry.worker_id)) rawPayload.worker_id = entry.worker_id;
+      if (isValidUUID(entry.entered_by)) rawPayload.entered_by = entry.entered_by;
+      if (entry.note) rawPayload.note = entry.note;
+
+      const rawSize = entry.size;
+      if (typeof rawSize === 'string' && rawSize.trim().length > 0 && rawSize.trim().toUpperCase() !== 'ALL') {
+        rawPayload.size = rawSize.trim();
+      }
+
+      payloads.push(sanitizePayload(rawPayload));
     }
 
     if (isSupabaseConfigured && payloads.length > 0) {

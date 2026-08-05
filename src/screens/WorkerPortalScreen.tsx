@@ -432,7 +432,7 @@ export const WorkerPortalScreen: React.FC = () => {
         cut_type: cuttingForm.cut_type,
         entry_date: cuttingForm.entry_date,
         pieces_cut: Number(cuttingForm.pieces_cut || 0),
-        tables_layers: cuttingForm.tables_layers || null,
+        tables_layers: cuttingForm.tables_layers || undefined,
         notes: cuttingForm.notes || 'Logged via Worker Mobile Portal',
       });
 
