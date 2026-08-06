@@ -442,3 +442,16 @@ export interface WorkerNotification {
   is_read: boolean;
 }
 
+export interface EntryAudit {
+  id: string;
+  created_at: string;
+  table_name: string;
+  action: 'INSERT' | 'UPDATE' | 'DELETE';
+  user_email?: string | null;
+  changed_by?: string | null;
+  summary?: string | null;
+  old_data?: Record<string, any> | null;
+  new_data?: Record<string, any> | null;
+  record_id?: string | null;
+}
+

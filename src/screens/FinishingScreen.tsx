@@ -11,6 +11,7 @@ import {
   DeliveryReport, UserRole, FactorySettings, GarmentProcess, ProductionEntry, StyleSize, StyleSizeBreakdownRow 
 } from '../types';
 import { StyleImage } from '../components/StyleImage';
+import { ViewEntriesModal } from '../components/ViewEntriesModal';
 
 interface FinishingScreenProps {
   role: UserRole;
@@ -171,6 +172,13 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const [dispatchDestination, setDispatchDestination] = useState<string>('');
   const [dispatchNotes, setDispatchNotes] = useState<string>('');
   const [savingDispatch, setSavingDispatch] = useState<boolean>(false);
+
+  // View Entries Modal State (Admin Only)
+  const [viewEntriesTarget, setViewEntriesTarget] = useState<{
+    styleId: string;
+    styleCode: string;
+    styleName: string;
+  } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -816,10 +824,25 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                     <StyleImage src={summary.style.image_url} alt={summary.style.name} className="w-12 h-12 rounded-2xl border border-stone-200 object-cover shrink-0" />
                     <div className="min-w-0">
                       <h3 className="text-base sm:text-lg font-black text-stone-900 tracking-tight truncate">{summary.style.name}</h3>
-                      <p className="text-xs text-stone-500 font-medium truncate">
+                      <p className="text-xs text-stone-500 font-medium truncate flex items-center space-x-2 flex-wrap">
                         <span className="font-mono font-bold text-stone-800">{summary.style.style_code}</span>
                         {summary.style.buyer_name ? <span className="text-stone-700"> • {summary.style.buyer_name}</span> : ''}
+                        {role === 'admin' && (
+                          <button
+                            type="button"
+                            onClick={() => setViewEntriesTarget({
+                              styleId: summary.style.id,
+                              styleCode: summary.style.style_code,
+                              styleName: summary.style.name,
+                            })}
+                            className="inline-flex items-center space-x-1 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200 transition-colors cursor-pointer"
+                          >
+                            <ClipboardList className="w-3 h-3" />
+                            <span>View entries</span>
+                          </button>
+                        )}
                       </p>
+
                     </div>
                   </div>
 
@@ -1680,6 +1703,21 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
           </div>
         </div>
       )}
+
+      {/* VIEW ENTRIES MODAL (ADMIN ONLY) */}
+      {viewEntriesTarget && (
+        <ViewEntriesModal
+          isOpen={!!viewEntriesTarget}
+          onClose={() => setViewEntriesTarget(null)}
+          styleId={viewEntriesTarget.styleId}
+          styleCode={viewEntriesTarget.styleCode}
+          styleName={viewEntriesTarget.styleName}
+          entryType="finishing"
+          role={role}
+          onRefresh={loadData}
+        />
+      )}
     </div>
   );
 };
+

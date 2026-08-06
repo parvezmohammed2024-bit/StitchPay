@@ -4,6 +4,7 @@ import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { FactorySettings, UserRole, Worker } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { AuditLogViewer } from '../components/AuditLogViewer';
 
 interface SettingsScreenProps {
   role: UserRole;
@@ -342,6 +343,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
           </form>
         </div>
       )}
+
+      {/* ADMIN ONLY: Audit Log Viewer Screen Section */}
+      {role === 'admin' && (
+        <AuditLogViewer role={role} />
+      )}
     </div>
   );
 };
+

@@ -3,7 +3,7 @@ import {
   Calendar, Copy, Sparkles, AlertTriangle, Users, Layers, 
   DollarSign, Plus, Trash2, CheckCircle2, RefreshCw, X, Eye, ArrowRight,
   TrendingUp, UserCheck, Search, Info, FileSpreadsheet, Download,
-  Scissors, Clock
+  Scissors, Clock, ClipboardList
 } from 'lucide-react';
 import { dataService, getLocalDateString } from '../lib/dataService';
 import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
@@ -12,6 +12,7 @@ import { WorkerAvatar } from '../components/WorkerAvatar';
 import { StyleImageLightbox } from '../components/StyleImageLightbox';
 import { NewStyleBadge } from '../components/NewStyleBadge';
 import { isStyleUnlockedForSewing, getStyleSewingAvailability } from '../lib/cuttingGate';
+import { ViewEntriesModal } from '../components/ViewEntriesModal';
 
 interface DailySetupScreenProps {
   role?: UserRole;
@@ -34,6 +35,13 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [selectedStyleIds, setSelectedStyleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // View Entries Modal State (Admin Only)
+  const [viewEntriesTarget, setViewEntriesTarget] = useState<{
+    styleId: string;
+    styleCode: string;
+    styleName: string;
+  } | null>(null);
 
   // Auto setup & copy modal states
   const [showCopyDateModal, setShowCopyDateModal] = useState<boolean>(false);
@@ -643,11 +651,26 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                     sizeClassName="w-12 h-12"
                   />
                   <div>
-                    <div className="text-lg font-bold text-stone-900 flex items-center space-x-2">
+                    <div className="text-lg font-bold text-stone-900 flex items-center space-x-2 flex-wrap">
                       <span className="text-amber-800">{style.style_code}</span>
                       <span className="text-stone-600 text-sm font-normal">— {style.name}</span>
                       <NewStyleBadge createdAt={style.created_at} />
+                      {role === 'admin' && (
+                        <button
+                          type="button"
+                          onClick={() => setViewEntriesTarget({
+                            styleId: style.id,
+                            styleCode: style.style_code,
+                            styleName: style.name,
+                          })}
+                          className="inline-flex items-center space-x-1 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200 transition-colors cursor-pointer ml-1"
+                        >
+                          <ClipboardList className="w-3 h-3" />
+                          <span>View entries</span>
+                        </button>
+                      )}
                     </div>
+
                     <p className="text-xs text-stone-500">
                       Sequence order processes for this style
                     </p>
@@ -1252,6 +1275,22 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
           </div>
         </div>
       )}
+
+      {/* VIEW ENTRIES MODAL (ADMIN ONLY) */}
+      {viewEntriesTarget && (
+        <ViewEntriesModal
+          isOpen={!!viewEntriesTarget}
+          onClose={() => setViewEntriesTarget(null)}
+          styleId={viewEntriesTarget.styleId}
+          styleCode={viewEntriesTarget.styleCode}
+          styleName={viewEntriesTarget.styleName}
+          entryType="production"
+          role={role || 'admin'}
+          onRefresh={loadInitialData}
+        />
+      )}
+
     </div>
   );
 };
+

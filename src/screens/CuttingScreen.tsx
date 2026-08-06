@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Scissors, Plus, AlertTriangle, CheckCircle2, Clock, 
   Calendar, Layers, Filter, Image as ImageIcon, FileText, 
-  Upload, Sparkles, AlertCircle, Check, X, Tag, UserCheck, Trash2
+  Upload, Sparkles, AlertCircle, Check, X, Tag, UserCheck, Trash2, ClipboardList
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { 
@@ -12,6 +12,7 @@ import {
 import { showSuccessToast, showErrorToast } from '../lib/toast';
 import { StyleImageLightbox } from '../components/StyleImageLightbox';
 import { NewStyleBadge } from '../components/NewStyleBadge';
+import { ViewEntriesModal } from '../components/ViewEntriesModal';
 
 interface CuttingScreenProps {
   role: UserRole;
@@ -32,6 +33,13 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   const [samples, setSamples] = useState<GarmentSample[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // View Entries Modal State (Admin Only)
+  const [viewEntriesTarget, setViewEntriesTarget] = useState<{
+    styleId: string;
+    styleCode: string;
+    styleName: string;
+  } | null>(null);
 
   // Modal States
   const [isCutModalOpen, setIsCutModalOpen] = useState<boolean>(false);
@@ -531,6 +539,8 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                       style={style}
                       priorityIndex={idx + 1}
                       hasPPApproval={hasApprovedPPSample(style.id)}
+                      role={role}
+                      onViewEntries={() => setViewEntriesTarget({ styleId: style.id, styleCode: style.style_code, styleName: style.name })}
                       onRecordCut={() => {
                         setCutForm(prev => ({ ...prev, style_id: style.id, cut_type: 'bulk' }));
                         setIsCutModalOpen(true);
@@ -567,6 +577,8 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                       key={style.id}
                       style={style}
                       hasPPApproval={hasApprovedPPSample(style.id)}
+                      role={role}
+                      onViewEntries={() => setViewEntriesTarget({ styleId: style.id, styleCode: style.style_code, styleName: style.name })}
                       onRecordCut={() => {
                         setCutForm(prev => ({ ...prev, style_id: style.id, cut_type: 'bulk' }));
                         setIsCutModalOpen(true);
@@ -603,6 +615,8 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                       key={style.id}
                       style={style}
                       hasPPApproval={hasApprovedPPSample(style.id)}
+                      role={role}
+                      onViewEntries={() => setViewEntriesTarget({ styleId: style.id, styleCode: style.style_code, styleName: style.name })}
                       onRecordCut={() => {
                         setCutForm(prev => ({ ...prev, style_id: style.id, cut_type: 'bulk' }));
                         setIsCutModalOpen(true);
@@ -610,6 +624,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                     />
                   ))
                 )}
+
               </div>
             </div>
 
@@ -1167,9 +1182,24 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
           </div>
         </div>
       )}
+
+      {/* VIEW ENTRIES MODAL (ADMIN ONLY) */}
+      {viewEntriesTarget && (
+        <ViewEntriesModal
+          isOpen={!!viewEntriesTarget}
+          onClose={() => setViewEntriesTarget(null)}
+          styleId={viewEntriesTarget.styleId}
+          styleCode={viewEntriesTarget.styleCode}
+          styleName={viewEntriesTarget.styleName}
+          entryType="cutting"
+          role={role}
+          onRefresh={loadData}
+        />
+      )}
     </div>
   );
 };
+
 
 // COMPONENT: STYLE CARD FOR CUTTING BOARD
 interface StyleCardProps {
@@ -1177,9 +1207,12 @@ interface StyleCardProps {
   priorityIndex?: number;
   hasPPApproval: boolean;
   onRecordCut: () => void;
+  role?: UserRole;
+  onViewEntries?: () => void;
 }
 
-const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, hasPPApproval, onRecordCut }) => {
+const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, hasPPApproval, onRecordCut, role, onViewEntries }) => {
+
   const percent = Math.min(100, Math.round((style.bulk_cut / (style.order_qty || 1)) * 100));
   const piecesPending = Math.max(0, style.order_qty - style.bulk_cut);
 
@@ -1227,7 +1260,19 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, hasPPApprov
                 {style.style_code}
               </span>
               <NewStyleBadge createdAt={style.created_at} />
+              {role === 'admin' && onViewEntries && (
+                <button
+                  type="button"
+                  onClick={onViewEntries}
+                  className="inline-flex items-center space-x-1 text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200 transition-colors cursor-pointer ml-1"
+                >
+                  <ClipboardList className="w-3 h-3" />
+                  <span>View entries</span>
+                </button>
+              )}
+
             </div>
+
             <h4 className="font-extrabold text-stone-900 text-sm leading-tight mt-1">
               {style.name}
             </h4>

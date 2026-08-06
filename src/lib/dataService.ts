@@ -5,8 +5,16 @@ import {
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
-  AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow
+  AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow, EntryAudit
 } from '../types';
+
+function formatLockedPeriodError(err: any): Error {
+  const msg = typeof err === 'string' ? err : err?.message || String(err || '');
+  if (msg.toLowerCase().includes('lock') || msg.toLowerCase().includes('payroll') || msg.toLowerCase().includes('closed')) {
+    return new Error('This entry is in a locked payroll period and cannot be changed. Unlock the period first.');
+  }
+  return err instanceof Error ? err : new Error(msg);
+}
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
 } from './store';
@@ -1464,18 +1472,8 @@ class DataService {
     return newEntry;
   }
 
-  public async deleteCuttingEntry(id: string): Promise<void> {
-    this.cuttingEntries = this.cuttingEntries.filter(c => c.id !== id);
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('cutting_entries').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Error deleting cutting entry from Supabase:', e);
-      }
-    }
-  }
-
   public async clearCuttingData(): Promise<void> {
+
     this.cuttingEntries = [];
     this.samples = [];
     if (isSupabaseConfigured) {
@@ -3508,6 +3506,342 @@ class DataService {
 
     return rows;
   }
+
+  // --- REPORTING, EDIT & DELETE FOR OUTPUT ENTRIES (ADMIN ONLY) ---
+  public async getFinishingEntriesReport(styleId: string, date?: string): Promise<any[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('rpt_finishing_entries', {
+          p_style_id: styleId,
+          p_date: date || null,
+        });
+        if (!error && data) {
+          const workers = await this.getWorkers();
+          const workerMap = new Map(workers.map(w => [w.id, w]));
+          const stages = await this.getFinishingStages();
+          const stageMap = new Map(stages.map(s => [s.id, s]));
+
+          return data.map((e: any) => ({
+            ...e,
+            id: e.id || e.entry_id,
+            entry_date: e.entry_date || e.date,
+            stage_id: e.stage_id,
+            stage_name: e.stage_name || (e.stage_id ? stageMap.get(e.stage_id)?.name : null) || 'Finishing Stage',
+            worker_id: e.worker_id,
+            worker_name: e.worker_name || (e.worker_id ? workerMap.get(e.worker_id)?.full_name : null) || 'Worker',
+            qty_ok: e.qty_ok ?? e.qty ?? 0,
+            qty_rework: e.qty_rework ?? 0,
+            qty_reject: e.qty_reject ?? 0,
+            note: e.note || null,
+            created_at: e.created_at || e.entry_date,
+          }));
+        }
+      } catch (e) {
+        console.warn('rpt_finishing_entries RPC failed, falling back to table query:', e);
+      }
+    }
+
+    return this.getFinishingEntries({ styleId, date });
+  }
+
+  public async getCuttingEntriesReport(styleId: string): Promise<any[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('cutting_entries')
+          .select('*')
+          .eq('style_id', styleId)
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          const workers = await this.getWorkers();
+          const workerMap = new Map(workers.map(w => [w.id, w]));
+
+          return data.map((e: any) => ({
+            ...e,
+            worker_name: e.worker_id ? workerMap.get(e.worker_id)?.full_name || 'Worker' : 'N/A',
+          }));
+        }
+      } catch (e) {
+        console.warn('Error fetching cutting entries:', e);
+      }
+    }
+
+    const workers = await this.getWorkers();
+    const workerMap = new Map(workers.map(w => [w.id, w]));
+    const list = this.cuttingEntries.filter(e => e.style_id === styleId);
+    return list.map(e => ({
+      ...e,
+      worker_name: e.worker_id ? workerMap.get(e.worker_id)?.full_name || 'Worker' : 'N/A',
+    }));
+  }
+
+  public async getProductionEntriesReport(styleId: string): Promise<any[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('production_entries')
+          .select('*')
+          .eq('style_id', styleId)
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          const workers = await this.getWorkers();
+          const processes = await this.getProcesses();
+          const workerMap = new Map(workers.map(w => [w.id, w]));
+          const processMap = new Map(processes.map(p => [p.id, p]));
+
+          return data.map((e: any) => ({
+            ...e,
+            worker_name: e.worker_id ? workerMap.get(e.worker_id)?.full_name || 'Worker' : 'N/A',
+            process_name: e.process_id ? processMap.get(e.process_id)?.name || 'Operation' : 'N/A',
+          }));
+        }
+      } catch (e) {
+        console.warn('Error fetching production entries:', e);
+      }
+    }
+
+    const workers = await this.getWorkers();
+    const processes = await this.getProcesses();
+    const workerMap = new Map(workers.map(w => [w.id, w]));
+    const processMap = new Map(processes.map(p => [p.id, p]));
+
+    const list = this.productionEntries.filter(e => e.style_id === styleId);
+    return list.map(e => ({
+      ...e,
+      worker_name: e.worker_id ? workerMap.get(e.worker_id)?.full_name || 'Worker' : 'N/A',
+      process_name: e.process_id ? processMap.get(e.process_id)?.name || 'Operation' : 'N/A',
+    }));
+  }
+
+  public async updateProductionEntry(id: string, updates: Partial<ProductionEntry>, entryDate?: string): Promise<void> {
+    const dateToCheck = entryDate || updates.entry_date;
+    if (dateToCheck && this.isPeriodLocked(dateToCheck)) {
+      const err = new Error('This entry is in a locked payroll period and cannot be changed. Unlock the period first.');
+      showErrorToast(err.message);
+      throw err;
+    }
+
+    // CRITICAL: For production_entries, do NOT touch rate_snapshot or amount.
+    // The database trigger recalculates them from qty_ok automatically!
+    const payload: Record<string, any> = {};
+    if (updates.qty_ok !== undefined) payload.qty_ok = Number(updates.qty_ok);
+    if (updates.qty_rework !== undefined) payload.qty_rework = Number(updates.qty_rework);
+    if (updates.qty_reject !== undefined) payload.qty_reject = Number(updates.qty_reject);
+    if (updates.shift !== undefined) payload.shift = updates.shift;
+    if (updates.note !== undefined) payload.note = updates.note;
+    if (updates.worker_id !== undefined) payload.worker_id = updates.worker_id;
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('production_entries').update(payload).eq('id', id);
+      if (error) {
+        console.error('Error updating production_entries:', error);
+        const formatted = formatLockedPeriodError(error);
+        showErrorToast(formatted.message);
+        throw formatted;
+      }
+    }
+
+    const idx = this.productionEntries.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      this.productionEntries[idx] = { ...this.productionEntries[idx], ...payload };
+    }
+  }
+
+  public async deleteProductionEntry(id: string, entryDate?: string): Promise<void> {
+    if (entryDate && this.isPeriodLocked(entryDate)) {
+      const err = new Error('This entry is in a locked payroll period and cannot be changed. Unlock the period first.');
+      showErrorToast(err.message);
+      throw err;
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('production_entries').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting production_entries:', error);
+        const formatted = formatLockedPeriodError(error);
+        showErrorToast(formatted.message);
+        throw formatted;
+      }
+    }
+
+    this.productionEntries = this.productionEntries.filter(e => e.id !== id);
+  }
+
+  public async updateFinishingEntry(id: string, updates: Partial<FinishingEntry>, entryDate?: string): Promise<void> {
+    const dateToCheck = entryDate || updates.entry_date;
+    if (dateToCheck && this.isPeriodLocked(dateToCheck)) {
+      const err = new Error('This entry is in a locked payroll period and cannot be changed. Unlock the period first.');
+      showErrorToast(err.message);
+      throw err;
+    }
+
+    const payload: Record<string, any> = {};
+    if (updates.qty_ok !== undefined) payload.qty_ok = Number(updates.qty_ok);
+    if (updates.qty_rework !== undefined) payload.qty_rework = Number(updates.qty_rework);
+    if (updates.qty_reject !== undefined) payload.qty_reject = Number(updates.qty_reject);
+    if (updates.note !== undefined) payload.note = updates.note;
+    if (updates.shift !== undefined) payload.shift = updates.shift;
+    if (updates.size !== undefined) payload.size = updates.size;
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('finishing_entries').update(payload).eq('id', id);
+      if (error) {
+        console.error('Error updating finishing_entries:', error);
+        const formatted = formatLockedPeriodError(error);
+        showErrorToast(formatted.message);
+        throw formatted;
+      }
+    }
+
+    const idx = this.finishingEntries.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      this.finishingEntries[idx] = { ...this.finishingEntries[idx], ...payload };
+    }
+  }
+
+  public async deleteFinishingEntry(id: string, entryDate?: string): Promise<void> {
+    if (entryDate && this.isPeriodLocked(entryDate)) {
+      const err = new Error('This entry is in a locked payroll period and cannot be changed. Unlock the period first.');
+      showErrorToast(err.message);
+      throw err;
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('finishing_entries').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting finishing_entries:', error);
+        const formatted = formatLockedPeriodError(error);
+        showErrorToast(formatted.message);
+        throw formatted;
+      }
+    }
+
+    this.finishingEntries = this.finishingEntries.filter(e => e.id !== id);
+  }
+
+  public async updateCuttingEntry(id: string, updates: Partial<CuttingEntry>, entryDate?: string): Promise<void> {
+    const dateToCheck = entryDate || updates.entry_date;
+    if (dateToCheck && this.isPeriodLocked(dateToCheck)) {
+      const err = new Error('This entry is in a locked payroll period and cannot be changed. Unlock the period first.');
+      showErrorToast(err.message);
+      throw err;
+    }
+
+    const payload: Record<string, any> = {};
+    if (updates.pieces_cut !== undefined) payload.pieces_cut = Number(updates.pieces_cut);
+    if (updates.size !== undefined) payload.size = updates.size;
+    if (updates.tables_layers !== undefined) payload.tables_layers = updates.tables_layers;
+    if (updates.notes !== undefined) payload.notes = updates.notes;
+    if (updates.worker_id !== undefined) payload.worker_id = updates.worker_id;
+
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('cutting_entries').update(payload).eq('id', id);
+      if (error) {
+        console.error('Error updating cutting_entries:', error);
+        const formatted = formatLockedPeriodError(error);
+        showErrorToast(formatted.message);
+        throw formatted;
+      }
+    }
+
+    const idx = this.cuttingEntries.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      this.cuttingEntries[idx] = { ...this.cuttingEntries[idx], ...payload };
+    }
+  }
+
+  public async deleteCuttingEntry(id: string, entryDate?: string): Promise<void> {
+    if (entryDate && this.isPeriodLocked(entryDate)) {
+      const err = new Error('This entry is in a locked payroll period and cannot be changed. Unlock the period first.');
+      showErrorToast(err.message);
+      throw err;
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('cutting_entries').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting cutting_entries:', error);
+        const formatted = formatLockedPeriodError(error);
+        showErrorToast(formatted.message);
+        throw formatted;
+      }
+    }
+
+    this.cuttingEntries = this.cuttingEntries.filter(e => e.id !== id);
+  }
+
+  public async getAuditLogs(filters?: { tableName?: string; fromDate?: string; toDate?: string }): Promise<EntryAudit[]> {
+    if (isSupabaseConfigured) {
+      try {
+        let query = supabase.from('entry_audit').select('*').order('created_at', { ascending: false });
+        if (filters?.tableName && filters.tableName !== 'all') {
+          query = query.eq('table_name', filters.tableName);
+        }
+        if (filters?.fromDate) {
+          query = query.gte('created_at', filters.fromDate);
+        }
+        if (filters?.toDate) {
+          query = query.lte('created_at', filters.toDate + 'T23:59:59');
+        }
+
+        const { data, error } = await query;
+        if (!error && data) {
+          return data as EntryAudit[];
+        }
+      } catch (err) {
+        console.warn('Error fetching entry_audit from Supabase:', err);
+      }
+    }
+
+    let logs: EntryAudit[] = [
+      {
+        id: 'aud-1',
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        table_name: 'production_entries',
+        action: 'UPDATE',
+        user_email: 'admin@factory.com',
+        changed_by: 'Admin User',
+        summary: 'qty_ok: 275 → 150',
+        old_data: { qty_ok: 275 },
+        new_data: { qty_ok: 150 },
+      },
+      {
+        id: 'aud-2',
+        created_at: new Date(Date.now() - 86400000).toISOString(),
+        table_name: 'finishing_entries',
+        action: 'INSERT',
+        user_email: 'admin@factory.com',
+        changed_by: 'Admin User',
+        summary: 'qty_ok: 120 at Ready to Deliver',
+        old_data: null,
+        new_data: { qty_ok: 120 },
+      },
+      {
+        id: 'aud-3',
+        created_at: new Date(Date.now() - 172800000).toISOString(),
+        table_name: 'cutting_entries',
+        action: 'DELETE',
+        user_email: 'admin@factory.com',
+        changed_by: 'Admin User',
+        summary: 'Deleted 200 pcs (Size M, Navy)',
+        old_data: { qty_cut: 200, size: 'M' },
+        new_data: null,
+      }
+    ];
+
+    if (filters?.tableName && filters.tableName !== 'all') {
+      logs = logs.filter(l => l.table_name === filters.tableName);
+    }
+    if (filters?.fromDate) {
+      logs = logs.filter(l => l.created_at.substring(0, 10) >= filters.fromDate!);
+    }
+    if (filters?.toDate) {
+      logs = logs.filter(l => l.created_at.substring(0, 10) <= filters.toDate!);
+    }
+    return logs;
+  }
 }
+
 
 export const dataService = new DataService();
