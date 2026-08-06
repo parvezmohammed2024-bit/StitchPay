@@ -6,9 +6,10 @@ import {
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from 'recharts';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
-import { ProductionEntry, GarmentStyle, Worker, FactorySettings, DailyAssignment, GarmentProcess, TodaySectionRow } from '../types';
+import { ProductionEntry, GarmentStyle, Worker, FactorySettings, DailyAssignment, GarmentProcess, TodaySectionRow, StylePipelineRow } from '../types';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { StyleImage } from '../components/StyleImage';
+import { StylePipelineCard } from '../components/StylePipelineCard';
 import { TodaysPerformanceSection } from '../components/TodaysPerformanceSection';
 
 export const DashboardScreen: React.FC = () => {
@@ -20,6 +21,7 @@ export const DashboardScreen: React.FC = () => {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [assignments, setAssignments] = useState<DailyAssignment[]>([]);
   const [todaySections, setTodaySections] = useState<TodaySectionRow[]>([]);
+  const [pipelines, setPipelines] = useState<StylePipelineRow[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +31,7 @@ export const DashboardScreen: React.FC = () => {
 
   const loadDashboardData = async () => {
     setLoading(true);
-    const [eList, sList, pList, wList, aList, setRes, secList] = await Promise.all([
+    const [eList, sList, pList, wList, aList, setRes, secList, pipeList] = await Promise.all([
       dataService.getProductionEntries(),
       dataService.getStyles(),
       dataService.getProcesses(),
@@ -37,6 +39,7 @@ export const DashboardScreen: React.FC = () => {
       dataService.getDailyAssignments(selectedDate),
       dataService.getSettings(),
       dataService.getRptTodaySections(selectedDate),
+      dataService.getRptStylePipeline(),
     ]);
     setEntries(eList);
     setStyles(sList);
@@ -45,6 +48,7 @@ export const DashboardScreen: React.FC = () => {
     setAssignments(aList);
     setSettings(setRes);
     setTodaySections(secList);
+    setPipelines(pipeList);
     setLoading(false);
   };
 
@@ -459,92 +463,17 @@ export const DashboardScreen: React.FC = () => {
         </h3>
         <p className="text-xs text-stone-600 mb-4">Completed order garments vs buyer target</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {styles.map(style => {
-            const completed = style.completed_pieces || 0;
-            const target = style.order_qty || 1;
-            const percent = Math.min(100, Math.round((completed / target) * 100));
-
-            return (
-              <div key={style.id} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center space-x-3">
-                    <StyleImage
-                      imageUrl={style.image_url}
-                      styleName={style.name}
-                      className="w-12 h-12 rounded-lg object-cover"
-                    />
-                    <div>
-                      <h4 className="font-bold text-sm text-stone-900">{style.name}</h4>
-                      <p className="text-xs text-stone-600 font-mono">{style.style_code} • {style.buyer_name}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold px-2 py-1 bg-indigo-50 text-indigo-800 rounded-lg border border-indigo-200">
-                    {percent}% Done
-                  </span>
-                </div>
-
-                <div className="w-full bg-stone-200 h-2.5 rounded-full overflow-hidden mt-3">
-                  <div 
-                    className="bg-gradient-to-r from-indigo-600 to-amber-600 h-full rounded-full transition-all duration-500" 
-                    style={{ width: `${percent}%` }}
-                  ></div>
-                </div>
-
-                <div className="flex justify-between text-xs font-mono text-stone-600 mt-2">
-                  <span>{completed.toLocaleString()} completed</span>
-                  <span>Target: {target.toLocaleString()} pcs</span>
-                </div>
-
-                {/* Production Pipeline Stages */}
-                <div className="pt-3 border-t border-stone-200 mt-3">
-                  <div className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                    <span>Pipeline Stage Flow</span>
-                    {style.requires_cutting === false && (
-                      <span className="text-[10px] font-bold text-stone-500 bg-stone-200/70 px-1.5 py-0.5 rounded">
-                        Starts at Sewing
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-4 gap-1 text-[11px] font-bold text-center">
-                    {/* Stage 1: Cutting */}
-                    {style.requires_cutting === false ? (
-                      <div className="bg-stone-200/60 text-stone-600 border border-stone-300 rounded-lg p-1.5 flex flex-col items-center justify-center">
-                        <span className="text-[9px] uppercase tracking-tight text-stone-600">Cutting</span>
-                        <span className="text-[10px] font-bold text-stone-600">Pre-cut</span>
-                      </div>
-                    ) : (
-                      <div className="bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
-                        <span className="text-[9px] uppercase tracking-tight text-indigo-600">Cutting</span>
-                        <span className="text-[10px] font-bold text-indigo-800">In-house</span>
-                      </div>
-                    )}
-
-                    {/* Stage 2: Sewing */}
-                    <div className="bg-amber-50 text-amber-900 border border-amber-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
-                      <span className="text-[9px] uppercase tracking-tight text-amber-700">Sewing</span>
-                      <span className="text-[10px] font-bold text-amber-900">Active</span>
-                    </div>
-
-                    {/* Stage 3: Finishing */}
-                    <div className="bg-purple-50 text-purple-900 border border-purple-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
-                      <span className="text-[9px] uppercase tracking-tight text-purple-700">Finishing</span>
-                      <span className="text-[10px] font-bold text-purple-900">Pipeline</span>
-                    </div>
-
-                    {/* Stage 4: Delivery */}
-                    <div className="bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-lg p-1.5 flex flex-col items-center justify-center">
-                      <span className="text-[9px] uppercase tracking-tight text-emerald-700">Delivery</span>
-                      <span className="text-[10px] font-bold text-emerald-900">
-                        {(style.delivered_pieces || 0).toLocaleString()} pcs
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {pipelines.length === 0 ? (
+          <div className="p-8 text-center text-stone-500 text-xs font-mono">
+            No active garment style pipeline data available.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pipelines.map(pipe => (
+              <StylePipelineCard key={pipe.style_id || pipe.style_code} pipeline={pipe} isDark={false} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

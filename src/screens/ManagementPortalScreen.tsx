@@ -5,9 +5,10 @@ import {
   RefreshCw, LayoutDashboard, BarChart3, AlertCircle, Clock, CheckCircle2, Phone, Lock, Eye, EyeOff
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
-import { StyleFinancialRecord, MgmtValueTodayRecord, MgmtOrderOverviewRecord, FactorySettings, TodaySectionRow } from '../types';
+import { StyleFinancialRecord, MgmtValueTodayRecord, MgmtOrderOverviewRecord, FactorySettings, TodaySectionRow, StylePipelineRow } from '../types';
 import { FooterCredit } from '../components/FooterCredit';
 import { TodaysPerformanceSection } from '../components/TodaysPerformanceSection';
+import { StylePipelineCard } from '../components/StylePipelineCard';
 
 export const ManagementPortalScreen: React.FC = () => {
   // Authentication State
@@ -32,6 +33,7 @@ export const ManagementPortalScreen: React.FC = () => {
   const [valueToday, setValueToday] = useState<MgmtValueTodayRecord | null>(null);
   const [overviewOrders, setOverviewOrders] = useState<MgmtOrderOverviewRecord[]>([]);
   const [todaySections, setTodaySections] = useState<TodaySectionRow[]>([]);
+  const [pipelines, setPipelines] = useState<StylePipelineRow[]>([]);
 
   // Reports Data State
   const [fromDate, setFromDate] = useState<string>('');
@@ -68,14 +70,16 @@ export const ManagementPortalScreen: React.FC = () => {
     setLoadingData(true);
     try {
       if (activeTab === 'dashboard') {
-        const [todayRes, overviewRes, sectionsRes] = await Promise.all([
+        const [todayRes, overviewRes, sectionsRes, pipelineRes] = await Promise.all([
           dataService.getMgmtValueToday(userToken, selectedDate),
           dataService.getMgmtOverview(userToken),
           dataService.getMgmtTodaySections(userToken, selectedDate),
+          dataService.getMgmtStylePipeline(userToken),
         ]);
         setValueToday(todayRes);
         setOverviewOrders(overviewRes);
         setTodaySections(sectionsRes);
+        setPipelines(pipelineRes);
       } else {
         const finRes = await dataService.getMgmtFinancials(userToken, fromDate || null, toDate || null);
         setFinancials(finRes);
@@ -449,7 +453,7 @@ export const ManagementPortalScreen: React.FC = () => {
                   <p className="text-xs text-stone-400">Order completion progress and shipping target days</p>
                 </div>
                 <span className="text-xs text-stone-400 font-mono">
-                  {overviewOrders.length} {overviewOrders.length === 1 ? 'Order' : 'Orders'}
+                  {pipelines.length} {pipelines.length === 1 ? 'Order' : 'Orders'}
                 </span>
               </div>
 
@@ -457,62 +461,41 @@ export const ManagementPortalScreen: React.FC = () => {
                 <div className="p-8 text-center text-stone-400 text-xs font-mono">
                   Loading active order status...
                 </div>
-              ) : overviewOrders.length === 0 ? (
+              ) : pipelines.length === 0 ? (
                 <div className="p-8 text-center text-stone-400 text-xs">
                   No active garment orders currently in progress.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {overviewOrders.map((ord, idx) => {
-                    const orderQty = ord.order_qty || 1;
-                    const sewnQty = ord.garments_sewn || 0;
-                    const progressPct = Math.min(100, Math.round((sewnQty / orderQty) * 100));
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {pipelines.map((pipe, idx) => {
+                    const ord = overviewOrders.find(o => 
+                      (pipe.style_id && o.style_id === pipe.style_id) || 
+                      (o.style_code && o.style_code === pipe.style_code)
+                    );
+
+                    const daysBadge = ord?.days_to_ship !== undefined ? (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono shrink-0 border ${
+                        ord.days_to_ship < 0
+                          ? 'bg-rose-950/80 text-rose-300 border-rose-800'
+                          : ord.days_to_ship <= 3
+                          ? 'bg-amber-950/80 text-amber-300 border-amber-800'
+                          : 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                      }`}>
+                        {ord.days_to_ship < 0 
+                          ? `Overdue by ${Math.abs(ord.days_to_ship)}d` 
+                          : ord.days_to_ship === 0 
+                          ? 'Ship Today' 
+                          : `${ord.days_to_ship}d left`}
+                      </span>
+                    ) : null;
 
                     return (
-                      <div 
-                        key={ord.style_id || idx} 
-                        className="bg-stone-900 border border-stone-700/80 rounded-2xl p-4 space-y-3 hover:border-stone-600 transition-colors"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="text-sm font-black text-white font-mono">{ord.style_code}</div>
-                            <div className="text-xs text-stone-400 font-medium">{ord.buyer}</div>
-                          </div>
-
-                          {/* Days to ship pill */}
-                          {ord.days_to_ship !== undefined && (
-                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full font-mono shrink-0 border ${
-                              ord.days_to_ship < 0
-                                ? 'bg-rose-950/80 text-rose-300 border-rose-800'
-                                : ord.days_to_ship <= 3
-                                ? 'bg-amber-950/80 text-amber-300 border-amber-800'
-                                : 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
-                            }`}>
-                              {ord.days_to_ship < 0 
-                                ? `Overdue by ${Math.abs(ord.days_to_ship)} days` 
-                                : ord.days_to_ship === 0 
-                                ? 'Ship Today' 
-                                : `${ord.days_to_ship} days left`}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-xs font-mono">
-                            <span className="text-stone-400">Sewn Progress:</span>
-                            <span className="text-white font-bold">
-                              {sewnQty.toLocaleString()} / {orderQty.toLocaleString()} pcs ({progressPct}%)
-                            </span>
-                          </div>
-                          <div className="w-full bg-stone-800 h-2.5 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-gradient-to-r from-amber-400 to-emerald-400 h-full transition-all duration-500 rounded-full"
-                              style={{ width: `${progressPct}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
+                      <StylePipelineCard
+                        key={pipe.style_id || pipe.style_code || idx}
+                        pipeline={pipe}
+                        isDark={true}
+                        extraBadge={daysBadge}
+                      />
                     );
                   })}
                 </div>

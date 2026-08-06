@@ -88,6 +88,25 @@ export interface StyleFinancialRecord {
   margin_pct: number;
 }
 
+export interface StylePipelineRow {
+  style_id?: string;
+  style_code: string;
+  style_name?: string;
+  buyer_name?: string;
+  image_url?: string | null;
+  order_qty: number;
+  requires_cutting?: boolean;
+  qty_cut: number;
+  qty_sewn: number;
+  qty_in_finishing: number;
+  qty_ready: number;
+  pct_cut: number;
+  pct_sewn: number;
+  pct_finishing: number;
+  pct_ready: number;
+  bottleneck?: string | null;
+}
+
 export interface MgmtValueTodayRecord {
   production_value_today: number;
   deliverable_value_today: number;

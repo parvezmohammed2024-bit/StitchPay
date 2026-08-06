@@ -5,7 +5,7 @@ import {
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
-  AvailableToReceiveRow, StyleDailyOutput, WorkerNotification
+  AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow
 } from '../types';
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
@@ -3164,6 +3164,138 @@ class DataService {
     }
 
     return this.getFallbackTodaySections(targetDate);
+  }
+
+  public async getRptStylePipeline(): Promise<StylePipelineRow[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('rpt_style_pipeline');
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => this.mapStylePipelineRow(item));
+        }
+        if (error) {
+          console.warn('RPC rpt_style_pipeline error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC rpt_style_pipeline call failed, using fallback:', err);
+      }
+    }
+    return this.getFallbackStylePipeline();
+  }
+
+  public async getMgmtStylePipeline(pToken: string): Promise<StylePipelineRow[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('mgmt_style_pipeline', {
+          p_token: pToken,
+        });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => this.mapStylePipelineRow(item));
+        }
+        if (error) {
+          console.warn('RPC mgmt_style_pipeline error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC mgmt_style_pipeline call failed, using fallback:', err);
+      }
+    }
+    return this.getFallbackStylePipeline();
+  }
+
+  private mapStylePipelineRow(item: any): StylePipelineRow {
+    const orderQty = Number(item.order_qty || 0);
+    const qtyCut = Number(item.qty_cut || 0);
+    const qtySewn = Number(item.qty_sewn || 0);
+    const qtyFinishing = Number(item.qty_in_finishing || item.qty_finishing || 0);
+    const qtyReady = Number(item.qty_ready || 0);
+
+    const calcPct = (qty: number) => orderQty > 0 ? Math.min(100, Math.round((qty / orderQty) * 100)) : 0;
+
+    return {
+      style_id: item.style_id || item.id || '',
+      style_code: item.style_code || item.code || 'Style',
+      style_name: item.style_name || item.name || '',
+      buyer_name: item.buyer_name || item.buyer || 'N/A',
+      image_url: item.image_url || null,
+      order_qty: orderQty,
+      requires_cutting: item.requires_cutting !== undefined ? Boolean(item.requires_cutting) : true,
+      qty_cut: qtyCut,
+      qty_sewn: qtySewn,
+      qty_in_finishing: qtyFinishing,
+      qty_ready: qtyReady,
+      pct_cut: item.pct_cut !== undefined && item.pct_cut !== null ? Number(item.pct_cut) : calcPct(qtyCut),
+      pct_sewn: item.pct_sewn !== undefined && item.pct_sewn !== null ? Number(item.pct_sewn) : calcPct(qtySewn),
+      pct_finishing: item.pct_finishing !== undefined && item.pct_finishing !== null ? Number(item.pct_finishing) : calcPct(qtyFinishing),
+      pct_ready: item.pct_ready !== undefined && item.pct_ready !== null ? Number(item.pct_ready) : calcPct(qtyReady),
+      bottleneck: item.bottleneck || null,
+    };
+  }
+
+  private async getFallbackStylePipeline(): Promise<StylePipelineRow[]> {
+    const styles = await this.getStyles();
+    const activeStyles = styles.filter(s => s.status !== 'archived');
+    const targetStyles = activeStyles.length > 0 ? activeStyles : styles;
+
+    const results: StylePipelineRow[] = [];
+
+    for (const st of targetStyles) {
+      const orderQty = st.order_qty || 1;
+      const requiresCutting = st.requires_cutting !== false;
+
+      let qtyCut = 0;
+      if (requiresCutting) {
+        const cutEntries = (await this.getCuttingEntries()).filter(c => c.style_id === st.id);
+        qtyCut = cutEntries.reduce((sum, c) => sum + Number(c.pieces_cut || 0), 0);
+      }
+
+      const financials = await this.getStyleFinancials(st.id);
+      const fin = financials.length > 0 ? financials[0] : null;
+
+      const qtySewn = fin ? fin.garments_sewn : 0;
+      const qtyFinishing = fin ? (fin.received_in_finishing || 0) : 0;
+      const qtyReady = fin ? fin.ready_to_deliver : (st.completed_pieces || 0);
+
+      const pctCut = requiresCutting ? Math.min(100, Math.round((qtyCut / orderQty) * 100)) : 100;
+      const pctSewn = Math.min(100, Math.round((qtySewn / orderQty) * 100));
+      const pctFinishing = Math.min(100, Math.round((qtyFinishing / orderQty) * 100));
+      const pctReady = Math.min(100, Math.round((qtyReady / orderQty) * 100));
+
+      let bottleneck: string | null = null;
+      let maxBacklog = 0;
+
+      const cutBacklog = requiresCutting ? Math.max(0, orderQty - qtyCut) : 0;
+      const sewBacklog = Math.max(0, (requiresCutting ? qtyCut : orderQty) - qtySewn);
+      const finBacklog = Math.max(0, qtySewn - qtyFinishing);
+      const readyBacklog = Math.max(0, qtyFinishing - qtyReady);
+
+      if (cutBacklog > maxBacklog) { maxBacklog = cutBacklog; bottleneck = 'CUTTING'; }
+      if (sewBacklog > maxBacklog) { maxBacklog = sewBacklog; bottleneck = 'SEWING'; }
+      if (finBacklog > maxBacklog) { maxBacklog = finBacklog; bottleneck = 'FINISHING'; }
+      if (readyBacklog > maxBacklog) { maxBacklog = readyBacklog; bottleneck = 'READY'; }
+
+      results.push({
+        style_id: st.id,
+        style_code: st.style_code,
+        style_name: st.name,
+        buyer_name: st.buyer_name || 'N/A',
+        image_url: st.image_url,
+        order_qty: orderQty,
+        requires_cutting: requiresCutting,
+        qty_cut: qtyCut,
+        qty_sewn: qtySewn,
+        qty_in_finishing: qtyFinishing,
+        qty_ready: qtyReady,
+        pct_cut: pctCut,
+        pct_sewn: pctSewn,
+        pct_finishing: pctFinishing,
+        pct_ready: pctReady,
+        bottleneck: bottleneck,
+      });
+    }
+
+    return results;
   }
 
   private async getFallbackTodaySections(targetDate: string): Promise<TodaySectionRow[]> {
