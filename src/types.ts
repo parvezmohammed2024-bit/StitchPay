@@ -410,3 +410,16 @@ export interface StyleDailyOutput {
   created_at?: string;
 }
 
+export interface WorkerNotification {
+  id: string;
+  title: string;
+  body: string;
+  type?: string | null;
+  style_id?: string | null;
+  style_code?: string | null;
+  worker_id?: string | null;
+  section?: string | null;
+  created_at: string;
+  is_read: boolean;
+}
+

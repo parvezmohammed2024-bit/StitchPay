@@ -5,7 +5,7 @@ import {
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
-  AvailableToReceiveRow, StyleDailyOutput
+  AvailableToReceiveRow, StyleDailyOutput, WorkerNotification
 } from '../types';
 import { 
   INITIAL_STYLES, INITIAL_WORKERS, INITIAL_CUTTING_ENTRIES, INITIAL_SAMPLES 
@@ -84,6 +84,27 @@ class DataService {
   private samples: GarmentSample[] = [];
   private styleSizes: StyleSize[] = [];
   private styleDailyOutputs: StyleDailyOutput[] = [];
+  private notifications: WorkerNotification[] = [
+    {
+      id: 'notif-1',
+      title: 'New Style Pre-cut: LIZ-KAP01',
+      body: 'Pre-cut fabric batch of 1,200 pcs is available in the sewing line.',
+      type: 'section',
+      section: 'Sewing',
+      style_id: 'style-1',
+      style_code: 'LIZ-KAP01',
+      created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      is_read: false,
+    },
+    {
+      id: 'notif-2',
+      title: 'Daily Line Target Updated',
+      body: 'Today target for Line-01 is updated to 250 pcs per process.',
+      type: 'everyone',
+      created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+      is_read: true,
+    },
+  ];
   private finishingListeners: Set<() => void> = new Set();
   private payrollPeriod: PayrollPeriod = {
     id: 'pp-2026-w31',
@@ -705,6 +726,140 @@ class DataService {
 
     return outputRecord;
   }
+
+  public async getWpNotifications(pToken?: string): Promise<WorkerNotification[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('wp_notifications', { p_token: pToken || '' });
+        if (!error && data && Array.isArray(data)) {
+          const fetched: WorkerNotification[] = data.map((d: any) => ({
+            id: String(d.id),
+            title: String(d.title || 'Notification'),
+            body: String(d.body || ''),
+            type: d.type || null,
+            style_id: d.style_id || null,
+            style_code: d.style_code || null,
+            worker_id: d.worker_id || null,
+            section: d.section || null,
+            created_at: d.created_at || new Date().toISOString(),
+            is_read: Boolean(d.is_read),
+          }));
+          this.notifications = fetched;
+          return fetched;
+        } else {
+          // Fallback table query
+          const { data: tblData, error: tblErr } = await supabase
+            .from('notifications')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (!tblErr && tblData) {
+            const fetched: WorkerNotification[] = tblData.map((d: any) => ({
+              id: String(d.id),
+              title: String(d.title || 'Notification'),
+              body: String(d.body || ''),
+              type: d.type || null,
+              style_id: d.style_id || null,
+              style_code: d.style_code || null,
+              worker_id: d.worker_id || null,
+              section: d.section || null,
+              created_at: d.created_at || new Date().toISOString(),
+              is_read: Boolean(d.is_read),
+            }));
+            this.notifications = fetched;
+            return fetched;
+          }
+        }
+      } catch (e) {
+        console.warn('Error fetching notifications from Supabase:', e);
+      }
+    }
+    return this.notifications;
+  }
+
+  public async markWpNotificationRead(id: string, pToken?: string): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      try {
+        try { await supabase.rpc('wp_mark_read', { p_token: pToken || '', p_notification_id: id }); } catch {}
+        try { await supabase.from('notifications').update({ is_read: true }).eq('id', id); } catch {}
+      } catch (e) {
+        console.warn('Error marking notification read in Supabase:', e);
+      }
+    }
+    this.notifications = this.notifications.map(n => n.id === id ? { ...n, is_read: true } : n);
+    return true;
+  }
+
+  public async markAllWpNotificationsRead(pToken?: string): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      try {
+        const unread = this.notifications.filter(n => !n.is_read);
+        for (const n of unread) {
+          try { await supabase.rpc('wp_mark_read', { p_token: pToken || '', p_notification_id: n.id }); } catch {}
+        }
+        try { await supabase.from('notifications').update({ is_read: true }).neq('id', '00000000-0000-0000-0000-000000000000'); } catch {}
+      } catch (e) {
+        console.warn('Error marking all notifications read in Supabase:', e);
+      }
+    }
+    this.notifications = this.notifications.map(n => ({ ...n, is_read: true }));
+    return true;
+  }
+
+  public async sendNotification(payload: {
+    title: string;
+    body: string;
+    target: 'everyone' | 'section' | 'worker';
+    section?: string | null;
+    worker_id?: string | null;
+    style_id?: string | null;
+    style_code?: string | null;
+  }): Promise<WorkerNotification> {
+    const newNotif: WorkerNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      title: payload.title,
+      body: payload.body,
+      type: payload.target,
+      section: payload.section || null,
+      worker_id: payload.worker_id || null,
+      style_id: payload.style_id || null,
+      style_code: payload.style_code || null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+
+    if (isSupabaseConfigured) {
+      try {
+        const cleanPayload = sanitizePayload({
+          title: payload.title,
+          body: payload.body,
+          type: payload.target,
+          section: payload.section || undefined,
+          worker_id: payload.worker_id || undefined,
+          style_id: payload.style_id || undefined,
+          style_code: payload.style_code || undefined,
+          is_read: false,
+        });
+
+        const { data, error } = await supabase
+          .from('notifications')
+          .insert([cleanPayload])
+          .select();
+
+        if (error) {
+          console.error('Error inserting notification to Supabase:', error);
+          showErrorToast(`Database Error (notifications): ${error.message}`);
+        } else if (data && data.length > 0) {
+          newNotif.id = String(data[0].id);
+        }
+      } catch (err) {
+        console.warn('Failed to insert notification to Supabase:', err);
+      }
+    }
+
+    this.notifications = [newNotif, ...this.notifications];
+    return newNotif;
+  }
+
 
   public async getStyleSizeBreakdown(styleId: string): Promise<StyleSizeBreakdownRow[]> {
     if (isSupabaseConfigured) {
@@ -1805,20 +1960,43 @@ class DataService {
 
     const allProcesses = await this.getProcesses();
     const processesMap = new Map(allProcesses.map(p => [p.id, p]));
-    const bids = await this.getRateBids();
 
-    const recordsToSave: DailyAssignment[] = [];
-    const payloadsToInsert: any[] = [];
+    // 1. Collect target work dates to fetch existing assignments
+    const workDates = Array.from(new Set(assignments.map(a => a.work_date || getLocalDateString())));
+
+    // 2. Fetch existing assignments from Supabase or memory for these work dates
+    let existingAssignments: DailyAssignment[] = [];
+    if (isSupabaseConfigured) {
+      const { data } = await supabase
+        .from('daily_assignments')
+        .select('*')
+        .in('work_date', workDates);
+      if (data) {
+        existingAssignments = data as DailyAssignment[];
+      }
+    } else {
+      existingAssignments = this.dailyAssignments.filter(a => workDates.includes(a.work_date));
+    }
+
+    const existingById = new Map<string, DailyAssignment>();
+    const existingByKey = new Map<string, DailyAssignment>();
+
+    for (const existing of existingAssignments) {
+      if (existing.id) existingById.set(existing.id, existing);
+      const key = `${existing.work_date}_${existing.style_id}_${existing.process_id}_${existing.worker_id}`;
+      existingByKey.set(key, existing);
+    }
+
+    const updatesToPerform: { id: string; payload: Record<string, any> }[] = [];
+    const insertsToUpsert: Record<string, any>[] = [];
+    const seenBatchKeys = new Set<string>();
 
     for (let i = 0; i < assignments.length; i++) {
       const item = assignments[i];
-      const rawId = item.id && !item.id.startsWith('draft-') ? item.id : crypto.randomUUID();
-      const id = cleanUuid(rawId);
       const workDate = item.work_date || getLocalDateString();
       const processId = cleanUuid(item.process_id);
       const workerId = cleanUuid(item.worker_id);
 
-      // Fallback: If style_id is missing or null/empty, read directly from processes.style_id!
       let styleId = cleanUuid(item.style_id);
       if ((!styleId || styleId === 'null') && processId) {
         const proc = processesMap.get(processId);
@@ -1827,7 +2005,7 @@ class DataService {
         }
       }
 
-      // MANDATORY FIELD VALIDATION FOR INSERT: Verify work_date, style_id, process_id, worker_id are all populated
+      // MANDATORY FIELD VALIDATION FOR INSERT/UPSERT
       const missingFields: string[] = [];
       if (!workDate) missingFields.push('work_date');
       if (!styleId) missingFields.push('style_id');
@@ -1835,83 +2013,117 @@ class DataService {
       if (!workerId) missingFields.push('worker_id');
 
       if (missingFields.length > 0) {
-        const errMsg = `Daily assignment insert BLOCKED: Missing required field(s) [${missingFields.join(', ')}] on assignment item #${i + 1}. Payload attempted: ${JSON.stringify({
-          id,
-          work_date: workDate || null,
-          style_id: styleId || null,
-          process_id: processId || null,
-          worker_id: workerId || null,
-        })}`;
+        const errMsg = `Daily assignment save BLOCKED: Missing required field(s) [${missingFields.join(', ')}] on assignment item #${i + 1}.`;
         console.error(errMsg);
         showErrorToast(`Save blocked: Missing required field(s): ${missingFields.join(', ')}`);
         throw new Error(errMsg);
       }
 
-      let defaultRate = item.agreed_rate;
-      if (defaultRate === undefined || defaultRate === null) {
-        const approvedBid = bids.find(b => cleanUuid(b.worker_id) === workerId && cleanUuid(b.process_id) === processId && b.status === 'approved');
-        if (approvedBid) {
-          defaultRate = approvedBid.counter_rate || approvedBid.proposed_rate;
-        } else {
-          const proc = processesMap.get(processId);
-          defaultRate = proc ? proc.rate : 0;
+      const key = `${workDate}_${styleId}_${processId}_${workerId}`;
+      if (seenBatchKeys.has(key)) {
+        continue;
+      }
+      seenBatchKeys.add(key);
+
+      const cleanId = item.id && !item.id.startsWith('draft-') ? cleanUuid(item.id) : null;
+      const existing = (cleanId ? existingById.get(cleanId) : null) || existingByKey.get(key);
+
+      if (existing) {
+        // Existing assignment found!
+        const newTargetQty = item.target_qty !== undefined ? (item.target_qty !== null ? Number(item.target_qty) : null) : existing.target_qty;
+        const newStatus = item.status || existing.status;
+        const newNote = item.note !== undefined ? item.note : existing.note;
+
+        const targetQtyChanged = newTargetQty !== existing.target_qty;
+        const statusChanged = newStatus !== existing.status;
+        const noteChanged = newNote !== existing.note;
+
+        if (!targetQtyChanged && !statusChanged && !noteChanged) {
+          // Rule 1: Skip unchanged rows completely
+          console.log(`Skipping unchanged daily assignment for key ${key}`);
+          continue;
         }
+
+        // Rule 2: When editing on existing assignment, send UPDATE matched on daily_assignments.id with only changed fields
+        const updatePayload: Record<string, any> = {};
+        if (targetQtyChanged) updatePayload.target_qty = newTargetQty;
+        if (statusChanged) updatePayload.status = newStatus;
+        if (noteChanged) updatePayload.note = newNote;
+
+        updatesToPerform.push({ id: existing.id, payload: updatePayload });
+      } else {
+        // Rule 3: Do NOT send agreed_rate on insert - database trigger fills it from process rate!
+        const rawPayload: Record<string, any> = {
+          work_date: workDate,
+          style_id: styleId,
+          process_id: processId,
+          worker_id: workerId,
+          target_qty: item.target_qty !== undefined ? (item.target_qty !== null ? Number(item.target_qty) : null) : null,
+          status: item.status || 'active',
+        };
+
+        if (item.note) rawPayload.note = item.note;
+
+        insertsToUpsert.push(sanitizePayload(rawPayload));
       }
-
-      const record: DailyAssignment = {
-        id,
-        work_date: workDate,
-        style_id: styleId!,
-        process_id: processId,
-        worker_id: workerId,
-        target_qty: item.target_qty ?? null,
-        agreed_rate: Number(defaultRate || 0),
-        status: item.status || 'active',
-        note: item.note || null,
-        created_at: item.created_at || new Date().toISOString(),
-      };
-
-      recordsToSave.push(record);
-
-      // INSERT PAYLOAD FOR DATABASE:
-      // Do NOT send agreed_rate on insert. The database trigger default_agreed_rate populates it from processes.rate automatically!
-      const rawPayload: any = {
-        id: record.id,
-        work_date: record.work_date,
-        style_id: record.style_id,
-        process_id: record.process_id,
-        worker_id: record.worker_id,
-        target_qty: record.target_qty,
-        status: record.status,
-      };
-
-      if (record.note) rawPayload.note = record.note;
-
-      // Only include agreed_rate if explicitly customized on the item (e.g. from an approved bid)
-      if (item.agreed_rate !== undefined && item.agreed_rate !== null) {
-        rawPayload.agreed_rate = Number(item.agreed_rate);
-      }
-
-      payloadsToInsert.push(sanitizePayload(rawPayload));
     }
 
     if (isSupabaseConfigured) {
-      console.log('Sending daily_assignments bulk INSERT payload:', JSON.stringify(payloadsToInsert, null, 2));
-      const { error } = await supabase.from('daily_assignments').upsert(payloadsToInsert);
-      if (this.handleError(error, 'Error saving daily assignment(s)')) {
-        throw new Error(error?.message || 'Error saving daily assignment');
+      // Execute updates matched on daily_assignments.id
+      for (const updateOp of updatesToPerform) {
+        console.log('Sending daily_assignments UPDATE payload:', JSON.stringify(updateOp.payload, null, 2), 'for ID:', updateOp.id);
+        const { error } = await supabase
+          .from('daily_assignments')
+          .update(updateOp.payload)
+          .eq('id', updateOp.id);
+        if (this.handleError(error, 'Error updating daily assignment')) {
+          throw new Error(error?.message || 'Error updating daily assignment');
+        }
       }
 
-      const workDateToFetch = recordsToSave[0]?.work_date || getLocalDateString();
-      const fullList = await this.getDailyAssignments(workDateToFetch);
-      return recordsToSave.map(r => fullList.find(a => a.id === r.id) || r);
+      // Execute upsert for new assignments on conflict work_date,style_id,process_id,worker_id
+      if (insertsToUpsert.length > 0) {
+        console.log('Sending daily_assignments bulk UPSERT payload:', JSON.stringify(insertsToUpsert, null, 2));
+        const { error } = await supabase
+          .from('daily_assignments')
+          .upsert(insertsToUpsert, {
+            onConflict: 'work_date,style_id,process_id,worker_id'
+          });
+        if (this.handleError(error, 'Error saving daily assignment(s)')) {
+          throw new Error(error?.message || 'Error saving daily assignment');
+        }
+      }
+
+      const workDateToFetch = workDates[0] || getLocalDateString();
+      return await this.getDailyAssignments(workDateToFetch);
     } else {
-      for (const record of recordsToSave) {
-        const idx = this.dailyAssignments.findIndex(a => a.id === record.id);
+      // In-memory fallback
+      for (const updateOp of updatesToPerform) {
+        const idx = this.dailyAssignments.findIndex(a => a.id === updateOp.id);
+        if (idx >= 0) {
+          this.dailyAssignments[idx] = { ...this.dailyAssignments[idx], ...updateOp.payload };
+        }
+      }
+      for (const raw of insertsToUpsert) {
+        const record: DailyAssignment = {
+          id: crypto.randomUUID(),
+          work_date: raw.work_date,
+          style_id: raw.style_id,
+          process_id: raw.process_id,
+          worker_id: raw.worker_id,
+          target_qty: raw.target_qty,
+          agreed_rate: 0,
+          status: raw.status || 'active',
+          note: raw.note || null,
+          created_at: new Date().toISOString(),
+        };
+        const key = `${record.work_date}_${record.style_id}_${record.process_id}_${record.worker_id}`;
+        const idx = this.dailyAssignments.findIndex(a => `${a.work_date}_${a.style_id}_${a.process_id}_${a.worker_id}` === key);
         if (idx >= 0) this.dailyAssignments[idx] = record;
         else this.dailyAssignments.push(record);
       }
-      return recordsToSave;
+      const workDateToFetch = workDates[0] || getLocalDateString();
+      return this.dailyAssignments.filter(a => a.work_date === workDateToFetch);
     }
   }
 

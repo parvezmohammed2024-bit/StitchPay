@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scissors, Shirt, PackageCheck, Info, Calendar } from 'lucide-react';
+import { Scissors, Shirt, PackageCheck, Calendar } from 'lucide-react';
 import { TodaySectionRow } from '../types';
 
 interface TodaysPerformanceSectionProps {
@@ -176,7 +176,7 @@ export const TodaysPerformanceSection: React.FC<TodaysPerformanceSectionProps> =
                       PRODUCTION
                     </h4>
                     <span className="text-[10px] font-bold text-indigo-400/90 block">
-                      Operations logged today
+                      Garments completed
                     </span>
                   </div>
                 </div>
@@ -186,18 +186,8 @@ export const TodaysPerformanceSection: React.FC<TodaysPerformanceSectionProps> =
                   <div className={isDark ? "text-2xl font-black font-mono text-indigo-300 tabular-nums" : "text-2xl font-black font-mono text-indigo-900 tabular-nums"}>
                     {totalProduction.toLocaleString()}
                   </div>
-                  <div className="text-[10px] font-semibold text-indigo-500 uppercase tracking-tight">steps</div>
+                  <div className="text-[10px] font-semibold text-indigo-500 uppercase tracking-tight">pieces</div>
                 </div>
-              </div>
-
-              {/* Helper text calling out operation steps */}
-              <div className={
-                isDark 
-                  ? "bg-indigo-950/50 border border-indigo-800/40 rounded-xl px-2.5 py-1.5 text-[11px] text-indigo-300 flex items-start space-x-1.5"
-                  : "bg-indigo-100/60 border border-indigo-200 rounded-xl px-2.5 py-1.5 text-[11px] text-indigo-900 flex items-start space-x-1.5"
-              }>
-                <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                <span className="font-medium leading-tight">Operation steps completed, not finished garments.</span>
               </div>
 
               {/* Styles List */}
@@ -221,7 +211,7 @@ export const TodaysPerformanceSection: React.FC<TodaysPerformanceSectionProps> =
                           )}
                         </div>
                         <div className={isDark ? "font-mono font-bold text-indigo-300 shrink-0 text-right" : "font-mono font-bold text-indigo-900 shrink-0 text-right"}>
-                          {Number(r.qty).toLocaleString()} <span className="text-[10px] font-normal opacity-70">ops</span>
+                          {Number(r.qty).toLocaleString()} <span className="text-[10px] font-normal opacity-70">pcs</span>
                         </div>
                       </div>
                       {r.detail && (
@@ -257,7 +247,7 @@ export const TodaysPerformanceSection: React.FC<TodaysPerformanceSectionProps> =
                     <h4 className={isDark ? "text-xs font-black uppercase tracking-wider text-purple-400" : "text-xs font-black uppercase tracking-wider text-purple-800"}>
                       FINISHING
                     </h4>
-                    <span className={`text-[10px] font-medium ${subText}`}>Ironing & packing</span>
+                    <span className={`text-[10px] font-medium ${subText}`}>Ready to deliver</span>
                   </div>
                 </div>
 

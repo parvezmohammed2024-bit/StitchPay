@@ -10,6 +10,8 @@ import {
   UserRole, SampleType, SampleStatus, CutType, StyleSize, StyleSizeBreakdownRow 
 } from '../types';
 import { showSuccessToast, showErrorToast } from '../lib/toast';
+import { StyleImageLightbox } from '../components/StyleImageLightbox';
+import { NewStyleBadge } from '../components/NewStyleBadge';
 
 interface CuttingScreenProps {
   role: UserRole;
@@ -1196,7 +1198,7 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, hasPPApprov
   const showPPRisk = style.bulk_cut > 0 && !hasPPApproval;
 
   return (
-    <div className={`bg-white rounded-2xl border ${showPPRisk ? 'border-rose-400 ring-2 ring-rose-300/40' : 'border-stone-200'} p-4 shadow-2xs hover:shadow-md transition-all space-y-3 relative overflow-hidden flex flex-col justify-between`}>
+    <div id={`style-card-${style.id}`} className={`bg-white rounded-2xl border ${showPPRisk ? 'border-rose-400 ring-2 ring-rose-300/40' : 'border-stone-200'} p-4 shadow-2xs hover:shadow-md transition-all space-y-3 relative overflow-hidden flex flex-col justify-between`}>
       {/* Risk Alert Banner if Bulk Cut without PP approval */}
       {showPPRisk && (
         <div className="bg-rose-50 border-b border-rose-200 -mx-4 -mt-4 p-2.5 mb-2 flex items-center space-x-2 text-rose-800 text-xs font-bold">
@@ -1205,35 +1207,32 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, hasPPApprov
         </div>
       )}
 
-      {/* Header: Priority & Status */}
+      {/* Header: Priority, Thumbnail & Status */}
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-3">
           {priorityIndex && (
             <span className="w-6 h-6 rounded-full bg-indigo-700 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
               #{priorityIndex}
             </span>
           )}
+          <StyleImageLightbox
+            imageUrl={style.image_url}
+            styleCode={style.style_code}
+            styleName={style.name}
+            sizeClassName="w-12 h-12"
+          />
           <div>
-            <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-              {style.style_code}
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                {style.style_code}
+              </span>
+              <NewStyleBadge createdAt={style.created_at} />
+            </div>
             <h4 className="font-extrabold text-stone-900 text-sm leading-tight mt-1">
               {style.name}
             </h4>
           </div>
         </div>
-
-        {style.image_url ? (
-          <img 
-            src={style.image_url} 
-            alt={style.name} 
-            className="w-12 h-12 rounded-xl object-cover border border-stone-200 shrink-0"
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center text-stone-400 border border-stone-200 shrink-0">
-            <ImageIcon className="w-6 h-6" />
-          </div>
-        )}
       </div>
 
       {/* Buyer & Ship Date */}

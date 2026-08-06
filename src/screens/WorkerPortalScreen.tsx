@@ -2,15 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserCheck, Clock, Pause, Square, Scissors, TrendingUp, CheckCircle2, 
   Zap, Trophy, Calendar, Crown, DollarSign, LogOut, Key, ShieldAlert,
-  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check, Lock, PackageCheck
+  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check, Lock, PackageCheck, Bell
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { dataService } from '../lib/dataService';
-import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess, CuttingEntry, FinishingEntry, FinishingStage, FactorySettings } from '../types';
+import { Worker, DailyAssignment, AttendanceRecord, ProductionEntry, GarmentStyle, GarmentProcess, CuttingEntry, FinishingEntry, FinishingStage, FactorySettings, WorkerNotification } from '../types';
 import { RateBiddingModal } from '../components/RateBiddingModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { FooterCredit } from '../components/FooterCredit';
 import { ReceiveFromSewingView } from '../components/ReceiveFromSewingView';
+import { StyleImageLightbox } from '../components/StyleImageLightbox';
+import { NewStyleBadge } from '../components/NewStyleBadge';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const WorkerPortalScreen: React.FC = () => {
   // PWA Install Prompt State
@@ -137,6 +140,60 @@ export const WorkerPortalScreen: React.FC = () => {
     tables_layers: '',
     notes: '',
   });
+
+  // Worker Notifications State
+  const [notifications, setNotifications] = useState<WorkerNotification[]>([]);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  useEffect(() => {
+    if (currentWorker) {
+      loadNotifications();
+
+      if (isSupabaseConfigured) {
+        const channel = supabase
+          .channel('worker_portal_notifications')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
+            loadNotifications();
+          })
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'wp_notifications' }, () => {
+            loadNotifications();
+          })
+          .subscribe();
+
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      }
+    }
+  }, [currentWorker]);
+
+  const loadNotifications = async () => {
+    const token = currentWorker?.pin_hash || currentWorker?.worker_code || currentWorker?.id;
+    const res = await dataService.getWpNotifications(token);
+    setNotifications(res);
+  };
+
+  const handleMarkNotifRead = async (notif: WorkerNotification) => {
+    const token = currentWorker?.pin_hash || currentWorker?.worker_code || currentWorker?.id;
+    await dataService.markWpNotificationRead(notif.id, token);
+    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
+
+    if (notif.style_id) {
+      setIsNotifOpen(false);
+      setTimeout(() => {
+        const el = document.getElementById(`style-card-${notif.style_id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  };
+
+  const handleMarkAllNotifsRead = async () => {
+    const token = currentWorker?.pin_hash || currentWorker?.worker_code || currentWorker?.id;
+    await dataService.markAllWpNotificationsRead(token);
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+  };
 
   // Check existing session on mount
   useEffect(() => {
@@ -721,15 +778,110 @@ export const WorkerPortalScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Sign Out Button */}
-        <button
-          onClick={handleLogout}
-          className="flex items-center space-x-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all self-start md:self-center"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Sign Out</span>
-        </button>
+        {/* Action Header Buttons: Bell Icon & Sign Out */}
+        <div className="flex items-center space-x-2 shrink-0 self-start md:self-center">
+          <div className="relative">
+            <button
+              onClick={() => setIsNotifOpen(!isNotifOpen)}
+              className="relative p-2.5 rounded-2xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 font-bold transition flex items-center justify-center cursor-pointer"
+              title="In-App Notifications"
+            >
+              <Bell className="w-5 h-5 text-indigo-800" />
+              {notifications.filter(n => !n.is_read).length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 text-white font-black text-[10px] rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-bounce">
+                  {notifications.filter(n => !n.is_read).length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center space-x-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </div>
+
+      {/* 1.1 SLIDE-DOWN NOTIFICATION PANEL */}
+      {isNotifOpen && (
+        <div className="bg-white border border-stone-200 rounded-3xl p-5 shadow-lg space-y-4 animate-in slide-in-from-top duration-200 border-l-4 border-l-indigo-600">
+          <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+            <div className="flex items-center space-x-2">
+              <Bell className="w-5 h-5 text-indigo-700" />
+              <h3 className="font-extrabold text-stone-900 text-base">Notifications</h3>
+              {notifications.filter(n => !n.is_read).length > 0 && (
+                <span className="text-xs bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full border border-indigo-300">
+                  {notifications.filter(n => !n.is_read).length} unread
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {notifications.some(n => !n.is_read) && (
+                <button
+                  onClick={handleMarkAllNotifsRead}
+                  className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-xl border border-indigo-200 transition cursor-pointer"
+                >
+                  Mark all read
+                </button>
+              )}
+              <button
+                onClick={() => setIsNotifOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-stone-500 italic bg-stone-50 p-2.5 rounded-xl border border-stone-200">
+            ℹ️ Note: These notifications appear when you open the worker portal app (in-app notifications).
+          </p>
+
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {notifications.length === 0 ? (
+              <div className="text-xs text-stone-500 italic text-center py-6">
+                No notifications right now.
+              </div>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => handleMarkNotifRead(n)}
+                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                    !n.is_read
+                      ? 'border-l-4 border-l-indigo-600 border-stone-200 bg-indigo-50/70 shadow-2xs'
+                      : 'border-l-2 border-l-stone-200 border-stone-200 bg-white opacity-85'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className={`text-sm tracking-tight ${!n.is_read ? 'font-black text-stone-900' : 'font-bold text-stone-700'}`}>
+                      {n.title}
+                    </h4>
+                    <span className="text-[10px] text-stone-400 shrink-0 font-mono">
+                      {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-600 mt-1 leading-relaxed">{n.body}</p>
+                  {n.style_code && (
+                    <div className="mt-2 flex items-center space-x-1.5">
+                      <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                        Style: {n.style_code}
+                      </span>
+                      <span className="text-[10px] text-indigo-700 font-bold hover:underline">
+                        Tap to view style card &rarr;
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 2. SHIFT TIME & ATTENDANCE CLOCK */}
       <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
@@ -878,22 +1030,32 @@ export const WorkerPortalScreen: React.FC = () => {
                   const agreedRate = work.agreed_rate || 0;
                   const opAmountEarned = myOutputForWork * agreedRate;
 
-                  return (
-                    <div key={work.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-stone-50 transition-colors">
-                      <div className="space-y-2 flex-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-black text-base text-stone-900">{work.process_name}</span>
-                          <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-800 font-mono font-bold border border-stone-200">
-                            {work.style_code}
-                          </span>
-                        </div>
+                  const workStyle = garmentStyles.find(s => s.id === work.style_id || s.style_code === work.style_code);
 
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
-                          <span>Style: <strong className="text-stone-800">{work.style_name}</strong></span>
-                          <span>•</span>
-                          <span>Target Qty: <strong className="text-stone-800">{targetQty} pcs</strong></span>
-                          <span>•</span>
-                          <span>Completed Qty: <strong className="text-emerald-800">{myOutputForWork} pcs</strong></span>
+                  return (
+                    <div key={work.id} id={`style-card-${work.style_id || workStyle?.id}`} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-stone-50 transition-colors">
+                      <div className="flex items-center space-x-3 flex-1">
+                        <StyleImageLightbox
+                          imageUrl={workStyle?.image_url}
+                          styleCode={work.style_code}
+                          styleName={work.style_name}
+                          sizeClassName="w-12 h-12"
+                        />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center space-x-2 flex-wrap gap-1">
+                            <span className="font-black text-base text-stone-900">{work.process_name}</span>
+                            <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-800 font-mono font-bold border border-stone-200">
+                              {work.style_code}
+                            </span>
+                            <NewStyleBadge createdAt={workStyle?.created_at} />
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
+                            <span>Style: <strong className="text-stone-800">{work.style_name}</strong></span>
+                            <span>•</span>
+                            <span>Target Qty: <strong className="text-stone-800">{targetQty} pcs</strong></span>
+                            <span>•</span>
+                            <span>Completed Qty: <strong className="text-emerald-800">{myOutputForWork} pcs</strong></span>
                           
                           {/* CONDITIONAL DISPLAY: Show Rate & Amount ONLY for Piece-Rate Workers */}
                           {isPieceRateWorker ? (
@@ -921,6 +1083,7 @@ export const WorkerPortalScreen: React.FC = () => {
                           ></div>
                         </div>
                       </div>
+                    </div>
 
                       {/* Actions: Bidding Option (piece-rate only) + Log Output */}
                       <div className="flex items-center space-x-2 self-start md:self-center shrink-0">
@@ -1301,13 +1464,24 @@ export const WorkerPortalScreen: React.FC = () => {
                   const styleStages = allFinishingStages.filter(stage => stage.style_id === st.id);
                   
                   return (
-                    <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                    <div key={st.id} id={`style-card-${st.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
-                            {st.style_code}
-                          </span>
-                          <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
+                        <div className="flex items-center space-x-3">
+                          <StyleImageLightbox
+                            imageUrl={st.image_url}
+                            styleCode={st.style_code}
+                            styleName={st.name}
+                            sizeClassName="w-12 h-12"
+                          />
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                                {st.style_code}
+                              </span>
+                              <NewStyleBadge createdAt={st.created_at} />
+                            </div>
+                            <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
+                          </div>
                         </div>
                         <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
                           {st.order_qty?.toLocaleString()} pcs
@@ -1586,13 +1760,24 @@ export const WorkerPortalScreen: React.FC = () => {
                   const cutPct = Math.min(100, Math.round((styleCutTotal / (st.order_qty || 1)) * 100));
 
                   return (
-                    <div key={st.id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                    <div key={st.id} id={`style-card-${st.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
-                            {st.style_code}
-                          </span>
-                          <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
+                        <div className="flex items-center space-x-3">
+                          <StyleImageLightbox
+                            imageUrl={st.image_url}
+                            styleCode={st.style_code}
+                            styleName={st.name}
+                            sizeClassName="w-12 h-12"
+                          />
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                                {st.style_code}
+                              </span>
+                              <NewStyleBadge createdAt={st.created_at} />
+                            </div>
+                            <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
+                          </div>
                         </div>
                         <span className="text-[11px] font-bold text-stone-600 bg-white px-2.5 py-1 rounded-xl border border-stone-200">
                           Target: {st.order_qty?.toLocaleString()} pcs

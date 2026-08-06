@@ -9,6 +9,8 @@ import { dataService, getLocalDateString } from '../lib/dataService';
 import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
 import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, CuttingEntry, ProductionEntry, StyleDailyOutput } from '../types';
 import { WorkerAvatar } from '../components/WorkerAvatar';
+import { StyleImageLightbox } from '../components/StyleImageLightbox';
+import { NewStyleBadge } from '../components/NewStyleBadge';
 import { isStyleUnlockedForSewing, getStyleSewingAvailability } from '../lib/cuttingGate';
 
 interface DailySetupScreenProps {
@@ -631,16 +633,25 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
           const isTargetExceeding = styleAssignments.length > 0 && targetVal > avail.availableToSew;
 
           return (
-            <div key={styleId} className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div key={styleId} id={`style-card-${style.id}`} className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-4">
               <div className="flex justify-between items-center border-b border-stone-200 pb-3 flex-wrap gap-2">
-                <div>
-                  <div className="text-lg font-bold text-stone-900 flex items-center space-x-2">
-                    <span className="text-amber-800">{style.style_code}</span>
-                    <span className="text-stone-600 text-sm font-normal">— {style.name}</span>
+                <div className="flex items-center space-x-3">
+                  <StyleImageLightbox
+                    imageUrl={style.image_url}
+                    styleCode={style.style_code}
+                    styleName={style.name}
+                    sizeClassName="w-12 h-12"
+                  />
+                  <div>
+                    <div className="text-lg font-bold text-stone-900 flex items-center space-x-2">
+                      <span className="text-amber-800">{style.style_code}</span>
+                      <span className="text-stone-600 text-sm font-normal">— {style.name}</span>
+                      <NewStyleBadge createdAt={style.created_at} />
+                    </div>
+                    <p className="text-xs text-stone-500">
+                      Sequence order processes for this style
+                    </p>
                   </div>
-                  <p className="text-xs text-stone-500">
-                    Sequence order processes for this style
-                  </p>
                 </div>
 
                 <div className="text-xs font-mono font-semibold text-stone-700 bg-stone-100 px-3 py-1.5 rounded-xl border border-stone-200">
