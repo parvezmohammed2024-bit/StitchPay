@@ -34,6 +34,7 @@ interface StyleFinishingSummary {
   sewingCompletedQty: number;
   sewingWarning: boolean;
   readyToDeliverQty: number;
+  readyTodayQty: number;
   totalDispatchedQty: number;
   remainingBalance: number;
   completionPercent: number;
@@ -116,6 +117,18 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedStyleId, setSelectedStyleId] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
+  
+  // View Toggle State: OFF by default, remembered per user for session
+  const [showStageDetail, setShowStageDetail] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('finishing_show_stage_detail') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+  const [workerSelectedStageId, setWorkerSelectedStageId] = useState<Record<string, string>>({});
+
+  const canToggleDetail = role === 'admin' || role === 'supervisor';
 
   // Daily Entry Form Modal State
   const [isEntryModalOpen, setIsEntryModalOpen] = useState<boolean>(false);
@@ -294,6 +307,16 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       const readyStageSummary = stageSummaries.length > 0 ? stageSummaries[stageSummaries.length - 1] : null;
       const readyToDeliverQty = readyStageSummary ? readyStageSummary.cumulativeQty : 0;
 
+      // Ready today quantity (logged on filter date or today)
+      const todayStr = filterDate || getLocalDateString();
+      let readyTodayQty = 0;
+      if (readyStageSummary) {
+        const readyTodayEntries = styleEntries.filter(
+          e => e.stage_id === readyStageSummary.stage.id && e.entry_date === todayStr
+        );
+        readyTodayQty = readyTodayEntries.reduce((sum, e) => sum + (e.qty_ok || 0), 0);
+      }
+
       // Dispatched quantity from deliveries
       const styleDeliveries = deliveries.filter(d => d.style_id === style.id);
       const totalDispatchedQty = styleDeliveries.reduce((sum, d) => sum + (d.delivered_qty || 0), 0);
@@ -316,6 +339,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         sewingCompletedQty,
         sewingWarning,
         readyToDeliverQty,
+        readyTodayQty,
         totalDispatchedQty,
         remainingBalance,
         completionPercent,
@@ -741,9 +765,24 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
           </div>
         </div>
 
-        <div className="text-stone-500 italic text-[11px]">
-          💡 Note: Finishing output is tracking-only; staff wages are managed via worker pay types.
-        </div>
+        {/* TOGGLE: SHOW STAGE DETAIL (ADMIN & SUPERVISOR ONLY) */}
+        {canToggleDetail && (
+          <label className="flex items-center space-x-2 font-bold cursor-pointer bg-stone-50 hover:bg-stone-100 px-3.5 py-1.5 rounded-xl border border-stone-200 text-stone-800 transition-colors shrink-0">
+            <input
+              type="checkbox"
+              checked={showStageDetail}
+              onChange={(e) => {
+                const val = e.target.checked;
+                setShowStageDetail(val);
+                try {
+                  sessionStorage.setItem('finishing_show_stage_detail', String(val));
+                } catch (err) {}
+              }}
+              className="w-4 h-4 text-indigo-600 rounded border-stone-300 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span>Show stage detail</span>
+          </label>
+        )}
       </div>
 
       {/* PIPELINE VIEWS PER STYLE */}
@@ -762,221 +801,304 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         </div>
       ) : (
         <div className="space-y-6">
-          {styleSummaries.map(summary => (
-            <div key={summary.style.id} className="bg-white rounded-3xl border border-stone-200 p-5 shadow-xs space-y-5">
-              {/* STYLE HEADER METRICS */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-100 pb-4">
-                <div className="flex items-center space-x-3">
-                  <StyleImage src={summary.style.image_url} alt={summary.style.name} className="w-12 h-12 rounded-2xl border border-stone-200 object-cover shrink-0" />
+          {styleSummaries.map(summary => {
+            const bottleneckSummary = summary.stageSummaries.find(s => s.isBottleneck && s.wipWaiting > 0);
+            const totalTargetQty = summary.receivedFromSewing > 0 ? summary.receivedFromSewing : summary.style.order_qty;
+
+            const selectedWorkerStageId = workerSelectedStageId[summary.style.id] || (summary.stageSummaries.length > 0 ? summary.stageSummaries[0].stage.id : '');
+            const workerStageSummary = summary.stageSummaries.find(s => s.stage.id === selectedWorkerStageId);
+
+            return (
+              <div key={summary.style.id} className="bg-white rounded-3xl border border-stone-200 p-5 shadow-xs space-y-4">
+                {/* SIMPLE VIEW CARD TOP HEADER */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
+                  <div className="flex items-center space-x-3.5 min-w-0">
+                    <StyleImage src={summary.style.image_url} alt={summary.style.name} className="w-12 h-12 rounded-2xl border border-stone-200 object-cover shrink-0" />
+                    <div className="min-w-0">
+                      <h3 className="text-base sm:text-lg font-black text-stone-900 tracking-tight truncate">{summary.style.name}</h3>
+                      <p className="text-xs text-stone-500 font-medium truncate">
+                        <span className="font-mono font-bold text-stone-800">{summary.style.style_code}</span>
+                        {summary.style.buyer_name ? <span className="text-stone-700"> • {summary.style.buyer_name}</span> : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* LOG OUTPUT BUTTON */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEntryModal(summary.style.id)}
+                    className="px-4 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-2xl text-xs shadow-xs hover:shadow-md transition-all flex items-center justify-center space-x-1.5 shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Log Output</span>
+                  </button>
+                </div>
+
+                {/* HEADLINE NUMBERS: READY TODAY & TOTAL READY */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center bg-stone-50/80 p-4 rounded-2xl border border-stone-200/80">
                   <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono text-xs font-black bg-stone-100 text-stone-800 px-2 py-0.5 rounded-lg border border-stone-200">
-                        {summary.style.style_code}
+                    <span className="text-[11px] font-extrabold text-stone-500 uppercase tracking-wider block mb-0.5">
+                      Ready today
+                    </span>
+                    <div className="text-3xl sm:text-4xl font-black text-emerald-700 font-mono tracking-tight leading-none">
+                      {summary.readyTodayQty.toLocaleString()} <span className="text-base font-bold text-stone-600">pcs</span>
+                    </div>
+                  </div>
+
+                  <div className="sm:border-l sm:border-stone-200 sm:pl-4">
+                    <span className="text-[11px] font-extrabold text-stone-500 uppercase tracking-wider block mb-0.5">
+                      Total ready
+                    </span>
+                    <div className="text-lg font-bold text-stone-900 font-mono">
+                      <span className="text-xl sm:text-2xl font-black text-stone-900">
+                        {summary.readyToDeliverQty.toLocaleString()}
                       </span>
-                      <h3 className="text-base font-bold text-stone-900">{summary.style.name}</h3>
+                      <span className="text-stone-400 font-normal"> of </span>
+                      <span className="text-stone-700 font-bold">
+                        {totalTargetQty.toLocaleString()}
+                      </span>
                     </div>
-                    <div className="text-xs text-stone-500 mt-0.5">
-                      Buyer: <span className="font-semibold text-stone-700">{summary.style.buyer_name || 'N/A'}</span> • Order Qty: <span className="font-bold text-stone-900">{summary.style.order_qty.toLocaleString()} pcs</span>
+                  </div>
+                </div>
+
+                {/* BOTTLENECK HIGHLIGHT LINE (WHEN THERE IS ONE) */}
+                {bottleneckSummary && (
+                  <div className="bg-amber-50/90 border border-amber-300 px-3.5 py-2.5 rounded-2xl flex items-center space-x-2 text-xs text-amber-950 font-bold">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      Bottleneck: <strong className="font-black underline">{bottleneckSummary.stage.name}</strong> — <span className="font-mono">{bottleneckSummary.wipWaiting.toLocaleString()}</span> waiting
+                    </span>
+                  </div>
+                )}
+
+                {/* RECONCILE SEWING WARNING BANNER */}
+                {summary.sewingWarning && (
+                  <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-2xl flex items-center space-x-3 text-xs text-rose-900">
+                    <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
+                    <div>
+                      <span className="font-bold">Sewing Output Mismatch Warning:</span> Received <strong className="font-mono">{summary.receivedFromSewing}</strong> pcs in finishing, but sewing minimum completed is only <strong className="font-mono">{summary.sewingCompletedQty}</strong> pcs — please verify your finishing entries.
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* SUMMARY NUMBERS IN HEADER */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="bg-indigo-50/70 border border-indigo-200 p-2.5 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-indigo-700 uppercase block">Received (Sewing)</span>
-                    <span className="text-sm font-black text-indigo-950">{summary.receivedFromSewing.toLocaleString()} pcs</span>
-                  </div>
+                {/* FINISHING WORKERS: SIMPLE VIEW PLUS THEIR OWN STAGE */}
+                {!canToggleDetail && (
+                  <div className="pt-2 border-t border-stone-100 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-stone-700">
+                      <span className="flex items-center space-x-1.5">
+                        <User className="w-3.5 h-3.5 text-indigo-700" />
+                        <span>Your Stage View</span>
+                      </span>
+                      {summary.stageSummaries.length > 1 && (
+                        <select
+                          value={selectedWorkerStageId}
+                          onChange={(e) => setWorkerSelectedStageId({ ...workerSelectedStageId, [summary.style.id]: e.target.value })}
+                          className="px-2 py-1 bg-stone-50 border border-stone-200 rounded-lg text-xs font-medium text-stone-800"
+                        >
+                          {summary.stageSummaries.map(st => (
+                            <option key={st.stage.id} value={st.stage.id}>{st.stage.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
 
-                  <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase block">Ready to Deliver</span>
-                    <span className="text-sm font-black text-emerald-900">{summary.readyToDeliverQty.toLocaleString()} pcs</span>
-                  </div>
-
-                  <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-amber-800 uppercase block">Finishing Progress</span>
-                    <span className="text-sm font-black text-amber-900">{summary.completionPercent}%</span>
-                  </div>
-
-                  <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase block">Order Balance</span>
-                    <span className="text-sm font-black text-stone-900">{summary.remainingBalance.toLocaleString()} pcs</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* RECONCILE SEWING WARNING BANNER */}
-              {summary.sewingWarning && (
-                <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-2xl flex items-center space-x-3 text-xs text-rose-900">
-                  <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
-                  <div>
-                    <span className="font-bold">Sewing Output Mismatch Warning:</span> Received <strong className="font-mono">{summary.receivedFromSewing}</strong> pcs in finishing, but sewing minimum completed is only <strong className="font-mono">{summary.sewingCompletedQty}</strong> pcs — please verify your finishing entries.
-                  </div>
-                </div>
-              )}
-
-              {/* PIPELINE STAGES LIST */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-stone-700 px-1">
-                  <span className="flex items-center space-x-2">
-                    <Layers className="w-4 h-4 text-indigo-700" />
-                    <span>Finishing Stage Pipeline Flow</span>
-                  </span>
-                  <span className="text-stone-500 font-normal text-[11px]">
-                    Overall Progress: <strong className="text-stone-900 font-bold">{summary.completionPercent}% of received</strong>
-                  </span>
-                </div>
-
-                {/* PIPELINE ROWS */}
-                <div className="space-y-2">
-                  {summary.stageSummaries.map((stgSummary, idx) => {
-                    const isFirstStage = idx === 0;
-                    const prevCumulative = isFirstStage ? summary.receivedFromSewing : summary.stageSummaries[idx - 1].cumulativeQty;
-                    const progressPct = !isFirstStage && prevCumulative > 0 
-                      ? Math.min(100, Math.round((stgSummary.cumulativeQty / prevCumulative) * 100))
-                      : 100;
-
-                    return (
-                      <div
-                        key={stgSummary.stage.id}
-                        className={`p-3.5 rounded-2xl border transition-all ${
-                          isFirstStage
-                            ? 'bg-indigo-50/40 border-indigo-200/80'
-                            : stgSummary.isBottleneck
-                            ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-400/50 shadow-xs'
-                            : 'bg-stone-50/80 border-stone-200'
-                        }`}
-                      >
+                    {workerStageSummary && (
+                      <div className={`p-3.5 rounded-2xl border transition-all ${
+                        workerStageSummary.isBottleneck ? 'bg-amber-50/90 border-amber-300' : 'bg-stone-50/80 border-stone-200'
+                      }`}>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          {/* STAGE INFO & DONE / WAITING NUMBERS */}
-                          <div className="flex-1 space-y-1.5">
-                            <div className="flex items-center space-x-2.5">
-                              <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
-                                isFirstStage 
-                                  ? 'bg-indigo-600 text-white' 
-                                  : stgSummary.isBottleneck 
-                                  ? 'bg-amber-600 text-white' 
-                                  : 'bg-stone-200 text-stone-700'
-                              }`}>
-                                {idx + 1}
-                              </span>
-
-                              <h4 className="font-bold text-stone-900 text-sm">
-                                {stgSummary.stage.name}
-                              </h4>
-
-                              {isFirstStage && (
-                                <span className="bg-indigo-100 text-indigo-800 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border border-indigo-200">
-                                  Input Pool
-                                </span>
-                              )}
-
-                              {stgSummary.isBottleneck && (
-                                <span className="bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs flex items-center space-x-1">
-                                  <AlertTriangle className="w-3 h-3" />
-                                  <span>Bottleneck</span>
-                                </span>
-                              )}
-                            </div>
-
-                            {/* METRICS & PROGRESS BAR */}
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                          <div className="flex-1 space-y-1">
+                            <h4 className="font-bold text-stone-900 text-sm">{workerStageSummary.stage.name}</h4>
+                            <div className="flex items-center space-x-3 text-xs">
                               <span className="font-bold text-stone-800">
-                                <span className="font-mono font-black text-sm text-stone-900">{stgSummary.cumulativeQty.toLocaleString()}</span> done
+                                <span className="font-mono font-black text-stone-900">{workerStageSummary.cumulativeQty.toLocaleString()}</span> done
                               </span>
-
-                              {!isFirstStage && (
-                                <>
-                                  <span className="text-stone-300">·</span>
-                                  <span className={`font-bold ${stgSummary.wipWaiting > 0 ? 'text-amber-900 font-extrabold' : 'text-stone-400'}`}>
-                                    <span className="font-mono">{stgSummary.wipWaiting.toLocaleString()}</span> waiting
-                                  </span>
-
-                                  <span className="text-stone-300">·</span>
-                                  <span className="text-stone-500 font-mono text-[11px]">
-                                    [{progressPct}%]
-                                  </span>
-                                </>
-                              )}
+                              <span className="text-stone-300">·</span>
+                              <span className={`font-bold ${workerStageSummary.wipWaiting > 0 ? 'text-amber-900 font-extrabold' : 'text-stone-400'}`}>
+                                <span className="font-mono">{workerStageSummary.wipWaiting.toLocaleString()}</span> waiting
+                              </span>
                             </div>
-
-                            {/* THIN PROGRESS BAR */}
-                            {!isFirstStage && (
-                              <div className="w-full bg-stone-200/80 rounded-full h-1.5 overflow-hidden mt-1">
-                                <div
-                                  className={`h-full transition-all duration-300 ${
-                                    stgSummary.isBottleneck ? 'bg-amber-500' : 'bg-indigo-600'
-                                  }`}
-                                  style={{ width: `${progressPct}%` }}
-                                />
-                              </div>
-                            )}
                           </div>
 
-                          {/* ACTION BUTTON */}
-                          <div className="shrink-0 flex items-center">
-                            {isFirstStage ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenQuickStageModal(summary.style, stgSummary.stage, idx, summary.stageSummaries, summary.sewingCompletedQty)}
-                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Log Received</span>
-                              </button>
-                            ) : stgSummary.wipWaiting > 0 ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenQuickStageModal(summary.style, stgSummary.stage, idx, summary.stageSummaries, summary.sewingCompletedQty)}
-                                className={`px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 ${
-                                  stgSummary.isBottleneck
-                                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                                    : 'bg-indigo-700 hover:bg-indigo-800 text-white'
-                                }`}
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Log Output</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled
-                                className="px-3.5 py-2 bg-stone-100 border border-stone-200 text-stone-400 font-medium text-xs rounded-xl cursor-not-allowed flex items-center space-x-1.5"
-                              >
-                                <X className="w-3.5 h-3.5 text-stone-300" />
-                                <span>Nothing waiting</span>
-                              </button>
-                            )}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const idx = summary.stageSummaries.findIndex(s => s.stage.id === workerStageSummary.stage.id);
+                              handleOpenQuickStageModal(summary.style, workerStageSummary.stage, idx, summary.stageSummaries, summary.sewingCompletedQty);
+                            }}
+                            className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 shrink-0"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Log Output</span>
+                          </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </div>
+                )}
+
+                {/* DETAIL VIEW: EXPANDED WHEN showStageDetail IS TRUE (FOR ADMIN & SUPERVISOR) */}
+                {canToggleDetail && showStageDetail && (
+                  <div className="pt-3 border-t border-stone-200 space-y-4">
+                    {/* PIPELINE STAGES LIST */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-stone-700 px-1">
+                        <span className="flex items-center space-x-2">
+                          <Layers className="w-4 h-4 text-indigo-700" />
+                          <span>Finishing Stage Pipeline Flow</span>
+                        </span>
+                        <span className="text-stone-500 font-normal text-[11px]">
+                          Overall Progress: <strong className="text-stone-900 font-bold">{summary.completionPercent}% of received</strong>
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {summary.stageSummaries.map((stgSummary, idx) => {
+                          const isFirstStage = idx === 0;
+                          const prevCumulative = isFirstStage ? summary.receivedFromSewing : summary.stageSummaries[idx - 1].cumulativeQty;
+                          const progressPct = !isFirstStage && prevCumulative > 0 
+                            ? Math.min(100, Math.round((stgSummary.cumulativeQty / prevCumulative) * 100))
+                            : 100;
+
+                          return (
+                            <div
+                              key={stgSummary.stage.id}
+                              className={`p-3.5 rounded-2xl border transition-all ${
+                                isFirstStage
+                                  ? 'bg-indigo-50/40 border-indigo-200/80'
+                                  : stgSummary.isBottleneck
+                                  ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-400/50 shadow-xs'
+                                  : 'bg-stone-50/80 border-stone-200'
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex-1 space-y-1.5">
+                                  <div className="flex items-center space-x-2.5">
+                                    <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
+                                      isFirstStage 
+                                        ? 'bg-indigo-600 text-white' 
+                                        : stgSummary.isBottleneck 
+                                        ? 'bg-amber-600 text-white' 
+                                        : 'bg-stone-200 text-stone-700'
+                                    }`}>
+                                      {idx + 1}
+                                    </span>
+
+                                    <h4 className="font-bold text-stone-900 text-sm">
+                                      {stgSummary.stage.name}
+                                    </h4>
+
+                                    {isFirstStage && (
+                                      <span className="bg-indigo-100 text-indigo-800 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border border-indigo-200">
+                                        Input Pool
+                                      </span>
+                                    )}
+
+                                    {stgSummary.isBottleneck && (
+                                      <span className="bg-amber-600 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs flex items-center space-x-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        <span>Bottleneck</span>
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                                    <span className="font-bold text-stone-800">
+                                      <span className="font-mono font-black text-sm text-stone-900">{stgSummary.cumulativeQty.toLocaleString()}</span> done
+                                    </span>
+
+                                    {!isFirstStage && (
+                                      <>
+                                        <span className="text-stone-300">·</span>
+                                        <span className={`font-bold ${stgSummary.wipWaiting > 0 ? 'text-amber-900 font-extrabold' : 'text-stone-400'}`}>
+                                          <span className="font-mono">{stgSummary.wipWaiting.toLocaleString()}</span> waiting
+                                        </span>
+
+                                        <span className="text-stone-300">·</span>
+                                        <span className="text-stone-500 font-mono text-[11px]">
+                                          [{progressPct}%]
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {!isFirstStage && (
+                                    <div className="w-full bg-stone-200/80 rounded-full h-1.5 overflow-hidden mt-1">
+                                      <div
+                                        className={`h-full transition-all duration-300 ${
+                                          stgSummary.isBottleneck ? 'bg-amber-500' : 'bg-indigo-600'
+                                        }`}
+                                        style={{ width: `${progressPct}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="shrink-0 flex items-center">
+                                  {isFirstStage ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenQuickStageModal(summary.style, stgSummary.stage, idx, summary.stageSummaries, summary.sewingCompletedQty)}
+                                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Log Received</span>
+                                    </button>
+                                  ) : stgSummary.wipWaiting > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenQuickStageModal(summary.style, stgSummary.stage, idx, summary.stageSummaries, summary.sewingCompletedQty)}
+                                      className={`px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 ${
+                                        stgSummary.isBottleneck
+                                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                                          : 'bg-indigo-700 hover:bg-indigo-800 text-white'
+                                      }`}
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Log Output</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="px-3.5 py-2 bg-stone-100 border border-stone-200 text-stone-400 font-medium text-xs rounded-xl cursor-not-allowed flex items-center space-x-1.5"
+                                    >
+                                      <X className="w-3.5 h-3.5 text-stone-300" />
+                                      <span>Nothing waiting</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <FinishingSizeTable styleId={summary.style.id} />
+
+                    {/* QC BREAKDOWN MOVED HERE INSIDE DETAIL VIEW */}
+                    <div className="bg-stone-50 border border-stone-200 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-bold text-stone-700">QC Status Breakdown:</span>
+                        <span className="text-emerald-700 font-bold">Passed: {summary.readyToDeliverQty} pcs</span>
+                        <span className="text-amber-800 font-bold">In Rework: {summary.inReworkCount} pcs</span>
+                        <span className="text-rose-700 font-bold">Rejected: {summary.totalReject} pcs</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEntryModal(summary.style.id)}
+                        className="text-indigo-700 hover:text-indigo-900 font-bold underline"
+                      >
+                        + Record Output for {summary.style.style_code}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {/* SIZE BREAKDOWN TABLE (FOR READY TO DELIVER) */}
-              <FinishingSizeTable styleId={summary.style.id} />
-
-              {/* QC & REWORK SUMMARY BAR */}
-              <div className="bg-stone-50 border border-stone-200 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center space-x-4">
-                  <span className="font-bold text-stone-700">QC Status Breakdown:</span>
-                  <span className="text-emerald-700 font-bold">Passed: {summary.readyToDeliverQty} pcs</span>
-                  <span className="text-amber-800 font-bold">In Rework: {summary.inReworkCount} pcs</span>
-                  <span className="text-rose-700 font-bold">Rejected: {summary.totalReject} pcs</span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleOpenEntryModal(summary.style.id)}
-                  className="text-indigo-700 hover:text-indigo-900 font-bold underline"
-                >
-                  + Record Output for {summary.style.style_code}
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
