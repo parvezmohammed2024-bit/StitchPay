@@ -337,9 +337,8 @@ export const StyleReportScreen: React.FC = () => {
       };
     }).sort((a, b) => a.seq - b.seq);
 
-    // Garments sewn = minimum across all active operations
-    const opOkQtys = processesList.map(p => p.qty);
-    const garments_sewn = opOkQtys.length > 0 ? Math.min(...opOkQtys) : 0;
+    // Garments sewn from fn_garments_sewn
+    const garments_sewn = await dataService.getGarmentsSewn(styleId, argFrom, argTo);
     const total_operations = processesList.reduce((sum, p) => sum + p.qty, 0);
     const total_wages = pEntries.reduce((sum, p) => sum + (p.amount || 0), 0);
 

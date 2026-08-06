@@ -85,7 +85,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const fetchedStyles = await dataService.getStyles();
+      const fetchedStyles = await dataService.getEntryStyles('cutting');
       const [fetchedEntries, fetchedSamples, fetchedWorkers] = await Promise.all([
         dataService.getCuttingEntries(),
         dataService.getSamples(),

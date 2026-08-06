@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Zap, Calendar, Shirt, Scissors, Plus, Minus, Check, 
   ChevronDown, ChevronUp, AlertCircle, Sparkles, CheckCircle,
-  PlusCircle, Target, TrendingUp, Layers, HelpCircle, PackageCheck, Lock
+  PlusCircle, Target, TrendingUp, Layers, HelpCircle, PackageCheck, Lock, Users
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService, getLocalDateString } from '../lib/dataService';
@@ -14,6 +14,7 @@ import { DuplicateConfirmModal } from '../components/DuplicateConfirmModal';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { isStyleUnlockedForSewing } from '../lib/cuttingGate';
 import { ReceiveFromSewingView } from '../components/ReceiveFromSewingView';
+import { TeamOutputModal } from '../components/TeamOutputModal';
 
 interface QuickEntryScreenProps {
   role: UserRole;
@@ -53,6 +54,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
 
   // Unplanned Entry Modal State
   const [showUnplannedModal, setShowUnplannedModal] = useState<boolean>(false);
+  const [showTeamOutputModal, setShowTeamOutputModal] = useState<boolean>(false);
   const [unplannedStyleId, setUnplannedStyleId] = useState<string>('');
   const [unplannedProcessId, setUnplannedProcessId] = useState<string>('');
   const [unplannedWorkerId, setUnplannedWorkerId] = useState<string>('');
@@ -106,7 +108,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
     try {
       const [assignList, stList, procList, wList, entryList, setts, cutEntries] = await Promise.all([
         dataService.getDailyAssignments(entryDate),
-        dataService.getStyles(),
+        dataService.getEntryStyles('sewing'),
         dataService.getProcesses(),
         dataService.getWorkers(),
         dataService.getProductionEntries(),
@@ -268,20 +270,37 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
   const handleCreateUnplannedEntry = async () => {
     if (!unplannedStyleId || !unplannedProcessId || !unplannedWorkerId) return;
     try {
-      const proc = processes.find(p => p.id === unplannedProcessId);
-      await dataService.saveDailyAssignment({
-        work_date: entryDate,
-        style_id: proc?.style_id || unplannedStyleId,
-        process_id: unplannedProcessId,
-        worker_id: unplannedWorkerId,
-        target_qty: unplannedTargetQty,
-        agreed_rate: proc?.rate || 4.0,
-        note: 'Unplanned entry created on floor',
-      });
+      if (unplannedProcessId === 'all_operations') {
+        const styleProcs = processes.filter(p => p.style_id === unplannedStyleId);
+        if (styleProcs.length > 0) {
+          for (const proc of styleProcs) {
+            await dataService.saveDailyAssignment({
+              work_date: entryDate,
+              style_id: unplannedStyleId,
+              process_id: proc.id,
+              worker_id: unplannedWorkerId,
+              target_qty: unplannedTargetQty,
+              agreed_rate: proc.rate || 0,
+              note: 'Full garment unplanned entry',
+            });
+          }
+        }
+      } else {
+        const proc = processes.find(p => p.id === unplannedProcessId);
+        await dataService.saveDailyAssignment({
+          work_date: entryDate,
+          style_id: proc?.style_id || unplannedStyleId,
+          process_id: unplannedProcessId,
+          worker_id: unplannedWorkerId,
+          target_qty: unplannedTargetQty,
+          agreed_rate: proc?.rate || 4.0,
+          note: 'Unplanned entry created on floor',
+        });
+      }
 
       setShowUnplannedModal(false);
       await loadData();
-      setToastMessage('Unplanned worker assignment added to today\'s line plan!');
+      setToastMessage('Worker assignment added to today\'s line plan!');
     } catch (err) {
       console.error('Error creating unplanned assignment:', err);
     }
@@ -373,11 +392,20 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
               <p className="text-xs text-stone-600">Direct recording against today's assigned line plan</p>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3 flex-wrap">
+              {/* Log Team Output Button */}
+              <button
+                onClick={() => setShowTeamOutputModal(true)}
+                className="flex items-center space-x-1.5 bg-indigo-700 hover:bg-indigo-800 text-white border border-indigo-800 px-3.5 py-2 rounded-xl font-bold text-xs transition shrink-0 shadow-xs cursor-pointer"
+              >
+                <Users className="w-4 h-4 text-indigo-200" />
+                <span>Log Team Output</span>
+              </button>
+
               {/* Unplanned Entry Button */}
               <button
                 onClick={() => setShowUnplannedModal(true)}
-                className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl font-semibold text-xs transition shrink-0"
+                className="flex items-center space-x-1.5 bg-stone-100 hover:bg-stone-200 text-amber-800 border border-amber-300 px-3.5 py-2 rounded-xl font-semibold text-xs transition shrink-0 cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4" />
                 <span>Unplanned Entry</span>
@@ -675,8 +703,9 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
               <select
                 value={unplannedProcessId}
                 onChange={(e) => setUnplannedProcessId(e.target.value)}
-                className="w-full bg-white border border-stone-300 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none"
+                className="w-full bg-white border border-stone-300 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none font-medium"
               >
+                <option value="all_operations">⭐ Full Garment Sewing (Assign to ALL Operations for this Style)</option>
                 {processes.filter(p => p.style_id === unplannedStyleId).map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({currencySymbol}{p.rate})</option>
                 ))}
@@ -723,6 +752,19 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
           </div>
         </div>
       )}
+
+      {/* TEAM OUTPUT MODAL */}
+      <TeamOutputModal
+        isOpen={showTeamOutputModal}
+        onClose={() => setShowTeamOutputModal(false)}
+        initialWorkDate={entryDate}
+        role={role}
+        onSuccess={(msg) => {
+          setToastMessage(msg);
+          setTimeout(() => setToastMessage(null), 5000);
+          loadData();
+        }}
+      />
         </>
       )}
     </div>

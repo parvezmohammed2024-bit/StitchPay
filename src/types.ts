@@ -56,10 +56,11 @@ export interface GarmentStyle {
   selling_price?: number | null;
   target_ship_date: string | null;
   start_date?: string | null;
-  status: 'upcoming' | 'active' | 'completed' | 'archived';
+  status: 'upcoming' | 'active' | 'completed' | 'delivered' | 'archived';
   completed_at?: string | null;
   notes: string | null;
   requires_cutting?: boolean;
+  wage_model?: 'individual' | 'team';
   created_at?: string;
   // Computed
   completed_pieces?: number;
@@ -453,5 +454,29 @@ export interface EntryAudit {
   old_data?: Record<string, any> | null;
   new_data?: Record<string, any> | null;
   record_id?: string | null;
+}
+
+export interface ProductionTeam {
+  id: string;
+  name: string;
+  style_id?: string | null;
+  created_at?: string;
+  // Joined/UI helper fields
+  members?: ProductionTeamMember[];
+  member_count?: number;
+  style_code?: string;
+  style_name?: string;
+}
+
+export interface ProductionTeamMember {
+  id: string;
+  team_id: string;
+  worker_id: string;
+  share_percent?: number | null;
+  created_at?: string;
+  // Joined/UI helper fields
+  worker_name?: string;
+  worker_code?: string;
+  worker_photo?: string;
 }
 

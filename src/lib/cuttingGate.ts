@@ -34,7 +34,8 @@ export function getStyleSewingAvailability(
   cuttingEntries: CuttingEntry[],
   processes: GarmentProcess[],
   productionEntries: ProductionEntry[],
-  dailyOutputs: StyleDailyOutput[] = []
+  dailyOutputs: StyleDailyOutput[] = [],
+  sewnOverride?: number
 ) {
   const styleProcesses = processes.filter(p => String(p.style_id).trim() === String(style.id).trim());
   
@@ -53,10 +54,16 @@ export function getStyleSewingAvailability(
   const hasDeclaredOutput = styleOutputs.length > 0;
   const totalDeclaredOutput = styleOutputs.reduce((sum, o) => sum + Number(o.qty || 0), 0);
 
-  // Sewn = declared output total if exists, else MINIMUM total qty_ok across that style's sewing processes
+  const fullGarmentEntries = productionEntries.filter(
+    e => String(e.style_id).trim() === String(style.id).trim() && (e.process_id === 'ALL' || !e.process_id)
+  );
+  const fullGarmentQty = fullGarmentEntries.reduce((sum, e) => sum + Number(e.qty_ok || 0), 0);
+
   let totalSewn = 0;
-  if (hasDeclaredOutput) {
-    totalSewn = totalDeclaredOutput;
+  if (sewnOverride !== undefined && sewnOverride !== null) {
+    totalSewn = sewnOverride;
+  } else if (hasDeclaredOutput || fullGarmentQty > 0) {
+    totalSewn = Math.max(totalDeclaredOutput, fullGarmentQty);
   } else if (styleProcesses.length > 0) {
     const processQtyMap = new Map<string, number>();
     styleProcesses.forEach(p => processQtyMap.set(p.id, 0));
@@ -71,7 +78,11 @@ export function getStyleSewingAvailability(
     });
 
     const processTotals = Array.from(processQtyMap.values());
-    totalSewn = Math.min(...processTotals);
+    totalSewn = processTotals.length > 0 ? Math.min(...processTotals) : 0;
+  } else {
+    totalSewn = productionEntries
+      .filter(e => String(e.style_id).trim() === String(style.id).trim())
+      .reduce((sum, e) => sum + Number(e.qty_ok || 0), 0);
   }
 
   const availableToSew = Math.max(0, totalCutFigure - totalSewn);

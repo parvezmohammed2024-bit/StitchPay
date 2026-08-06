@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, CheckCircle, Database, ShieldAlert, DollarSign, Bell, Send, User, Layers } from 'lucide-react';
+import { Settings, Save, CheckCircle, Database, ShieldAlert, DollarSign, Bell, Send, User, Layers, Users, ClipboardList } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
 import { FactorySettings, UserRole, Worker } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { AuditLogViewer } from '../components/AuditLogViewer';
+import { TeamsScreen } from './TeamsScreen';
 
 interface SettingsScreenProps {
   role: UserRole;
+  initialTab?: 'general' | 'teams' | 'notifications' | 'audit';
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role, initialTab = 'general' }) => {
   const { t } = useTranslation();
 
+  const [activeTab, setActiveTab] = useState<'general' | 'teams' | 'notifications' | 'audit'>(initialTab);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -108,6 +111,63 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
         </button>
       </div>
 
+      {/* Navigation Sub-Tabs */}
+      <div className="flex items-center space-x-1.5 bg-stone-200/70 p-1.5 rounded-2xl overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab('general')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+            activeTab === 'general' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Settings className="w-4 h-4 text-amber-800" />
+          <span>General Settings</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('teams')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+            activeTab === 'teams' ? 'bg-white text-indigo-900 shadow-2xs' : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Users className="w-4 h-4 text-indigo-600" />
+          <span>Production Teams</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('notifications')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+            activeTab === 'notifications' ? 'bg-white text-amber-900 shadow-2xs' : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <Bell className="w-4 h-4 text-amber-600" />
+          <span>Notifications</span>
+        </button>
+
+        {role === 'admin' && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('audit')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+              activeTab === 'audit' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4 text-stone-600" />
+            <span>Audit Log</span>
+          </button>
+        )}
+      </div>
+
+      {/* TAB CONTENT: TEAMS */}
+      {activeTab === 'teams' && (
+        <TeamsScreen role={role} embeddedInSettings={true} />
+      )}
+
+      {/* TAB CONTENT: GENERAL SETTINGS */}
+      {activeTab === 'general' && (
+        <>
       {/* Supabase Connection Status Banner */}
       <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -222,9 +282,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
           </div>
         </div>
       </form>
+      </>
+      )}
 
-      {/* ADMIN ONLY: Send In-App Notification Section */}
-      {role === 'admin' && (
+      {/* TAB CONTENT: NOTIFICATIONS */}
+      {activeTab === 'notifications' && (
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xs space-y-5">
           <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
             <div className="flex items-center space-x-2.5">
@@ -233,11 +295,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
               </div>
               <div>
                 <h3 className="text-base font-extrabold text-stone-900">Send In-App Notification</h3>
-                <p className="text-xs text-stone-600">Broadcast messages to workers on the factory floor (admin only)</p>
+                <p className="text-xs text-stone-600">Broadcast messages to workers on the factory floor</p>
               </div>
             </div>
             <span className="text-[10px] bg-indigo-100 text-indigo-900 border border-indigo-300 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">
-              Admin Action
+              Notification Center
             </span>
           </div>
 
@@ -345,7 +407,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ role }) => {
       )}
 
       {/* ADMIN ONLY: Audit Log Viewer Screen Section */}
-      {role === 'admin' && (
+      {role === 'admin' && activeTab === 'audit' && (
         <AuditLogViewer role={role} />
       )}
     </div>

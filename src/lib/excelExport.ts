@@ -186,17 +186,8 @@ export async function exportDailyReportExcel(selectedDate: string): Promise<void
   ]);
 
   activeStyleIds.forEach(styleId => {
-    const styleProcs = processes.filter(p => p.style_id === styleId);
-    if (styleProcs.length === 0) {
-      styleCompletedMap.set(styleId, 0);
-      return;
-    }
-    const procOutputs = styleProcs.map(proc => {
-      const procEntries = dateEntries.filter(e => e.process_id === proc.id);
-      return procEntries.reduce((sum, e) => sum + (e.qty_ok || 0), 0);
-    });
-    const minOutput = procOutputs.length > 0 ? Math.min(...procOutputs) : 0;
-    styleCompletedMap.set(styleId, minOutput);
+    const garmentsSewn = dataService.getFallbackGarmentsSewn(styleId, selectedDate, selectedDate);
+    styleCompletedMap.set(styleId, garmentsSewn);
   });
 
   const totalOpsCompleted = dateEntries.length;

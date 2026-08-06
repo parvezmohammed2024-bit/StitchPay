@@ -25,6 +25,7 @@ import { PayrollRunScreen } from './screens/PayrollRunScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { ManagementPortalScreen } from './screens/ManagementPortalScreen';
+import { TeamsScreen } from './screens/TeamsScreen';
 
 export default function App() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>('dashboard');
@@ -204,6 +205,7 @@ export default function App() {
             {activeScreen === 'finishing' && <FinishingScreen role={role} onNavigate={(scr) => setActiveScreen(scr as ScreenId)} />}
             {activeScreen === 'bulkGrid' && <BulkGridScreen role={role} onNavigate={(scr) => setActiveScreen(scr)} />}
             {activeScreen === 'rateBids' && <RateBidsScreen role={role} />}
+            {activeScreen === 'teams' && <TeamsScreen role={role} />}
             {activeScreen === 'styles' && <StylesBuilderScreen role={role} />}
             {activeScreen === 'workers' && <WorkersScreen role={role} />}
             {activeScreen === 'attendance' && <AttendanceScreen role={role} />}

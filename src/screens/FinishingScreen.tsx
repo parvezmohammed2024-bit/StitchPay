@@ -8,7 +8,7 @@ import { dataService, getLocalDateString } from '../lib/dataService';
 import { showErrorToast, showSuccessToast } from '../lib/toast';
 import { 
   GarmentStyle, FinishingStage, FinishingEntry, Worker, 
-  DeliveryReport, UserRole, FactorySettings, GarmentProcess, ProductionEntry, StyleSize, StyleSizeBreakdownRow 
+  DeliveryReport, UserRole, FactorySettings, GarmentProcess, ProductionEntry, StyleSize, StyleSizeBreakdownRow, StyleDailyOutput 
 } from '../types';
 import { StyleImage } from '../components/StyleImage';
 import { ViewEntriesModal } from '../components/ViewEntriesModal';
@@ -105,6 +105,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const [allEntries, setAllEntries] = useState<FinishingEntry[]>([]);
   const [deliveries, setDeliveries] = useState<DeliveryReport[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [garmentsSewnMap, setGarmentsSewnMap] = useState<Record<string, number>>({});
 
   const finishingWorkers = useMemo(() => {
     const fw = workers.filter(w => w.section && w.section.toLowerCase().includes('finish'));
@@ -113,6 +114,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
 
   const [sewingProcesses, setSewingProcesses] = useState<GarmentProcess[]>([]);
   const [sewingEntries, setSewingEntries] = useState<ProductionEntry[]>([]);
+  const [allDailyOutputs, setAllDailyOutputs] = useState<StyleDailyOutput[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   
   const [loading, setLoading] = useState<boolean>(true);
@@ -187,8 +189,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const loadData = async () => {
     setLoading(true);
     try {
-      const [stList, stgList, entList, delList, wrkList, prodEntries, setRes, procList] = await Promise.all([
-        dataService.getStyles(),
+      const [stList, stgList, entList, delList, wrkList, prodEntries, setRes, procList, dailyOuts] = await Promise.all([
+        dataService.getEntryStyles('finishing'),
         dataService.getFinishingStages(),
         dataService.getFinishingEntries(),
         dataService.getDeliveries(),
@@ -196,6 +198,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
         dataService.getProductionEntries(),
         dataService.getSettings(),
         dataService.getProcesses(),
+        dataService.getStyleDailyOutputs(),
       ]);
 
       setStyles(stList);
@@ -206,6 +209,16 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       setSewingEntries(prodEntries);
       setSettings(setRes);
       setSewingProcesses(procList);
+      setAllDailyOutputs(dailyOuts);
+
+      // Populate garments sewn map via RPC/fn_garments_sewn
+      const sewnMap: Record<string, number> = {};
+      await Promise.all(
+        stList.map(async (st) => {
+          sewnMap[st.id] = await dataService.getGarmentsSewn(st.id);
+        })
+      );
+      setGarmentsSewnMap(sewnMap);
 
       // Auto initialize default stages if any active style lacks stages
       const activeStyles = stList.filter(s => s.status === 'active' || s.status === 'upcoming');
@@ -231,7 +244,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
 
   // Build Finishing Summaries per Style
   const styleSummaries: StyleFinishingSummary[] = useMemo(() => {
-    const activeStyles = styles.filter(s => s.status === 'active' || s.status === 'upcoming');
+    const activeStyles = styles.filter(s => s.status !== 'completed' && s.status !== 'delivered');
     const targetStyles = selectedStyleId === 'all' 
       ? activeStyles 
       : activeStyles.filter(s => s.id === selectedStyleId);
@@ -292,21 +305,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       // Stage 1 cumulative output is Received from Sewing
       const receivedFromSewing = stageSummaries.length > 0 ? stageSummaries[0].cumulativeQty : 0;
 
-      // Sewing completed = MINIMUM qty_ok across all of that style's sewing processes, NOT the sum
-      const styleProcesses = sewingProcesses.filter(p => p.style_id === style.id);
-      let sewingCompletedQty = 0;
-
-      if (styleProcesses.length > 0) {
-        const processTotals = styleProcesses.map(proc => {
-          return sewingEntries
-            .filter(e => e.style_id === style.id && e.process_id === proc.id)
-            .reduce((sum, e) => sum + (e.qty_ok || 0), 0);
-        });
-        sewingCompletedQty = Math.min(...processTotals);
-      } else {
-        const styleSewingEntries = sewingEntries.filter(e => e.style_id === style.id);
-        sewingCompletedQty = styleSewingEntries.reduce((sum, e) => sum + (e.qty_ok || 0), 0);
-      }
+      // Sewing completed comes directly from fn_garments_sewn (or fallback)
+      const sewingCompletedQty = garmentsSewnMap[style.id] ?? dataService.getFallbackGarmentsSewn(style.id);
 
       // Reconcile warning: Trigger if receivedFromSewing > sewingCompletedQty
       const sewingWarning = style.requires_cutting !== false && (receivedFromSewing > sewingCompletedQty && sewingCompletedQty >= 0);
@@ -747,8 +747,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
               onChange={(e) => setSelectedStyleId(e.target.value)}
               className="px-3 py-1.5 bg-stone-50 border border-stone-200 rounded-xl font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="all">All Active Styles ({styles.filter(s => s.status === 'active' || s.status === 'upcoming').length})</option>
-              {styles.filter(s => s.status === 'active' || s.status === 'upcoming').map(s => (
+              <option value="all">All Active Styles ({styles.filter(s => s.status !== 'completed' && s.status !== 'delivered').length})</option>
+              {styles.filter(s => s.status !== 'completed' && s.status !== 'delivered').map(s => (
                 <option key={s.id} value={s.id}>{s.style_code} — {s.name}</option>
               ))}
             </select>
@@ -1343,7 +1343,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                       onChange={(e) => handleEntryStyleChange(e.target.value)}
                       className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                      {styles.filter(s => s.status === 'active' || s.status === 'upcoming').map(s => (
+                      {styles.filter(s => s.status !== 'completed' && s.status !== 'delivered').map(s => (
                         <option key={s.id} value={s.id}>{s.style_code} — {s.name}</option>
                       ))}
                     </select>
@@ -1613,7 +1613,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                     onChange={(e) => setDispatchStyleId(e.target.value)}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-900 focus:outline-none"
                   >
-                    {styles.filter(s => s.status === 'active' || s.status === 'upcoming').map(s => (
+                    {styles.filter(s => s.status !== 'completed' && s.status !== 'delivered').map(s => (
                       <option key={s.id} value={s.id}>{s.style_code} — {s.name}</option>
                     ))}
                   </select>

@@ -3,7 +3,7 @@ import {
   Calendar, Copy, Sparkles, AlertTriangle, Users, Layers, 
   DollarSign, Plus, Trash2, CheckCircle2, RefreshCw, X, Eye, ArrowRight,
   TrendingUp, UserCheck, Search, Info, FileSpreadsheet, Download,
-  Scissors, Clock, ClipboardList
+  Scissors, Clock, ClipboardList, Zap
 } from 'lucide-react';
 import { dataService, getLocalDateString } from '../lib/dataService';
 import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
@@ -13,6 +13,7 @@ import { StyleImageLightbox } from '../components/StyleImageLightbox';
 import { NewStyleBadge } from '../components/NewStyleBadge';
 import { isStyleUnlockedForSewing, getStyleSewingAvailability } from '../lib/cuttingGate';
 import { ViewEntriesModal } from '../components/ViewEntriesModal';
+import { TeamOutputModal } from '../components/TeamOutputModal';
 
 interface DailySetupScreenProps {
   role?: UserRole;
@@ -35,6 +36,10 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [selectedStyleIds, setSelectedStyleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Team Output Modal State
+  const [showTeamOutputModal, setShowTeamOutputModal] = useState<boolean>(false);
+  const [teamOutputToastMsg, setTeamOutputToastMsg] = useState<string | null>(null);
 
   // View Entries Modal State (Admin Only)
   const [viewEntriesTarget, setViewEntriesTarget] = useState<{
@@ -77,7 +82,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
     setIsLoading(true);
     try {
       const [allStyles, allProcesses, allWorkers, dailyList, setts, cutEntries, prodEntries, dailyOutputs] = await Promise.all([
-        dataService.getStyles(),
+        dataService.getEntryStyles('sewing'),
         dataService.getProcesses(),
         dataService.getWorkers(),
         dataService.getDailyAssignments(selectedDate),
@@ -87,7 +92,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
         dataService.getStyleDailyOutputs(),
       ]);
 
-      const activeStyles = allStyles.filter(s => !s.status || s.status.toLowerCase() === 'active');
+      const activeStyles = allStyles.filter(s => s.status !== 'completed' && s.status !== 'delivered');
       const activeProcesses = allProcesses.filter(p => p.is_active === undefined || p.is_active === true);
       const activeWorkers = allWorkers.filter(w => !w.status || w.status.toLowerCase() === 'active');
 
@@ -249,20 +254,35 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
     }
   };
 
-  // Assign worker to process
+  // Assign worker to process (or ALL operations for full garment sewing)
   const handleAssignWorkerToProcess = async (workerId: string) => {
     if (!assigningProcess) return;
     try {
       const proc = processes.find(p => p.id === assigningProcess.processId);
       const resolvedStyleId = assigningProcess.styleId || proc?.style_id;
 
-      await dataService.saveDailyAssignment({
-        work_date: selectedDate,
-        style_id: resolvedStyleId,
-        process_id: assigningProcess.processId,
-        worker_id: workerId,
-        target_qty: 250,
-      });
+      if (assigningProcess.processId === 'ALL') {
+        const styleProcs = processes.filter(p => p.style_id === resolvedStyleId);
+        if (styleProcs.length > 0) {
+          for (const p of styleProcs) {
+            await dataService.saveDailyAssignment({
+              work_date: selectedDate,
+              style_id: resolvedStyleId,
+              process_id: p.id,
+              worker_id: workerId,
+              target_qty: 250,
+            });
+          }
+        }
+      } else {
+        await dataService.saveDailyAssignment({
+          work_date: selectedDate,
+          style_id: resolvedStyleId,
+          process_id: assigningProcess.processId,
+          worker_id: workerId,
+          target_qty: 250,
+        });
+      }
       const updatedList = await dataService.getDailyAssignments(selectedDate);
       setAssignments(updatedList);
     } catch (err) {
@@ -418,6 +438,15 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
               className="bg-transparent text-stone-900 font-semibold text-sm outline-none focus:ring-0 cursor-pointer"
             />
           </div>
+
+          <button
+            onClick={() => setShowTeamOutputModal(true)}
+            className="flex items-center space-x-2 bg-indigo-700 hover:bg-indigo-800 text-white border border-indigo-800 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            title="Log team production output and split pieces across members"
+          >
+            <Users className="w-4 h-4 text-indigo-200" />
+            <span>Log Team Output</span>
+          </button>
 
           <button
             onClick={() => exportDailyPlanExcel(selectedDate)}
@@ -667,6 +696,22 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                         >
                           <ClipboardList className="w-3 h-3" />
                           <span>View entries</span>
+                        </button>
+                      )}
+
+                      {styleProcesses.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setAssigningProcess({
+                            styleId: style.id,
+                            processId: 'ALL',
+                            processName: `ALL Operations / Full Garment Sewing (${style.style_code})`,
+                          })}
+                          className="inline-flex items-center space-x-1 text-xs font-bold text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-xl border border-amber-300 transition-colors shadow-xs cursor-pointer ml-1"
+                          title="Assign a single worker to perform all operations for this style"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-700 fill-amber-700 shrink-0" />
+                          <span>Assign 1 Worker to ALL Operations (Full Garment)</span>
                         </button>
                       )}
                     </div>
@@ -1288,6 +1333,26 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
           role={role || 'admin'}
           onRefresh={loadInitialData}
         />
+      )}
+
+      {/* TEAM OUTPUT MODAL */}
+      <TeamOutputModal
+        isOpen={showTeamOutputModal}
+        onClose={() => setShowTeamOutputModal(false)}
+        initialWorkDate={selectedDate}
+        role={role}
+        onSuccess={(msg) => {
+          setTeamOutputToastMsg(msg);
+          setTimeout(() => setTeamOutputToastMsg(null), 6000);
+          loadInitialData();
+        }}
+      />
+
+      {teamOutputToastMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-indigo-900 text-white font-bold text-xs px-5 py-3 rounded-2xl shadow-2xl border border-indigo-700 flex items-center space-x-3 animate-slide-up">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span>{teamOutputToastMsg}</span>
+        </div>
       )}
 
     </div>

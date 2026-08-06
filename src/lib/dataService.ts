@@ -5,7 +5,8 @@ import {
   UserAccount, DeliveryReport, FinishingStage, FinishingEntry,
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
-  AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow, EntryAudit
+  AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow, EntryAudit,
+  ProductionTeam, ProductionTeamMember
 } from '../types';
 
 function formatLockedPeriodError(err: any): Error {
@@ -92,6 +93,8 @@ class DataService {
   private samples: GarmentSample[] = [];
   private styleSizes: StyleSize[] = [];
   private styleDailyOutputs: StyleDailyOutput[] = [];
+  private teams: ProductionTeam[] = [];
+  private teamMembers: ProductionTeamMember[] = [];
   private notifications: WorkerNotification[] = [
     {
       id: 'notif-1',
@@ -564,6 +567,355 @@ class DataService {
     });
   }
 
+  public async getEntryStyles(section: 'cutting' | 'sewing' | 'finishing' | null = null): Promise<GarmentStyle[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_entry_styles', { p_section: section });
+        if (!error && data && Array.isArray(data)) {
+          return data as GarmentStyle[];
+        }
+        if (error) {
+          console.warn('RPC fn_entry_styles returned error, using fallback:', error);
+        }
+      } catch (err) {
+        console.warn('RPC fn_entry_styles exception:', err);
+      }
+    }
+
+    const allStyles = await this.getStyles();
+    return allStyles.filter(s => {
+      if (s.status === 'completed' || s.status === 'delivered' || s.status === 'archived') return false;
+      if (section === 'cutting' && s.requires_cutting === false) return false;
+      return true;
+    });
+  }
+
+  public async getWorkerPortalEntryStyles(pToken?: string, section: 'cutting' | 'sewing' | 'finishing' | null = null): Promise<GarmentStyle[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('wp_entry_styles', { p_token: pToken || '', p_section: section });
+        if (!error && data && Array.isArray(data)) {
+          return data as GarmentStyle[];
+        }
+        if (error) {
+          console.warn('RPC wp_entry_styles returned error, using fallback:', error);
+        }
+      } catch (err) {
+        console.warn('RPC wp_entry_styles exception:', err);
+      }
+    }
+
+    const allStyles = await this.getStyles();
+    return allStyles.filter(s => {
+      if (s.status === 'completed' || s.status === 'delivered' || s.status === 'archived') return false;
+      if (section === 'cutting' && s.requires_cutting === false) return false;
+      return true;
+    });
+  }
+
+  // --- PRODUCTION TEAMS & TEAM OUTPUT ---
+  public async getTeams(styleId?: string | null): Promise<ProductionTeam[]> {
+    let rawTeams: any[] = [];
+    let rawMembers: any[] = [];
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_style_teams', { p_style_id: styleId || null });
+        if (!rpcErr && rpcData && Array.isArray(rpcData)) {
+          return rpcData as ProductionTeam[];
+        }
+      } catch (e) {
+        console.warn('fn_style_teams RPC not available, querying tables directly:', e);
+      }
+
+      try {
+        let q = supabase.from('production_teams').select('*');
+        if (styleId) {
+          q = q.or(`style_id.eq.${styleId},style_id.is.null`);
+        }
+        const { data: tData } = await q;
+        if (tData) rawTeams = tData;
+
+        const teamIds = rawTeams.map(t => t.id);
+        if (teamIds.length > 0) {
+          const { data: mData } = await supabase.from('production_team_members').select('*').in('team_id', teamIds);
+          if (mData) rawMembers = mData;
+        }
+      } catch (err) {
+        console.warn('Error fetching production teams from Supabase:', err);
+      }
+    } else {
+      rawTeams = styleId 
+        ? this.teams.filter(t => !t.style_id || t.style_id === styleId)
+        : [...this.teams];
+      rawMembers = [...this.teamMembers];
+    }
+
+    const workersList = await this.getWorkers();
+    const stylesList = await this.getStyles();
+
+    return rawTeams.map(t => {
+      const style = stylesList.find(s => s.id === t.style_id);
+      const members = rawMembers
+        .filter(m => m.team_id === t.id)
+        .map(m => {
+          const w = workersList.find(w => w.id === m.worker_id);
+          return {
+            ...m,
+            worker_name: w ? w.full_name : 'Unknown Worker',
+            worker_code: w ? w.worker_code : '',
+            worker_photo: w ? w.photo_url || undefined : undefined,
+          };
+        });
+
+      return {
+        ...t,
+        style_code: style?.style_code,
+        style_name: style?.name,
+        member_count: members.length,
+        members,
+      };
+    });
+  }
+
+  public async saveTeam(
+    teamData: { id?: string; name: string; style_id?: string | null },
+    membersList: { worker_id: string; share_percent?: number | null }[]
+  ): Promise<ProductionTeam> {
+    const id = teamData.id || crypto.randomUUID();
+    const teamPayload = {
+      id,
+      name: teamData.name,
+      style_id: teamData.style_id || null,
+    };
+
+    if (isSupabaseConfigured) {
+      const cleanTeam = sanitizePayload(teamPayload);
+      const { error: teamErr } = await supabase.from('production_teams').upsert(cleanTeam);
+      this.handleError(teamErr, 'Error saving production team');
+
+      // Delete existing members then insert new ones
+      await supabase.from('production_team_members').delete().eq('team_id', id);
+
+      if (membersList.length > 0) {
+        const membersPayload = membersList.map(m => ({
+          id: crypto.randomUUID(),
+          team_id: id,
+          worker_id: m.worker_id,
+          share_percent: m.share_percent != null && !isNaN(m.share_percent) ? Number(m.share_percent) : null,
+        }));
+        await supabase.from('production_team_members').insert(membersPayload);
+      }
+    } else {
+      const existingIdx = this.teams.findIndex(t => t.id === id);
+      if (existingIdx >= 0) {
+        this.teams[existingIdx] = { ...this.teams[existingIdx], ...teamPayload };
+      } else {
+        this.teams.push(teamPayload);
+      }
+
+      this.teamMembers = this.teamMembers.filter(m => m.team_id !== id);
+      membersList.forEach(m => {
+        this.teamMembers.push({
+          id: crypto.randomUUID(),
+          team_id: id,
+          worker_id: m.worker_id,
+          share_percent: m.share_percent != null && !isNaN(m.share_percent) ? Number(m.share_percent) : null,
+        });
+      });
+    }
+
+    const refreshed = await this.getTeams();
+    return refreshed.find(t => t.id === id) || { ...teamPayload, members: [] };
+  }
+
+  public async deleteTeam(teamId: string): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      await supabase.from('production_team_members').delete().eq('team_id', teamId);
+      const { error } = await supabase.from('production_teams').delete().eq('id', teamId);
+      this.handleError(error, 'Error deleting production team');
+    } else {
+      this.teams = this.teams.filter(t => t.id !== teamId);
+      this.teamMembers = this.teamMembers.filter(m => m.team_id !== teamId);
+    }
+    return true;
+  }
+
+  public async previewTeamSplit(params: {
+    team_id: string;
+    style_id: string;
+    process_id: string;
+    qty_ok: number;
+    split: 'equal' | 'share';
+  }): Promise<{
+    splits: { worker_id: string; worker_name: string; qty_ok: number; amount: number }[];
+    summaryMessage: string;
+  }> {
+    const teams = await this.getTeams(params.style_id);
+    const team = teams.find(t => t.id === params.team_id);
+    if (!team || !team.members || team.members.length === 0) {
+      throw new Error('Selected team has no members assigned.');
+    }
+
+    const members = team.members;
+    const numMembers = members.length;
+    const totalQty = Math.max(0, Math.round(params.qty_ok));
+
+    let processRate = 0;
+    const styleProcs = await this.getProcesses(params.style_id);
+    if (params.process_id === 'ALL' || params.process_id === 'all_operations') {
+      processRate = styleProcs.reduce((sum, p) => sum + Number(p.rate || 0), 0);
+    } else {
+      const proc = styleProcs.find(p => p.id === params.process_id);
+      processRate = Number(proc?.rate || 0);
+    }
+
+    const memberQtys: { worker_id: string; worker_name: string; qty: number }[] = [];
+
+    const hasShares = members.some(m => m.share_percent != null && m.share_percent > 0);
+    if (params.split === 'share' && hasShares) {
+      let allocated = 0;
+      members.forEach((m) => {
+        const pct = Number(m.share_percent || 0);
+        const qty = Math.floor((totalQty * pct) / 100);
+        allocated += qty;
+        memberQtys.push({
+          worker_id: m.worker_id,
+          worker_name: m.worker_name || 'Worker',
+          qty,
+        });
+      });
+      let remainder = totalQty - allocated;
+      for (let i = 0; i < memberQtys.length && remainder > 0; i++) {
+        memberQtys[i].qty += 1;
+        remainder -= 1;
+      }
+    } else {
+      // Equal split: distribute integer base + remainder piece by piece
+      const baseQty = Math.floor(totalQty / numMembers);
+      let remainder = totalQty - (baseQty * numMembers);
+
+      members.forEach((m, idx) => {
+        const extra = idx < remainder ? 1 : 0;
+        memberQtys.push({
+          worker_id: m.worker_id,
+          worker_name: m.worker_name || 'Worker',
+          qty: baseQty + extra,
+        });
+      });
+    }
+
+    const splits = memberQtys.map(m => ({
+      worker_id: m.worker_id,
+      worker_name: m.worker_name,
+      qty_ok: m.qty,
+      amount: m.qty * processRate,
+    }));
+
+    const splitParts = splits.map(s => `${s.worker_name} ${s.qty_ok}`);
+    const summaryMessage = `${totalQty} pcs split: ${splitParts.join(', ')}`;
+
+    return { splits, summaryMessage };
+  }
+
+  public async logTeamOutput(params: {
+    team_id: string;
+    style_id: string;
+    process_id: string;
+    qty_ok: number;
+    work_date: string;
+    split: 'equal' | 'share';
+    shift?: 'day' | 'night';
+    entered_by?: string;
+    note?: string;
+  }): Promise<{
+    success: boolean;
+    summaryMessage: string;
+    splits: { worker_id: string; worker_name: string; qty_ok: number; amount: number }[];
+  }> {
+    const preview = await this.previewTeamSplit({
+      team_id: params.team_id,
+      style_id: params.style_id,
+      process_id: params.process_id,
+      qty_ok: params.qty_ok,
+      split: params.split,
+    });
+
+    const teams = await this.getTeams(params.style_id);
+    const team = teams.find(t => t.id === params.team_id);
+    const teamName = team ? team.name : 'Team';
+
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await supabase.rpc('log_team_output', {
+          p_team_id: params.team_id,
+          p_style_id: params.style_id,
+          p_process_id: params.process_id,
+          p_qty_ok: params.qty_ok,
+          p_work_date: params.work_date,
+          p_split: params.split,
+          p_shift: params.shift || 'day',
+        });
+
+        if (!error) {
+          return { success: true, summaryMessage: preview.summaryMessage, splits: preview.splits };
+        } else {
+          console.warn('RPC log_team_output returned error, inserting production entries directly:', error);
+        }
+      } catch (err) {
+        console.warn('RPC log_team_output exception, fallback:', err);
+      }
+    }
+
+    // Fallback or Supabase direct insertion: insert production entry for each member
+    const styleProcs = await this.getProcesses(params.style_id);
+    const isAllOps = params.process_id === 'ALL' || params.process_id === 'all_operations';
+
+    for (const splitItem of preview.splits) {
+      if (splitItem.qty_ok <= 0) continue;
+
+      if (isAllOps && styleProcs.length > 0) {
+        // Option: write entry per process or write single entry
+        for (const proc of styleProcs) {
+          await this.saveProductionEntry({
+            entry_date: params.work_date,
+            worker_id: splitItem.worker_id,
+            style_id: params.style_id,
+            process_id: proc.id,
+            qty_ok: splitItem.qty_ok,
+            qty_rework: 0,
+            qty_reject: 0,
+            rate_snapshot: proc.rate,
+            shift: params.shift || 'day',
+            entered_by: params.entered_by || null,
+            note: `Team output (${teamName})`,
+          });
+        }
+      } else {
+        const proc = styleProcs.find(p => p.id === params.process_id);
+        await this.saveProductionEntry({
+          entry_date: params.work_date,
+          worker_id: splitItem.worker_id,
+          style_id: params.style_id,
+          process_id: proc ? proc.id : params.process_id,
+          qty_ok: splitItem.qty_ok,
+          qty_rework: 0,
+          qty_reject: 0,
+          rate_snapshot: proc ? proc.rate : 0,
+          shift: params.shift || 'day',
+          entered_by: params.entered_by || null,
+          note: `Team output (${teamName})`,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      summaryMessage: preview.summaryMessage,
+      splits: preview.splits,
+    };
+  }
+
   public async saveStyle(style: Partial<GarmentStyle>): Promise<GarmentStyle> {
     const { total_labour_cost, completed_pieces, delivered_pieces, remaining_pieces, ...cleanStyle } = style as any;
     const existing = cleanStyle.id ? this.styles.find(s => s.id === cleanStyle.id) : null;
@@ -581,6 +933,7 @@ class DataService {
       start_date: cleanStyle.start_date ?? existing?.start_date ?? null,
       status: cleanStyle.status ?? existing?.status ?? 'upcoming',
       requires_cutting: cleanStyle.requires_cutting ?? existing?.requires_cutting ?? true,
+      wage_model: cleanStyle.wage_model ?? existing?.wage_model ?? 'individual',
       notes: cleanStyle.notes ?? existing?.notes ?? null,
     };
 
@@ -2756,6 +3109,70 @@ class DataService {
     };
   }
 
+  // --- GARMENTS SEWN RPC & FALLBACK ---
+  public async getGarmentsSewn(styleId: string, pFrom?: string | null, pTo?: string | null): Promise<number> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_garments_sewn', {
+          p_style_id: styleId,
+          p_from: pFrom || null,
+          p_to: pTo || null,
+        });
+        if (!error && data !== null && data !== undefined) {
+          return Number(data) || 0;
+        }
+      } catch (err) {
+        console.warn('RPC fn_garments_sewn call failed, using fallback:', err);
+      }
+    }
+
+    return this.getFallbackGarmentsSewn(styleId, pFrom, pTo);
+  }
+
+  public getFallbackGarmentsSewn(styleId: string, pFrom?: string | null, pTo?: string | null): number {
+    const styleOutputs = this.styleDailyOutputs.filter(o => {
+      if (o.style_id !== styleId) return false;
+      if (pFrom && o.output_date < pFrom) return false;
+      if (pTo && o.output_date > pTo) return false;
+      return true;
+    });
+
+    const styleEntries = this.productionEntries.filter(e => {
+      if (e.style_id !== styleId) return false;
+      if (pFrom && e.entry_date < pFrom) return false;
+      if (pTo && e.entry_date > pTo) return false;
+      return true;
+    });
+
+    const fullGarmentEntries = styleEntries.filter(e => e.process_id === 'ALL' || !e.process_id);
+    const fullGarmentQty = fullGarmentEntries.reduce((sum, e) => sum + Number(e.qty_ok || 0), 0);
+    const declaredQty = styleOutputs.reduce((sum, o) => sum + Number(o.qty || 0), 0);
+
+    // If declared output exists or full garment output exists, that takes precedence
+    if (declaredQty > 0 || fullGarmentQty > 0) {
+      return Math.max(declaredQty, fullGarmentQty);
+    }
+
+    // Otherwise fallback to minimum across operations plus full garment output
+    const styleProcs = this.processes.filter(p => p.style_id === styleId);
+    if (styleProcs.length === 0) {
+      return styleEntries.reduce((sum, e) => sum + Number(e.qty_ok || 0), 0);
+    }
+
+    const procQtyMap = new Map<string, number>();
+    styleProcs.forEach(p => procQtyMap.set(p.id, 0));
+    let hasEntries = false;
+    styleEntries.forEach(e => {
+      if (procQtyMap.has(e.process_id)) {
+        hasEntries = true;
+        procQtyMap.set(e.process_id, (procQtyMap.get(e.process_id) || 0) + Number(e.qty_ok || 0));
+      }
+    });
+
+    if (!hasEntries) return 0;
+    return Math.min(...Array.from(procQtyMap.values()));
+  }
+
   // --- FINANCIALS & MANAGEMENT PORTAL RPCs ---
   public async getStyleFinancials(
     styleId?: string | null,
@@ -2833,27 +3250,8 @@ class DataService {
         return true;
       });
 
-      // Garments sewn: prefer declared output if available, else MINIMUM qty_ok across operations
-      const styleOutputs = this.styleDailyOutputs.filter(o => {
-        if (o.style_id !== st.id) return false;
-        if (pFrom && o.output_date < pFrom) return false;
-        if (pTo && o.output_date > pTo) return false;
-        return true;
-      });
-
-      let garments_sewn = 0;
-      if (styleOutputs.length > 0) {
-        garments_sewn = styleOutputs.reduce((sum, o) => sum + Number(o.qty || 0), 0);
-      } else if (styleProcs.length > 0) {
-        const procQtyMap = new Map<string, number>();
-        styleProcs.forEach(p => procQtyMap.set(p.id, 0));
-        styleEntries.forEach(e => {
-          if (procQtyMap.has(e.process_id)) {
-            procQtyMap.set(e.process_id, (procQtyMap.get(e.process_id) || 0) + Number(e.qty_ok || 0));
-          }
-        });
-        garments_sewn = Math.min(...Array.from(procQtyMap.values()));
-      }
+      // Garments sewn: call fn_garments_sewn or fallback rule
+      const garments_sewn = this.getFallbackGarmentsSewn(st.id, pFrom, pTo);
 
       // Received in Finishing = stage_id === receivedStageId (or first finishing stage)
       const styleStages = allFinishingStages.filter(stg => stg.style_id === st.id);
@@ -3121,7 +3519,7 @@ class DataService {
           p_token: pToken,
           p_date: targetDate,
         });
-        if (!error && data) {
+        if (!error && data && Array.isArray(data) && data.length > 0) {
           const arr = Array.isArray(data) ? data : [data];
           return arr.map((item: any) => ({
             section: item.section || 'Cutting',
@@ -3136,7 +3534,7 @@ class DataService {
       }
     }
 
-    return this.getFallbackTodaySections(targetDate);
+    return this.getRptTodaySections(targetDate);
   }
 
   public async getRptTodaySections(pDate?: string | null): Promise<TodaySectionRow[]> {
@@ -3476,16 +3874,7 @@ class DataService {
       }
       const receivedStageId = receivedStage ? receivedStage.id : `received-${style.id}`;
 
-      const styleProcs = processes.filter(p => p.style_id === style.id);
-      let garmentsSewn = 0;
-      if (styleProcs.length > 0) {
-        const procQtys = styleProcs.map(proc => {
-          return prodEntries
-            .filter(e => e.style_id === style.id && e.process_id === proc.id)
-            .reduce((sum, e) => sum + (Number(e.qty_ok) || 0), 0);
-        });
-        garmentsSewn = Math.min(...procQtys);
-      }
+      const garmentsSewn = await this.getGarmentsSewn(style.id);
 
       const alreadyReceived = finishingEntries
         .filter(f => f.style_id === style.id && f.stage_id === receivedStageId)

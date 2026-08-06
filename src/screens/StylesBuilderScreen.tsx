@@ -3,7 +3,7 @@ import {
   Scissors, Plus, Copy, FileSpreadsheet, Trash2, Edit3, 
   DollarSign, Shirt, Check, X, AlertTriangle, Archive, CheckCircle2,
   Layers, RefreshCw, Calendar, Clock, History, AlertCircle, ArrowUpRight,
-  TrendingDown, CheckCircle, Info
+  TrendingDown, CheckCircle, Info, Users
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
@@ -100,6 +100,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       status: 'upcoming',
       image_url: null,
       requires_cutting: true,
+      wage_model: 'individual',
     });
     setEnableSizeBreakdown(false);
     setSizeRows([
@@ -125,6 +126,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       status: st.status,
       image_url: st.image_url,
       requires_cutting: st.requires_cutting !== false,
+      wage_model: st.wage_model || 'individual',
     });
     dataService.getStyleSizes(st.id).then(existing => {
       if (existing && existing.length > 0) {
@@ -575,8 +577,8 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
     });
 
-  // History styles (completed + archived)
-  const historyStyles = styles.filter(s => s.status === 'completed' || s.status === 'archived');
+  // History styles (completed + delivered + archived)
+  const historyStyles = styles.filter(s => s.status === 'completed' || s.status === 'delivered' || s.status === 'archived');
 
   const totalLabourCost = processes.reduce((sum, p) => sum + Number(p.rate || 0), 0);
   const currencySymbol = settings?.currency_symbol || 'MYR';
@@ -618,6 +620,12 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                       <span className="text-[10px] font-bold text-stone-700 bg-stone-100 border border-stone-300 px-1.5 py-0.5 rounded-md flex items-center space-x-1" title="Pre-cut fabric supplied in-house">
                         <Scissors className="w-3 h-3 text-stone-500 line-through" />
                         <span>Pre-cut</span>
+                      </span>
+                    )}
+                    {st.wage_model === 'team' && (
+                      <span className="text-[10px] font-bold text-indigo-900 bg-indigo-100 border border-indigo-300 px-1.5 py-0.5 rounded-md flex items-center space-x-1" title="Team-based Piece Rate Wage Model">
+                        <Users className="w-3 h-3 text-indigo-700" />
+                        <span>Team Rate</span>
                       </span>
                     )}
                   </div>
@@ -1525,6 +1533,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                           <option value="active">Reactivate</option>
                           <option value="upcoming">Move to Upcoming</option>
                           <option value="completed">Completed</option>
+                          <option value="delivered">Delivered</option>
                           <option value="archived">Archived</option>
                         </select>
                       </div>
@@ -1877,8 +1886,49 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   <option value="upcoming">Upcoming (Scheduled)</option>
                   <option value="active">Active (In Production)</option>
                   <option value="completed">Completed</option>
+                  <option value="delivered">Delivered</option>
                   <option value="archived">Archived</option>
                 </select>
+              </div>
+
+              {/* WAGE MODEL PER STYLE */}
+              <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
+                <label className="text-xs font-bold text-stone-900 block">Piece Rate Model (Wage Model)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  <label className={`flex items-start p-3 rounded-xl border cursor-pointer transition ${styleForm.wage_model !== 'team' ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs' : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-100'}`}>
+                    <input
+                      type="radio"
+                      name="wage_model"
+                      value="individual"
+                      checked={styleForm.wage_model !== 'team'}
+                      onChange={() => setStyleForm({ ...styleForm, wage_model: 'individual' })}
+                      className="mt-0.5 accent-indigo-700 cursor-pointer"
+                    />
+                    <div className="ml-2.5">
+                      <span className="font-bold text-xs block">Individual</span>
+                      <span className="text-[11px] text-stone-500 block leading-tight mt-0.5">
+                        Each worker records their own output and is paid for what they personally completed.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start p-3 rounded-xl border cursor-pointer transition ${styleForm.wage_model === 'team' ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs' : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-100'}`}>
+                    <input
+                      type="radio"
+                      name="wage_model"
+                      value="team"
+                      checked={styleForm.wage_model === 'team'}
+                      onChange={() => setStyleForm({ ...styleForm, wage_model: 'team' })}
+                      className="mt-0.5 accent-indigo-700 cursor-pointer"
+                    />
+                    <div className="ml-2.5">
+                      <span className="font-bold text-xs block">Team</span>
+                      <span className="text-[11px] text-stone-500 block leading-tight mt-0.5">
+                        One total for the group, split between members.
+                      </span>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               {/* SIZE BREAKDOWN OPTIONAL SECTION */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserCheck, Clock, Pause, Square, Scissors, TrendingUp, CheckCircle2, 
   Zap, Trophy, Calendar, Crown, DollarSign, LogOut, Key, ShieldAlert,
-  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check, Lock, PackageCheck, Bell
+  ArrowRight, AlertCircle, RefreshCw, Briefcase, Award, Info, Layers, Plus, X, FileText, Check, Lock, PackageCheck, Bell, Users
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { dataService } from '../lib/dataService';
@@ -281,6 +281,8 @@ export const WorkerPortalScreen: React.FC = () => {
     const todayStr = new Date().toISOString().split('T')[0];
     const currentMonthPrefix = todayStr.slice(0, 7); // 'YYYY-MM'
 
+    const token = currentWorker?.pin_hash || currentWorker?.worker_code || workerId || '';
+
     const [
       wrkList, attTodayList, allAttList, assignList, entryList,
       stylesList, finishingList, cuttingList, stagesList, factorySet
@@ -290,7 +292,7 @@ export const WorkerPortalScreen: React.FC = () => {
       dataService.getAttendance(),
       dataService.getDailyAssignments(todayStr),
       dataService.getProductionEntries(),
-      dataService.getStyles(),
+      dataService.getWorkerPortalEntryStyles(token),
       dataService.getFinishingEntries(),
       dataService.getCuttingEntries(),
       dataService.getFinishingStages(),
@@ -1047,6 +1049,12 @@ export const WorkerPortalScreen: React.FC = () => {
                             <span className="text-xs px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-800 font-mono font-bold border border-stone-200">
                               {work.style_code}
                             </span>
+                            {workStyle?.wage_model === 'team' && (
+                              <span className="text-[10px] bg-indigo-100 text-indigo-900 font-bold px-2 py-0.5 rounded-md border border-indigo-300 flex items-center space-x-1">
+                                <Users className="w-3 h-3 text-indigo-700 inline" />
+                                <span>Team output</span>
+                              </span>
+                            )}
                             <NewStyleBadge createdAt={workStyle?.created_at} />
                           </div>
 
@@ -1460,7 +1468,7 @@ export const WorkerPortalScreen: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {garmentStyles.filter(s => s.status !== 'completed').map(st => {
+                {garmentStyles.filter(s => s.status !== 'completed' && s.status !== 'delivered').map(st => {
                   const styleStages = allFinishingStages.filter(stage => stage.style_id === st.id);
                   
                   return (
@@ -1752,7 +1760,7 @@ export const WorkerPortalScreen: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {garmentStyles.filter(s => s.requires_cutting !== false && s.status !== 'completed').map(st => {
+                {garmentStyles.filter(s => s.requires_cutting !== false && s.status !== 'completed' && s.status !== 'delivered').map(st => {
                   const styleCutTotal = allCuttingEntries
                     .filter(c => c.style_id === st.id)
                     .reduce((s, c) => s + (c.pieces_cut || 0), 0);
@@ -2006,7 +2014,7 @@ export const WorkerPortalScreen: React.FC = () => {
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none focus:border-purple-700"
                 >
                   <option value="">Select Style...</option>
-                  {garmentStyles.map(st => (
+                  {garmentStyles.filter(s => s.status !== 'completed' && s.status !== 'delivered').map(st => (
                     <option key={st.id} value={st.id}>{st.style_code} - {st.name}</option>
                   ))}
                 </select>
@@ -2153,7 +2161,7 @@ export const WorkerPortalScreen: React.FC = () => {
                 >
                   <option value="">Select Style...</option>
                   {garmentStyles
-                    .filter(st => st.requires_cutting !== false)
+                    .filter(st => st.requires_cutting !== false && st.status !== 'completed' && st.status !== 'delivered')
                     .map(st => (
                       <option key={st.id} value={st.id}>{st.style_code} - {st.name}</option>
                     ))}

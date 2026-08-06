@@ -16,6 +16,7 @@ export type ScreenId =
   | 'cutting'
   | 'finishing'
   | 'rateBids'
+  | 'teams'
   | 'bulkGrid' 
   | 'styles' 
   | 'workers' 
@@ -42,6 +43,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
     { id: 'cutting' as ScreenId, label: 'Cutting Board', icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'finishing' as ScreenId, label: 'Finishing', icon: Layers, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'rateBids' as ScreenId, label: 'Rate Approvals', icon: BadgePercent, roles: ['admin', 'supervisor'] },
+    { id: 'teams' as ScreenId, label: 'Teams', icon: Users, roles: ['admin', 'supervisor'] },
     { id: 'styles' as ScreenId, label: t('navStyles'), icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'workers' as ScreenId, label: t('navWorkers'), icon: Users, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'bulkGrid' as ScreenId, label: t('navBulkGrid'), icon: Table, roles: ['admin', 'supervisor'] },
