@@ -190,7 +190,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
     setLoading(true);
     try {
       const [stList, stgList, entList, delList, wrkList, prodEntries, setRes, procList, dailyOuts] = await Promise.all([
-        dataService.getEntryStyles('finishing'),
+        dataService.getEntryStyles('finishing', false),
         dataService.getFinishingStages(),
         dataService.getFinishingEntries(),
         dataService.getDeliveries(),

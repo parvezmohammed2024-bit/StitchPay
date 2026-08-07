@@ -141,6 +141,44 @@ export interface TodaySectionRow {
   detail?: string | null;
 }
 
+export interface FactorySummary {
+  cut_pending: number;
+  cut_today: number;
+  sew_pending: number;
+  sewn_today: number;
+  fin_wip: number;
+  fin_today: number;
+  fin_ready: number;
+  dispatched: number;
+  workers_present: number;
+  workers_total: number;
+  styles_at_risk: number;
+}
+
+export interface FactoryStatusRow {
+  style_id?: string;
+  style_code: string;
+  style_name?: string;
+  buyer?: string | null;
+  order_qty: number;
+  requires_cutting?: boolean;
+  days_to_ship: number;
+  balance: number;
+  status?: string;
+  cut_total: number;
+  cut_pending: number;
+  sewn_total: number;
+  sewn_today: number;
+  fin_ready: number;
+  fin_received: number;
+  fin_wip: number;
+  dispatched: number;
+  pct_complete: number;
+  bottleneck_stage?: string | null;
+  bottleneck_qty?: number;
+  sew_pending?: number;
+}
+
 export interface GarmentProcess {
   id: string;
   style_id: string;

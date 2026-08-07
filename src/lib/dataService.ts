@@ -6,7 +6,7 @@ import {
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
   AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow, EntryAudit,
-  ProductionTeam, ProductionTeamMember
+  ProductionTeam, ProductionTeamMember, FactorySummary, FactoryStatusRow
 } from '../types';
 
 function formatLockedPeriodError(err: any): Error {
@@ -567,10 +567,16 @@ class DataService {
     });
   }
 
-  public async getEntryStyles(section: 'cutting' | 'sewing' | 'finishing' | null = null): Promise<GarmentStyle[]> {
+  public async getEntryStyles(
+    section: 'cutting' | 'sewing' | 'finishing' | null = null,
+    includeDone: boolean = false
+  ): Promise<GarmentStyle[]> {
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase.rpc('fn_entry_styles', { p_section: section });
+        const { data, error } = await supabase.rpc('fn_entry_styles', {
+          p_section: section,
+          p_include_done: includeDone,
+        });
         if (!error && data && Array.isArray(data)) {
           return data as GarmentStyle[];
         }
@@ -584,16 +590,24 @@ class DataService {
 
     const allStyles = await this.getStyles();
     return allStyles.filter(s => {
-      if (s.status === 'completed' || s.status === 'delivered' || s.status === 'archived') return false;
+      if (!includeDone && (s.status === 'completed' || s.status === 'delivered' || s.status === 'archived')) return false;
       if (section === 'cutting' && s.requires_cutting === false) return false;
       return true;
     });
   }
 
-  public async getWorkerPortalEntryStyles(pToken?: string, section: 'cutting' | 'sewing' | 'finishing' | null = null): Promise<GarmentStyle[]> {
+  public async getWorkerPortalEntryStyles(
+    pToken?: string,
+    section: 'cutting' | 'sewing' | 'finishing' | null = null,
+    includeDone: boolean = false
+  ): Promise<GarmentStyle[]> {
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase.rpc('wp_entry_styles', { p_token: pToken || '', p_section: section });
+        const { data, error } = await supabase.rpc('wp_entry_styles', {
+          p_token: pToken || '',
+          p_section: section,
+          p_include_done: includeDone,
+        });
         if (!error && data && Array.isArray(data)) {
           return data as GarmentStyle[];
         }
@@ -607,7 +621,7 @@ class DataService {
 
     const allStyles = await this.getStyles();
     return allStyles.filter(s => {
-      if (s.status === 'completed' || s.status === 'delivered' || s.status === 'archived') return false;
+      if (!includeDone && (s.status === 'completed' || s.status === 'delivered' || s.status === 'archived')) return false;
       if (section === 'cutting' && s.requires_cutting === false) return false;
       return true;
     });
@@ -3560,6 +3574,95 @@ class DataService {
     }
 
     return this.getFallbackTodaySections(targetDate);
+  }
+
+  // --- FACTORY STATUS RPCs ---
+  public async getFactorySummary(pDate?: string | null): Promise<FactorySummary> {
+    const targetDate = pDate || getLocalDateString();
+    const defaultSummary: FactorySummary = {
+      cut_pending: 0,
+      cut_today: 0,
+      sew_pending: 0,
+      sewn_today: 0,
+      fin_wip: 0,
+      fin_today: 0,
+      fin_ready: 0,
+      dispatched: 0,
+      workers_present: 0,
+      workers_total: 0,
+      styles_at_risk: 0,
+    };
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_factory_summary', { p_date: targetDate });
+        if (!error && data) {
+          const item = Array.isArray(data) ? data[0] : data;
+          if (item) {
+            return {
+              cut_pending: Number(item.cut_pending || 0),
+              cut_today: Number(item.cut_today || 0),
+              sew_pending: Number(item.sew_pending || 0),
+              sewn_today: Number(item.sewn_today || 0),
+              fin_wip: Number(item.fin_wip || 0),
+              fin_today: Number(item.fin_today || 0),
+              fin_ready: Number(item.fin_ready || 0),
+              dispatched: Number(item.dispatched || 0),
+              workers_present: Number(item.workers_present || 0),
+              workers_total: Number(item.workers_total || 0),
+              styles_at_risk: Number(item.styles_at_risk || 0),
+            };
+          }
+        } else if (error) {
+          console.warn('RPC fn_factory_summary error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC fn_factory_summary call failed:', err);
+      }
+    }
+
+    return defaultSummary;
+  }
+
+  public async getFactoryStatus(pDate?: string | null): Promise<FactoryStatusRow[]> {
+    const targetDate = pDate || getLocalDateString();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_factory_status', { p_date: targetDate });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id || '',
+            style_code: item.style_code || item.code || '',
+            style_name: item.style_name || item.name || '',
+            buyer: item.buyer || item.buyer_name || null,
+            order_qty: Number(item.order_qty || 0),
+            requires_cutting: item.requires_cutting !== false,
+            days_to_ship: Number(item.days_to_ship || 0),
+            balance: Number(item.balance || 0),
+            status: item.status || 'Active',
+            cut_total: Number(item.cut_total || 0),
+            cut_pending: Number(item.cut_pending || 0),
+            sewn_total: Number(item.sewn_total || 0),
+            sewn_today: Number(item.sewn_today || 0),
+            fin_ready: Number(item.fin_ready || 0),
+            fin_received: Number(item.fin_received || 0),
+            fin_wip: Number(item.fin_wip || 0),
+            dispatched: Number(item.dispatched || 0),
+            pct_complete: Number(item.pct_complete || 0),
+            bottleneck_stage: item.bottleneck_stage || null,
+            bottleneck_qty: item.bottleneck_qty !== undefined && item.bottleneck_qty !== null ? Number(item.bottleneck_qty) : 0,
+            sew_pending: item.sew_pending !== undefined ? Number(item.sew_pending) : undefined,
+          }));
+        } else if (error) {
+          console.warn('RPC fn_factory_status error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC fn_factory_status call failed:', err);
+      }
+    }
+
+    return [];
   }
 
   public async getRptStylePipeline(): Promise<StylePipelineRow[]> {

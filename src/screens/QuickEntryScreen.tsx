@@ -108,7 +108,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
     try {
       const [assignList, stList, procList, wList, entryList, setts, cutEntries] = await Promise.all([
         dataService.getDailyAssignments(entryDate),
-        dataService.getEntryStyles('sewing'),
+        dataService.getEntryStyles('sewing', false),
         dataService.getProcesses(),
         dataService.getWorkers(),
         dataService.getProductionEntries(),
@@ -116,8 +116,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
         dataService.getCuttingEntries(),
       ]);
 
-      const activeStyles = stList.filter(s => !s.status || s.status.toLowerCase() === 'active');
-      const unlockedStyles = activeStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
+      const unlockedStyles = stList.filter(s => isStyleUnlockedForSewing(s, cutEntries));
       const unlockedStyleIds = new Set(unlockedStyles.map(s => s.id));
 
       const validAssignments = assignList.filter(a => unlockedStyleIds.has(a.style_id));

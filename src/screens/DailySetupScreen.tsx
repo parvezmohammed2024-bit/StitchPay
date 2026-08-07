@@ -35,6 +35,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const [outputSuccessMsg, setOutputSuccessMsg] = useState<Record<string, string | null>>({});
   const [settings, setSettings] = useState<FactorySettings | null>(null);
   const [selectedStyleIds, setSelectedStyleIds] = useState<string[]>([]);
+  const [showCompleted, setShowCompleted] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Team Output Modal State
@@ -76,13 +77,13 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
 
   useEffect(() => {
     loadInitialData();
-  }, [selectedDate]);
+  }, [selectedDate, showCompleted]);
 
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
       const [allStyles, allProcesses, allWorkers, dailyList, setts, cutEntries, prodEntries, dailyOutputs] = await Promise.all([
-        dataService.getEntryStyles('sewing'),
+        dataService.getEntryStyles('sewing', showCompleted),
         dataService.getProcesses(),
         dataService.getWorkers(),
         dataService.getDailyAssignments(selectedDate),
@@ -92,11 +93,10 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
         dataService.getStyleDailyOutputs(),
       ]);
 
-      const activeStyles = allStyles.filter(s => s.status !== 'completed' && s.status !== 'delivered');
       const activeProcesses = allProcesses.filter(p => p.is_active === undefined || p.is_active === true);
       const activeWorkers = allWorkers.filter(w => !w.status || w.status.toLowerCase() === 'active');
 
-      setStyles(activeStyles);
+      setStyles(allStyles);
       setProcesses(activeProcesses);
       setWorkers(activeWorkers);
       setAssignments(dailyList);
@@ -107,7 +107,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
 
       // Initialize output values for selectedDate
       const nextValues: Record<string, { qty: number; auto_receive: boolean; note?: string }> = {};
-      activeStyles.forEach(style => {
+      allStyles.forEach(style => {
         const existing = dailyOutputs.find(o => o.style_id === style.id && o.output_date === selectedDate);
         nextValues[style.id] = {
           qty: existing ? existing.qty : 0,
@@ -117,8 +117,8 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
       });
       setOutputValues(nextValues);
 
-      // Auto-select all selectable (unlocked) active styles so new unlocked styles and all operation lines are immediately visible
-      const selectableStyles = activeStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
+      // Auto-select all selectable (unlocked) styles so new unlocked styles and all operation lines are immediately visible
+      const selectableStyles = allStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
       if (selectableStyles.length > 0) {
         setSelectedStyleIds(selectableStyles.map(s => s.id));
       } else {
@@ -511,15 +511,22 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
             Active Styles Running Today
           </span>
           <div className="flex items-center space-x-3 text-xs">
-            <span className="text-stone-500 hidden sm:inline">
-              Select one or multiple styles to configure processes
-            </span>
+            <label className="inline-flex items-center space-x-1.5 text-stone-700 font-semibold cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showCompleted}
+                onChange={(e) => setShowCompleted(e.target.checked)}
+                className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+              />
+              <span>Show completed styles</span>
+            </label>
+            <span className="text-stone-300">|</span>
             <button
               onClick={() => {
                 const selectable = styles.filter(s => isStyleUnlockedForSewing(s, cuttingEntries));
                 setSelectedStyleIds(selectable.map(s => s.id));
               }}
-              className="text-indigo-700 hover:text-indigo-800 font-semibold transition"
+              className="text-indigo-700 hover:text-indigo-800 font-semibold transition cursor-pointer"
             >
               Select All Ready
             </button>

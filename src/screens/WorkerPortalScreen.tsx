@@ -292,7 +292,7 @@ export const WorkerPortalScreen: React.FC = () => {
       dataService.getAttendance(),
       dataService.getDailyAssignments(todayStr),
       dataService.getProductionEntries(),
-      dataService.getWorkerPortalEntryStyles(token),
+      dataService.getWorkerPortalEntryStyles(token, null, false),
       dataService.getFinishingEntries(),
       dataService.getCuttingEntries(),
       dataService.getFinishingStages(),

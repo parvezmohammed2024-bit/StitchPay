@@ -59,14 +59,13 @@ export const BulkGridScreen: React.FC<BulkGridScreenProps> = ({ role, onNavigate
   const loadInitialData = async () => {
     setLoadingData(true);
     const [stList, wList, setRes, cutEntries] = await Promise.all([
-      dataService.getEntryStyles('sewing'),
+      dataService.getEntryStyles('sewing', false),
       dataService.getWorkers(),
       dataService.getSettings(),
       dataService.getCuttingEntries(),
     ]);
 
-    const activeStyles = stList.filter(s => s.status !== 'completed' && s.status !== 'delivered');
-    const unlockedStyles = activeStyles.filter(s => isStyleUnlockedForSewing(s, cutEntries));
+    const unlockedStyles = stList.filter(s => isStyleUnlockedForSewing(s, cutEntries));
 
     setStyles(unlockedStyles);
     setWorkers(wList);

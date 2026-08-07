@@ -77,15 +77,16 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   // Samples Filter
   const [sampleStatusFilter, setSampleStatusFilter] = useState<string>('all');
   const [sampleTypeFilter, setSampleTypeFilter] = useState<string>('all');
+  const [showCompleted, setShowCompleted] = useState<boolean>(false);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [showCompleted]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const fetchedStyles = await dataService.getEntryStyles('cutting');
+      const fetchedStyles = await dataService.getEntryStyles('cutting', showCompleted);
       const [fetchedEntries, fetchedSamples, fetchedWorkers] = await Promise.all([
         dataService.getCuttingEntries(),
         dataService.getSamples(),
@@ -499,14 +500,25 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
       {/* TAB 1: THREE-COLUMN CUTTING BOARD */}
       {activeTab === 'board' && (
         <div className="space-y-4">
-          {/* Rules Banner */}
-          <div className="bg-sky-50/80 border border-sky-200 rounded-xl p-3 flex items-start space-x-3 text-sky-900 text-xs">
-            <Scissors className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold">Cutting Priority Board Rules: </span>
-              Pending styles are automatically sorted by target ship deadline (soonest first). 
-              Styles starting bulk cut without an approved PP Sample are flagged with high-visibility risk alerts.
+          {/* Rules Banner & Filters */}
+          <div className="bg-sky-50/80 border border-sky-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sky-900 text-xs">
+            <div className="flex items-start space-x-3">
+              <Scissors className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Cutting Priority Board Rules: </span>
+                Pending styles are automatically sorted by target ship deadline (soonest first). 
+                Styles starting bulk cut without an approved PP Sample are flagged with high-visibility risk alerts.
+              </div>
             </div>
+            <label className="inline-flex items-center space-x-1.5 text-stone-800 font-semibold bg-white/80 border border-sky-200 px-3 py-1.5 rounded-lg shrink-0 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showCompleted}
+                onChange={(e) => setShowCompleted(e.target.checked)}
+                className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+              />
+              <span>Show completed styles</span>
+            </label>
           </div>
 
           {/* Three Columns Layout */}

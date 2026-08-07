@@ -11,6 +11,7 @@ import { WorkerAvatar } from '../components/WorkerAvatar';
 import { StyleImage } from '../components/StyleImage';
 import { StylePipelineCard } from '../components/StylePipelineCard';
 import { TodaysPerformanceSection } from '../components/TodaysPerformanceSection';
+import { FactoryStatusSection } from '../components/FactoryStatusSection';
 
 export const DashboardScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -181,6 +182,12 @@ export const DashboardScreen: React.FC = () => {
 
   return (
     <div className="space-y-4 sm:space-y-6 pb-12 w-full max-w-full overflow-hidden">
+      {/* FACTORY STATUS CARD BLOCK */}
+      <FactoryStatusSection 
+        selectedDate={selectedDate} 
+        onDateChange={setSelectedDate} 
+      />
+
       {/* Page Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
