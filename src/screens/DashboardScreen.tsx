@@ -13,7 +13,11 @@ import { StylePipelineCard } from '../components/StylePipelineCard';
 import { TodaysPerformanceSection } from '../components/TodaysPerformanceSection';
 import { FactoryStatusSection } from '../components/FactoryStatusSection';
 
-export const DashboardScreen: React.FC = () => {
+interface DashboardScreenProps {
+  onNavigate?: (screen: string) => void;
+}
+
+export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) => {
   const { t } = useTranslation();
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [entries, setEntries] = useState<ProductionEntry[]>([]);
@@ -185,7 +189,8 @@ export const DashboardScreen: React.FC = () => {
       {/* FACTORY STATUS CARD BLOCK */}
       <FactoryStatusSection 
         selectedDate={selectedDate} 
-        onDateChange={setSelectedDate} 
+        onDateChange={setSelectedDate}
+        onNavigate={onNavigate}
       />
 
       {/* Page Title */}

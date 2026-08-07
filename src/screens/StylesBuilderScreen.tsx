@@ -22,10 +22,12 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
   const [selectedStyle, setSelectedStyle] = useState<GarmentStyle | null>(null);
   const [processes, setProcesses] = useState<GarmentProcess[]>([]);
   const [finishingStages, setFinishingStages] = useState<FinishingStage[]>([]);
+  const [allFinishingStages, setAllFinishingStages] = useState<FinishingStage[]>([]);
   const [styleTab, setStyleTab] = useState<'sewing' | 'finishing'>('sewing');
   const [editingStageId, setEditingStageId] = useState<string | null>(null);
   const [stageForm, setStageForm] = useState<Partial<FinishingStage>>({});
   const [hasButtonsForDefaults, setHasButtonsForDefaults] = useState<boolean>(true);
+  const [hasButtonsForNewStyle, setHasButtonsForNewStyle] = useState<boolean>(true);
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
   const [settings, setSettings] = useState<FactorySettings | null>(null);
 
@@ -157,14 +159,16 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
 
   const loadData = async () => {
     try {
-      const [stList, setRes, entriesList] = await Promise.all([
+      const [stList, setRes, entriesList, allStagesList] = await Promise.all([
         dataService.getStyles(),
         dataService.getSettings(),
         dataService.getProductionEntries(),
+        dataService.getFinishingStages(),
       ]);
       setStyles(stList);
       setSettings(setRes);
       setProductionEntries(entriesList);
+      setAllFinishingStages(allStagesList || []);
 
       // Main board styles are ONLY active and upcoming
       const mainBoardStyles = stList.filter(s => s.status === 'active' || s.status === 'upcoming');
@@ -197,6 +201,8 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     try {
       const stages = await dataService.getFinishingStages(styleId);
       setFinishingStages(stages);
+      const allStages = await dataService.getFinishingStages();
+      setAllFinishingStages(allStages || []);
     } catch (err: any) {
       showErrorToast(`Failed to load finishing stages: ${err.message || String(err)}`);
     }
@@ -269,11 +275,26 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       }
     }
 
+    // Check if trying to save as active when editing an existing style that has zero finishing stages
+    if (styleForm.status === 'active' && editingStyleId) {
+      const existingStages = await dataService.getFinishingStages(editingStyleId);
+      if (existingStages.length === 0) {
+        showErrorToast('Finishing stages must be configured before the style can be saved as Active.');
+        return;
+      }
+    }
+
     try {
       const saved = await dataService.saveStyle({
         ...styleForm,
         id: editingStyleId || styleForm.id,
       });
+
+      // Default the standard 8 stages automatically on new style creation or if style has 0 stages
+      const currentStages = await dataService.getFinishingStages(saved.id);
+      if (!editingStyleId || currentStages.length === 0) {
+        await dataService.applyDefaultFinishingStages(saved.id, hasButtonsForNewStyle);
+      }
 
       if (enableSizeBreakdown) {
         const validSizes = sizeRows.filter(r => r.size && r.size.trim().length > 0);
@@ -303,12 +324,21 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       setSelectedStyle(saved);
       await loadData();
       await loadProcesses(saved.id);
+      await loadFinishingStages(saved.id);
     } catch (err: any) {
       showErrorToast(`Failed to save style: ${err.message || String(err)}`);
     }
   };
 
   const handleRequestStatusChange = async (style: GarmentStyle, targetStatus: 'upcoming' | 'active' | 'completed' | 'archived') => {
+    if (targetStatus === 'active') {
+      const stages = await dataService.getFinishingStages(style.id);
+      if (stages.length === 0) {
+        showErrorToast('No finishing stages — output will not reach finishing. Please set up finishing stages first.');
+        return;
+      }
+    }
+
     if (targetStatus === 'completed') {
       setCompletionStyle(style);
       setShowCompletionModal(true);
@@ -820,6 +850,39 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 <span className="font-medium text-[11px]">
                   Behind schedule — need <span className="font-bold">{pace.requiredDailyOutput.toLocaleString()}</span>/day, running <span className="font-bold">{pace.avgDaily7d.toLocaleString()}</span>/day
                 </span>
+              </div>
+            )}
+
+            {/* NO FINISHING STAGES WARNING */}
+            {allFinishingStages.filter(fs => fs.style_id === st.id).length === 0 && (
+              <div
+                onClick={e => e.stopPropagation()}
+                className="bg-rose-50 border border-rose-300 rounded-xl p-2.5 text-xs text-rose-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs"
+              >
+                <div className="flex items-center space-x-2 font-bold">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span className="text-[11px]">No finishing stages — output will not reach finishing.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await dataService.applyDefaultFinishingStages(st.id, hasButtonsForDefaults);
+                      showSuccessToast(`Standard finishing stages applied for ${st.style_code}.`);
+                      const allStages = await dataService.getFinishingStages();
+                      setAllFinishingStages(allStages || []);
+                      if (selectedStyle?.id === st.id) {
+                        await loadFinishingStages(st.id);
+                      }
+                    } catch (err: any) {
+                      showErrorToast(`Failed to set up stages: ${err.message || String(err)}`);
+                    }
+                  }}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] px-2.5 py-1 rounded-lg transition shrink-0 cursor-pointer"
+                >
+                  Set up stages
+                </button>
               </div>
             )}
 
@@ -1889,6 +1952,41 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   <option value="delivered">Delivered</option>
                   <option value="archived">Archived</option>
                 </select>
+              </div>
+
+              {/* FINISHING PROCESSES QUESTION */}
+              <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
+                <label className="text-xs font-bold text-stone-900 block">Finishing Stages Configuration</label>
+                <div className="space-y-2">
+                  <span className="text-[11px] text-stone-600 block font-medium">Does this style have buttons / buttonholes?</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setHasButtonsForNewStyle(true)}
+                      className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
+                        hasButtonsForNewStyle
+                          ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
+                          : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                      }`}
+                    >
+                      Yes (8 stages)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHasButtonsForNewStyle(false)}
+                      className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
+                        !hasButtonsForNewStyle
+                          ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
+                          : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                      }`}
+                    >
+                      No (6 stages)
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-stone-500 block">
+                    Standard finishing process stages will be configured automatically so declared output reaches finishing.
+                  </span>
+                </div>
               </div>
 
               {/* WAGE MODEL PER STYLE */}

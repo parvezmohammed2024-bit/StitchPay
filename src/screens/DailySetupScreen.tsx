@@ -30,6 +30,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const [cuttingEntries, setCuttingEntries] = useState<CuttingEntry[]>([]);
   const [productionEntries, setProductionEntries] = useState<ProductionEntry[]>([]);
   const [allDailyOutputs, setAllDailyOutputs] = useState<StyleDailyOutput[]>([]);
+  const [allFinishingStages, setAllFinishingStages] = useState<FinishingStage[]>([]);
   const [outputValues, setOutputValues] = useState<Record<string, { qty: number; auto_receive: boolean; note?: string }>>({});
   const [isSavingOutput, setIsSavingOutput] = useState<Record<string, boolean>>({});
   const [outputSuccessMsg, setOutputSuccessMsg] = useState<Record<string, string | null>>({});
@@ -82,7 +83,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      const [allStyles, allProcesses, allWorkers, dailyList, setts, cutEntries, prodEntries, dailyOutputs] = await Promise.all([
+      const [allStyles, allProcesses, allWorkers, dailyList, setts, cutEntries, prodEntries, dailyOutputs, finishingStagesList] = await Promise.all([
         dataService.getEntryStyles('sewing', showCompleted),
         dataService.getProcesses(),
         dataService.getWorkers(),
@@ -91,6 +92,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
         dataService.getCuttingEntries(),
         dataService.getProductionEntries(),
         dataService.getStyleDailyOutputs(),
+        dataService.getFinishingStages(),
       ]);
 
       const activeProcesses = allProcesses.filter(p => p.is_active === undefined || p.is_active === true);
@@ -104,6 +106,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
       setCuttingEntries(cutEntries);
       setProductionEntries(prodEntries);
       setAllDailyOutputs(dailyOutputs);
+      setAllFinishingStages(finishingStagesList || []);
 
       // Initialize output values for selectedDate
       const nextValues: Record<string, { qty: number; auto_receive: boolean; note?: string }> = {};
@@ -188,6 +191,13 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
     const currentData = outputValues[styleId] || { qty: 0, auto_receive: true };
     setIsSavingOutput(prev => ({ ...prev, [styleId]: true }));
     setOutputSuccessMsg(prev => ({ ...prev, [styleId]: null }));
+
+    const styleStages = allFinishingStages.filter(fs => fs.style_id === styleId);
+    if (styleStages.length === 0) {
+      showErrorToast('No finishing stages — output will not reach finishing.');
+      setIsSavingOutput(prev => ({ ...prev, [styleId]: false }));
+      return;
+    }
 
     try {
       await dataService.saveStyleDailyOutput({
@@ -598,13 +608,16 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col space-y-2">
                     {awaitingCuttingStyles.map(st => (
-                      <div key={st.id} className="bg-stone-200/70 border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-xs">
-                        <Scissors className="w-3.5 h-3.5 text-stone-600" />
-                        <span className="font-bold">{st.style_code}</span>
-                        <span className="text-stone-600">({st.name})</span>
-                        <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-medium">0 pcs cut</span>
+                      <div key={st.id} className="bg-amber-50/90 border border-amber-300 text-amber-950 px-3.5 py-2 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 text-xs shadow-2xs">
+                        <div className="flex items-center space-x-2 font-bold">
+                          <Scissors className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>{st.style_code} ({st.name})</span>
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-md border border-amber-300">
+                          Cutting not started — this style will not appear on the sewing list
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -997,6 +1010,27 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                           </button>
                         </div>
                       </div>
+
+                      {/* Validation warning if style has zero finishing stages */}
+                      {allFinishingStages.filter(fs => fs.style_id === styleId).length === 0 && (
+                        <div className="bg-rose-50 border border-rose-300 text-rose-950 rounded-xl p-3 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 font-bold shadow-2xs">
+                          <div className="flex items-center space-x-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>No finishing stages — output will not reach finishing.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await dataService.applyDefaultFinishingStages(styleId, true);
+                              showSuccessToast(`Standard finishing stages set up for ${style.style_code}.`);
+                              loadInitialData();
+                            }}
+                            className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                          >
+                            Set up stages
+                          </button>
+                        </div>
+                      )}
 
                       {/* Validation warning if declared output > pieces cut */}
                       {isExceedingCut && (

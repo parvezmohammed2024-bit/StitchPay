@@ -198,7 +198,7 @@ export default function App() {
 
           {/* Screen Content Container */}
           <main className="flex-1 p-3 sm:p-6 overflow-y-auto w-full max-w-full">
-            {activeScreen === 'dashboard' && <DashboardScreen />}
+            {activeScreen === 'dashboard' && <DashboardScreen onNavigate={(scr) => setActiveScreen(scr as ScreenId)} />}
             {activeScreen === 'dailySetup' && <DailySetupScreen role={role} onNavigate={(scr) => setActiveScreen(scr as ScreenId)} />}
             {activeScreen === 'quickEntry' && <QuickEntryScreen role={role} />}
             {activeScreen === 'cutting' && <CuttingScreen role={role} />}

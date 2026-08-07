@@ -6,7 +6,8 @@ import {
   CuttingEntry, GarmentSample, StyleFinancialRecord, MgmtValueTodayRecord,
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
   AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow, EntryAudit,
-  ProductionTeam, ProductionTeamMember, FactorySummary, FactoryStatusRow
+  ProductionTeam, ProductionTeamMember, FactorySummary, FactoryStatusRow,
+  DrillCuttingRow, DrillSewingRow, DrillFinishingStageRow, DrillReadyRow
 } from '../types';
 
 function formatLockedPeriodError(err: any): Error {
@@ -3662,6 +3663,124 @@ class DataService {
       }
     }
 
+    return [];
+  }
+
+  public async getDrillCutting(pDate?: string | null): Promise<DrillCuttingRow[]> {
+    const targetDate = pDate || getLocalDateString();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_drill_cutting', { p_date: targetDate });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id || '',
+            style_code: item.style_code || item.code || '',
+            style_name: item.style_name || item.name || '',
+            buyer: item.buyer || item.buyer_name || null,
+            order_qty: Number(item.order_qty || 0),
+            cut_pending: Number(item.cut_pending || 0),
+            cut_total: Number(item.cut_total || 0),
+            cut_today: Number(item.cut_today || 0),
+            last_cut_date: item.last_cut_date || null,
+            workers_today: Number(item.workers_today || 0),
+          }));
+        } else if (error) {
+          console.warn('RPC fn_drill_cutting error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC fn_drill_cutting call failed:', err);
+      }
+    }
+    return [];
+  }
+
+  public async getDrillSewing(pDate?: string | null): Promise<DrillSewingRow[]> {
+    const targetDate = pDate || getLocalDateString();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_drill_sewing', { p_date: targetDate });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id || '',
+            style_code: item.style_code || item.code || '',
+            style_name: item.style_name || item.name || '',
+            buyer: item.buyer || item.buyer_name || null,
+            order_qty: Number(item.order_qty || 0),
+            sew_pending: Number(item.sew_pending || 0),
+            sewn_total: Number(item.sewn_total || 0),
+            sewn_today: Number(item.sewn_today || 0),
+            workers_assigned: Number(item.workers_assigned ?? item.workers_today ?? 0),
+            ready_to_sew: Number(item.ready_to_sew || 0),
+          }));
+        } else if (error) {
+          console.warn('RPC fn_drill_sewing error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC fn_drill_sewing call failed:', err);
+      }
+    }
+    return [];
+  }
+
+  public async getDrillFinishing(pDate?: string | null): Promise<DrillFinishingStageRow[]> {
+    const targetDate = pDate || getLocalDateString();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_drill_finishing', { p_date: targetDate });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id || '',
+            style_code: item.style_code || item.code || '',
+            style_name: item.style_name || item.name || '',
+            buyer: item.buyer || item.buyer_name || null,
+            stage_id: item.stage_id || item.id || '',
+            stage_name: item.stage_name || item.name || '',
+            seq_no: item.seq_no !== undefined ? Number(item.seq_no) : undefined,
+            waiting: Number(item.waiting || 0),
+            done_today: Number(item.done_today || 0),
+            received: Number(item.received || 0),
+            done: Number(item.done || 0),
+            rework: Number(item.rework || 0),
+            reject: Number(item.reject || 0),
+          }));
+        } else if (error) {
+          console.warn('RPC fn_drill_finishing error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC fn_drill_finishing call failed:', err);
+      }
+    }
+    return [];
+  }
+
+  public async getDrillReady(pDate?: string | null): Promise<DrillReadyRow[]> {
+    const targetDate = pDate || getLocalDateString();
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_drill_ready', { p_date: targetDate });
+        if (!error && data) {
+          const arr = Array.isArray(data) ? data : [data];
+          return arr.map((item: any) => ({
+            style_id: item.style_id || item.id || '',
+            style_code: item.style_code || item.code || '',
+            style_name: item.style_name || item.name || '',
+            buyer: item.buyer || item.buyer_name || null,
+            qty_available: Number(item.qty_available ?? item.fin_ready ?? 0),
+            dispatched: Number(item.dispatched || 0),
+            balance: Number(item.balance || 0),
+            target_ship_date: item.target_ship_date || null,
+            days_to_ship: Number(item.days_to_ship || 0),
+          }));
+        } else if (error) {
+          console.warn('RPC fn_drill_ready error:', error);
+        }
+      } catch (err) {
+        console.warn('RPC fn_drill_ready call failed:', err);
+      }
+    }
     return [];
   }
 

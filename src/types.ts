@@ -179,6 +179,60 @@ export interface FactoryStatusRow {
   sew_pending?: number;
 }
 
+export interface DrillCuttingRow {
+  style_id?: string;
+  style_code: string;
+  style_name?: string;
+  buyer?: string | null;
+  order_qty: number;
+  cut_pending: number;
+  cut_total: number;
+  cut_today: number;
+  last_cut_date?: string | null;
+  workers_today: number;
+}
+
+export interface DrillSewingRow {
+  style_id?: string;
+  style_code: string;
+  style_name?: string;
+  buyer?: string | null;
+  order_qty: number;
+  sew_pending: number;
+  sewn_total: number;
+  sewn_today: number;
+  workers_assigned: number;
+  ready_to_sew: number;
+}
+
+export interface DrillFinishingStageRow {
+  style_id?: string;
+  style_code: string;
+  style_name?: string;
+  buyer?: string | null;
+  stage_id?: string;
+  stage_name: string;
+  seq_no?: number;
+  waiting: number;
+  done_today: number;
+  received: number;
+  done: number;
+  rework: number;
+  reject: number;
+}
+
+export interface DrillReadyRow {
+  style_id?: string;
+  style_code: string;
+  style_name?: string;
+  buyer?: string | null;
+  qty_available: number;
+  dispatched: number;
+  balance: number;
+  target_ship_date?: string | null;
+  days_to_ship: number;
+}
+
 export interface GarmentProcess {
   id: string;
   style_id: string;
