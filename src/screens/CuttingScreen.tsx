@@ -225,18 +225,72 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
 
   const [sizeRejects, setSizeRejects] = useState<Record<string, number | string>>({});
 
+  const isBulkCut = cutForm.cut_type === 'bulk' || !cutForm.cut_type;
   const selectedCutStyle = styles.find(s => s.id === cutForm.style_id);
-  const modalSizesToDisplay: StyleSize[] = availableSizes.length > 0
-    ? availableSizes
-    : (cutForm.style_id ? [{
+
+  const allStyleSizes: StyleSize[] = useMemo(() => {
+    if (availableSizes.length > 0) return availableSizes;
+    if (cutForm.style_id) {
+      return [{
         style_id: cutForm.style_id,
         size: 'Standard',
         seq_no: 1,
         order_qty: selectedCutStyle?.order_qty || 0
-      }] : []);
+      }];
+    }
+    return [];
+  }, [availableSizes, cutForm.style_id, selectedCutStyle?.order_qty]);
+
+  // For BULK cutting only:
+  // 1. For each size of the selected style, calculate:
+  //    alreadyCut = sum of qty_cut from cutting_entries where style_id matches, size matches, and cut type is bulk
+  //    remaining = order qty − alreadyCut
+  //    Match sizes after trimming spaces and ignoring upper/lower case.
+  const modalSizesStats = useMemo(() => {
+    if (!cutForm.style_id) return [];
+
+    const styleEntries = cuttingEntries.filter(e =>
+      String(e.style_id).trim() === String(cutForm.style_id).trim() &&
+      (e.cut_type === 'bulk' || !e.cut_type)
+    );
+
+    return allStyleSizes.map(sz => {
+      const szClean = (sz.size || '').trim().toLowerCase();
+      const orderQty = Number(sz.order_qty) || 0;
+
+      const alreadyCut = styleEntries
+        .filter(e => {
+          const entrySizeClean = (e.size || '').trim().toLowerCase();
+          return entrySizeClean === szClean || (!entrySizeClean && szClean === 'standard');
+        })
+        .reduce((sum, e) => sum + Number((e as any).qty_cut ?? e.pieces_cut ?? 0), 0);
+
+      const remaining = orderQty - alreadyCut;
+
+      return {
+        ...sz,
+        alreadyCut,
+        remaining,
+      };
+    });
+  }, [cutForm.style_id, allStyleSizes, cuttingEntries]);
+
+  // For BULK: Hide any size where remaining is 0 or less.
+  // For SAMPLE: show all sizes as before. Do not hide anything.
+  const modalSizesToDisplay = useMemo(() => {
+    if (!isBulkCut) {
+      return modalSizesStats;
+    }
+    return modalSizesStats.filter(sz => sz.remaining > 0);
+  }, [isBulkCut, modalSizesStats]);
+
+  const isAllSizesFullyCut = isBulkCut && Boolean(cutForm.style_id) && modalSizesStats.length > 0 && modalSizesToDisplay.length === 0;
 
   const tickedSizesList = modalSizesToDisplay.filter(sz => selectedSizes.includes(sz.size));
-  const plannedTotal = tickedSizesList.reduce((sum, sz) => sum + (Number(sz.order_qty) || 0), 0);
+  const plannedTotal = tickedSizesList.reduce(
+    (sum, sz) => sum + (isBulkCut ? sz.remaining : (Number(sz.order_qty) || 0)),
+    0
+  );
   const actualTotal = tickedSizesList.reduce((sum, sz) => {
     const val = sizeActualCuts[sz.size];
     return sum + (val === '' || isNaN(Number(val)) ? 0 : Number(val));
@@ -247,16 +301,18 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   }, 0);
   const shortfall = plannedTotal - actualTotal;
 
+  // The reason field is required only if Actual Cut is below REMAINING, or if rejected pieces > 0.
+  // Do not compare against the full order qty.
   const requiresReason = tickedSizesList.some(sz => {
-    const orderQty = Number(sz.order_qty) || 0;
+    const targetQty = isBulkCut ? sz.remaining : (Number(sz.order_qty) || 0);
     const actualVal = sizeActualCuts[sz.size];
     const actualCut = actualVal === '' || isNaN(Number(actualVal)) ? 0 : Number(actualVal);
     const rejectVal = sizeRejects[sz.size];
     const rejectCut = rejectVal === '' || isNaN(Number(rejectVal)) ? 0 : Number(rejectVal);
-    return rejectCut > 0 || actualCut < orderQty;
+    return rejectCut > 0 || actualCut < targetQty;
   });
 
-  const handleToggleSize = (sizeName: string, orderQty: number) => {
+  const handleToggleSize = (sizeName: string, defaultCutQty: number) => {
     if (selectedSizes.includes(sizeName)) {
       setSelectedSizes(prev => prev.filter(s => s !== sizeName));
       setSizeActualCuts(prev => {
@@ -273,7 +329,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
       setSelectedSizes(prev => [...prev, sizeName]);
       setSizeActualCuts(prev => ({
         ...prev,
-        [sizeName]: orderQty,
+        [sizeName]: defaultCutQty,
       }));
       setSizeRejects(prev => ({
         ...prev,
@@ -421,7 +477,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
         worker_id: '',
         notes: ''
       });
-      loadData();
+      await loadData();
     } catch (err) {
       showErrorToast('Failed to save cutting entries');
     }
@@ -998,7 +1054,13 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setCutForm(prev => ({ ...prev, cut_type: 'bulk' }))}
+                    onClick={() => {
+                      setCutForm(prev => ({ ...prev, cut_type: 'bulk' }));
+                      setSelectedSizes([]);
+                      setSizeActualCuts({});
+                      setSizeRejects({});
+                      setCuttingReason('');
+                    }}
                     className={`p-3 rounded-xl border font-bold flex flex-col items-center justify-center text-center transition-all ${
                       cutForm.cut_type === 'bulk'
                         ? 'bg-indigo-50 border-indigo-600 text-indigo-900 ring-2 ring-indigo-500/20'
@@ -1011,7 +1073,13 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
 
                   <button
                     type="button"
-                    onClick={() => setCutForm(prev => ({ ...prev, cut_type: 'sample' }))}
+                    onClick={() => {
+                      setCutForm(prev => ({ ...prev, cut_type: 'sample' }));
+                      setSelectedSizes([]);
+                      setSizeActualCuts({});
+                      setSizeRejects({});
+                      setCuttingReason('');
+                    }}
                     className={`p-3 rounded-xl border font-bold flex flex-col items-center justify-center text-center transition-all ${
                       cutForm.cut_type === 'sample'
                         ? 'bg-amber-50 border-amber-600 text-amber-900 ring-2 ring-amber-500/20'
@@ -1070,10 +1138,13 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                           onClick={() => {
                             setSelectedSizes(modalSizesToDisplay.map(s => s.size));
                             const cuts: Record<string, number> = {};
+                            const rejects: Record<string, number> = {};
                             modalSizesToDisplay.forEach(s => {
-                              cuts[s.size] = Number(s.order_qty) || 0;
+                              cuts[s.size] = isBulkCut ? s.remaining : (Number(s.order_qty) || 0);
+                              rejects[s.size] = 0;
                             });
                             setSizeActualCuts(cuts);
+                            setSizeRejects(rejects);
                           }}
                           className="text-indigo-600 hover:text-indigo-800 font-bold"
                         >
@@ -1085,6 +1156,8 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                           onClick={() => {
                             setSelectedSizes([]);
                             setSizeActualCuts({});
+                            setSizeRejects({});
+                            setCuttingReason('');
                           }}
                           className="text-stone-500 hover:text-stone-700 font-medium"
                         >
@@ -1096,10 +1169,12 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
 
                   {!cutForm.style_id ? (
                     <p className="text-stone-400 italic py-2">Select a garment style first to view sizes</p>
+                  ) : isAllSizesFullyCut ? (
+                    <p className="text-stone-600 font-semibold italic py-2">All sizes for this style are fully cut.</p>
                   ) : modalSizesToDisplay.length === 0 ? (
                     <p className="text-stone-400 italic py-2">No sizes found for this style</p>
                   ) : (
-                    /* Checkboxes labelled "S (Order: 10)" */
+                    /* Checkboxes labelled "L (Left: 35 of 35)" for bulk or "S (Order: 10)" for sample */
                     <div className="flex flex-wrap gap-2 pt-1">
                       {modalSizesToDisplay.map(sz => {
                         const isChecked = selectedSizes.includes(sz.size);
@@ -1115,10 +1190,14 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => handleToggleSize(sz.size, Number(sz.order_qty) || 0)}
+                              onChange={() => handleToggleSize(sz.size, isBulkCut ? sz.remaining : (Number(sz.order_qty) || 0))}
                               className="rounded border-stone-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
                             />
-                            <span>{sz.size} (Order: {sz.order_qty})</span>
+                            <span>
+                              {isBulkCut
+                                ? `${sz.size} (Left: ${sz.remaining} of ${sz.order_qty})`
+                                : `${sz.size} (Order: ${sz.order_qty})`}
+                            </span>
                           </label>
                         );
                       })}
@@ -1126,12 +1205,12 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   )}
                 </div>
 
-                {/* For each ticked size: Size | Order Qty (read-only) | Good Cut | Rejected (default 0) */}
+                {/* For each ticked size: Size | Remaining / Order Qty | Good Cut | Rejected (default 0) */}
                 {tickedSizesList.length > 0 && (
                   <div className="border border-stone-200 rounded-2xl overflow-hidden bg-white mt-2">
                     <div className="grid grid-cols-12 gap-2 bg-stone-100/80 px-3 py-2 text-[11px] font-bold text-stone-600 uppercase tracking-wider">
                       <div className="col-span-3">Size</div>
-                      <div className="col-span-3">Order Qty</div>
+                      <div className="col-span-3">{isBulkCut ? 'Remaining' : 'Order Qty'}</div>
                       <div className="col-span-3">Good Cut</div>
                       <div className="col-span-3">Rejected</div>
                     </div>
@@ -1142,7 +1221,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                             {sz.size}
                           </div>
                           <div className="col-span-3 text-stone-600 font-medium">
-                            {sz.order_qty} pcs
+                            {isBulkCut ? `${sz.remaining} of ${sz.order_qty}` : `${sz.order_qty} pcs`}
                           </div>
                           <div className="col-span-3">
                             <input
@@ -1198,7 +1277,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   </div>
                 )}
 
-                {/* ONE Reason field: Show when any size has rejected pieces OR is cut below its order qty */}
+                {/* ONE Reason field: Show when any size has rejected pieces OR is cut below its order/remaining qty */}
                 {requiresReason && (
                   <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-3 space-y-1 mt-2">
                     <label className="block font-bold text-amber-800 text-xs">
@@ -1212,7 +1291,11 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                       onChange={e => setCuttingReason(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-stone-900 font-medium placeholder:text-stone-400 focus:ring-2 focus:ring-amber-500 text-xs"
                     />
-                    <p className="text-[10px] text-amber-700">Reason is required because one or more sizes have rejected pieces or cut quantity below order quantity.</p>
+                    <p className="text-[10px] text-amber-700">
+                      {isBulkCut
+                        ? 'Reason is required because one or more sizes have rejected pieces or cut quantity below remaining quantity.'
+                        : 'Reason is required because one or more sizes have rejected pieces or cut quantity below order quantity.'}
+                    </p>
                   </div>
                 )}
               </div>
