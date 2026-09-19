@@ -1840,6 +1840,87 @@ class DataService {
     return newEntry;
   }
 
+  public async saveCuttingEntries(entries: Partial<CuttingEntry>[]): Promise<CuttingEntry[]> {
+    if (entries.length === 0) return [];
+    const isValidUUID = (id?: string) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    const payloads: Record<string, any>[] = [];
+    const createdEntries: CuttingEntry[] = [];
+
+    for (const entry of entries) {
+      const entryId = entry.id && isValidUUID(entry.id) ? entry.id : crypto.randomUUID();
+      const entryDate = entry.entry_date || getLocalDateString();
+      const qtyCut = Number(entry.pieces_cut || (entry as any).qty_cut || 0);
+      const notesText = entry.notes || (entry as any).note;
+      const cutTypeVal = entry.cut_type || 'bulk';
+
+      const rawPayload: Record<string, any> = {
+        id: entryId,
+        entry_date: entryDate,
+        style_id: entry.style_id,
+        qty_cut: qtyCut,
+        cut_type: cutTypeVal,
+      };
+
+      const tableLayers = entry.tables_layers || (entry as any).lay_id;
+      if (tableLayers && typeof tableLayers === 'string' && tableLayers.trim().length > 0) {
+        rawPayload.lay_id = tableLayers.trim();
+      }
+
+      const rawSize = entry.size || (entry as any).size;
+      if (typeof rawSize === 'string' && rawSize.trim().length > 0 && rawSize.trim().toUpperCase() !== 'ALL') {
+        rawPayload.size = rawSize.trim();
+      }
+
+      if (entry.worker_id && isValidUUID(entry.worker_id)) {
+        rawPayload.worker_id = entry.worker_id;
+      }
+
+      if (typeof notesText === 'string' && notesText.trim().length > 0) {
+        rawPayload.note = notesText.trim();
+      }
+
+      // Sanitize payload ensuring no null/undefined or empty string keys are sent
+      const cleanPayload = sanitizePayload(rawPayload);
+      payloads.push(cleanPayload);
+
+      createdEntries.push({
+        id: entryId,
+        entry_date: entryDate,
+        style_id: entry.style_id!,
+        cut_type: cutTypeVal,
+        pieces_cut: qtyCut,
+        size: cleanPayload.size || null,
+        tables_layers: cleanPayload.lay_id || null,
+        worker_id: cleanPayload.worker_id || null,
+        notes: cleanPayload.note || null,
+        created_at: entry.created_at || new Date().toISOString(),
+      });
+    }
+
+    if (isSupabaseConfigured && payloads.length > 0) {
+      console.log('[SUPABASE BATCH CUTTING INSERT PAYLOADS]:', JSON.stringify(payloads, null, 2));
+      const { data, error } = await supabase.from('cutting_entries').insert(payloads).select();
+      if (error) {
+        console.error('Error batch saving cutting_entries to Supabase:', error);
+        showErrorToast(`Database Error (cutting_entries): ${error.message}`);
+        throw new Error(error.message);
+      }
+      await this.getCuttingEntries();
+    }
+
+    for (const newEntry of createdEntries) {
+      const idx = this.cuttingEntries.findIndex(c => c.id === newEntry.id);
+      if (idx >= 0) {
+        this.cuttingEntries[idx] = newEntry;
+      } else {
+        this.cuttingEntries.unshift(newEntry);
+      }
+    }
+
+    return createdEntries;
+  }
+
   public async clearCuttingData(): Promise<void> {
 
     this.cuttingEntries = [];

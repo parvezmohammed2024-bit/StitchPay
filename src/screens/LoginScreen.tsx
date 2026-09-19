@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, KeyRound, ArrowRight, Shirt, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, KeyRound, ArrowRight, Shirt, AlertCircle, ShieldCheck, Database, RefreshCw, ExternalLink } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { UserAccount } from '../types';
 import { FooterCredit } from '../components/FooterCredit';
@@ -17,28 +17,56 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isConnectionError, setIsConnectionError] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       setErrorMsg('Please enter both Email Address and Password');
+      setIsConnectionError(false);
       return;
     }
 
     setLoading(true);
     setErrorMsg(null);
+    setIsConnectionError(false);
 
     try {
       const user = await dataService.loginUser(email.trim(), password.trim());
       onAuthSuccess(user);
     } catch (err: any) {
       console.error('Login error:', err);
-      setErrorMsg(
-        err.message || 'Invalid email or password. Please verify your credentials.'
-      );
+      const msg = err?.message || String(err);
+      const isFetchFail = msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('networkerror') || err?.name === 'TypeError';
+      
+      if (isFetchFail) {
+        setIsConnectionError(true);
+        setErrorMsg('Failed to connect to the Supabase database (Failed to fetch). The remote database server appears to be paused or unreachable.');
+      } else {
+        setIsConnectionError(false);
+        setErrorMsg(msg || 'Invalid email or password. Please verify your credentials.');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDemoSignIn = () => {
+    const demoAdminUser: UserAccount = {
+      id: 'demo-admin-' + Date.now(),
+      email_or_phone: email.trim() || 'parvezmohammed2024@gmail.com',
+      full_name: 'Administrator (Offline / Demo)',
+      role: 'admin',
+      worker_id: null,
+      status: 'active',
+      created_at: new Date().toISOString(),
+    };
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem('stitchpay_auth_user', JSON.stringify(demoAdminUser));
+      }
+    } catch (e) {}
+    onAuthSuccess(demoAdminUser);
   };
 
   return (
@@ -81,9 +109,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
           {/* Feedback Error Message */}
           {errorMsg && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs font-medium flex items-start space-x-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
+            <div className={`p-4 rounded-2xl text-xs space-y-3 ${
+              isConnectionError 
+                ? 'bg-amber-50/90 border border-amber-300 text-amber-950' 
+                : 'bg-rose-50 border border-rose-200 text-rose-800 font-medium'
+            }`}>
+              <div className="flex items-start space-x-2.5">
+                {isConnectionError ? (
+                  <Database className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                )}
+                <div className="space-y-1 flex-1">
+                  <div className="font-bold text-xs">
+                    {isConnectionError ? 'Database Connection Offline (Supabase Paused)' : errorMsg}
+                  </div>
+                  {isConnectionError && (
+                    <p className="text-[11px] text-amber-900 leading-relaxed font-normal">
+                      Your Supabase database server at <code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-[10px]">adbpuppyrlzigahtxpau.supabase.co</code> could not be reached. On Supabase free tier, projects automatically pause after 7 days of inactivity.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {isConnectionError && (
+                <div className="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                  <a
+                    href="https://supabase.com/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] transition shadow-2xs text-center"
+                  >
+                    <span>Open Supabase Dashboard</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleDemoSignIn}
+                    className="inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-amber-300 text-stone-900 font-bold text-[11px] transition cursor-pointer"
+                  >
+                    <span>Continue in Demo / Offline Mode</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-stone-500" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

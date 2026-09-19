@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { dataService, getLocalDateString } from '../lib/dataService';
 import { exportDailyPlanExcel, exportDailyReportExcel } from '../lib/excelExport';
-import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, CuttingEntry, ProductionEntry, StyleDailyOutput } from '../types';
+import { DailyAssignment, GarmentStyle, GarmentProcess, Worker, FactorySettings, UserRole, CuttingEntry, ProductionEntry, StyleDailyOutput, FinishingStage } from '../types';
+import { showSuccessToast, showErrorToast } from '../lib/toast';
 import { WorkerAvatar } from '../components/WorkerAvatar';
 import { StyleImageLightbox } from '../components/StyleImageLightbox';
 import { NewStyleBadge } from '../components/NewStyleBadge';

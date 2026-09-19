@@ -58,6 +58,9 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
     worker_id: '',
     notes: ''
   });
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [sizeActualCuts, setSizeActualCuts] = useState<Record<string, number | string>>({});
+  const [shortfallReason, setShortfallReason] = useState<string>('');
 
   // Sample Form
   const [sampleForm, setSampleForm] = useState({
@@ -201,21 +204,76 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
     return { pending, inProgress, done };
   }, [styles, bulkCutMap, sampleCutMap]);
 
-  // Handle Save Cutting Entry
+  // Handle Style Sizes & Multi-Size Calculations
   useEffect(() => {
     if (cutForm.style_id) {
       dataService.getStyleSizes(cutForm.style_id).then(sizes => {
         setAvailableSizes(sizes);
-        if (sizes.length > 0) {
-          setCutForm(prev => ({ ...prev, size: sizes[0].size }));
-        } else {
-          setCutForm(prev => ({ ...prev, size: '' }));
-        }
+        setSelectedSizes([]);
+        setSizeActualCuts({});
+        setShortfallReason('');
       });
     } else {
       setAvailableSizes([]);
+      setSelectedSizes([]);
+      setSizeActualCuts({});
+      setShortfallReason('');
     }
   }, [cutForm.style_id]);
+
+  const selectedCutStyle = styles.find(s => s.id === cutForm.style_id);
+  const modalSizesToDisplay: StyleSize[] = availableSizes.length > 0
+    ? availableSizes
+    : (cutForm.style_id ? [{
+        style_id: cutForm.style_id,
+        size: 'Standard',
+        seq_no: 1,
+        order_qty: selectedCutStyle?.order_qty || 0
+      }] : []);
+
+  const tickedSizesList = modalSizesToDisplay.filter(sz => selectedSizes.includes(sz.size));
+  const plannedTotal = tickedSizesList.reduce((sum, sz) => sum + (Number(sz.order_qty) || 0), 0);
+  const actualTotal = tickedSizesList.reduce((sum, sz) => {
+    const val = sizeActualCuts[sz.size];
+    return sum + (val === '' || isNaN(Number(val)) ? 0 : Number(val));
+  }, 0);
+  const shortfall = plannedTotal - actualTotal;
+
+  const handleToggleSize = (sizeName: string, orderQty: number) => {
+    if (selectedSizes.includes(sizeName)) {
+      setSelectedSizes(prev => prev.filter(s => s !== sizeName));
+      setSizeActualCuts(prev => {
+        const next = { ...prev };
+        delete next[sizeName];
+        return next;
+      });
+    } else {
+      setSelectedSizes(prev => [...prev, sizeName]);
+      setSizeActualCuts(prev => ({
+        ...prev,
+        [sizeName]: orderQty,
+      }));
+    }
+  };
+
+  const handleActualCutChange = (sizeName: string, val: string) => {
+    if (val === '') {
+      setSizeActualCuts(prev => ({ ...prev, [sizeName]: '' }));
+      return;
+    }
+    const cleanNum = Math.max(0, Math.floor(Number(val)));
+    setSizeActualCuts(prev => ({
+      ...prev,
+      [sizeName]: isNaN(cleanNum) ? 0 : cleanNum,
+    }));
+  };
+
+  const handleCloseCutModal = () => {
+    setIsCutModalOpen(false);
+    setSelectedSizes([]);
+    setSizeActualCuts({});
+    setShortfallReason('');
+  };
 
   const handleSaveCutEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,52 +281,92 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
       showErrorToast('Please select a garment style');
       return;
     }
-    const qty = Number(cutForm.pieces_cut);
-    if (isNaN(qty) || qty <= 0) {
-      showErrorToast('Please enter a valid pieces cut quantity');
+
+    // 5. Validation: at least one size must be ticked
+    if (tickedSizesList.length === 0) {
+      showErrorToast('Please tick at least one size');
       return;
     }
 
-    const selectedStyle = styles.find(s => s.id === cutForm.style_id);
-    const styleCode = selectedStyle?.style_code || 'Style';
-    const prevBulkCut = bulkCutMap.get(cutForm.style_id) || 0;
-    const isFirstBulkCut = (cutForm.cut_type === 'bulk' || !cutForm.cut_type) && qty > 0 && prevBulkCut === 0;
+    // 5. Validation: Actual Total must be greater than 0
+    if (actualTotal <= 0) {
+      showErrorToast('Actual Total must be greater than 0');
+      return;
+    }
 
-    try {
-      await dataService.saveCuttingEntry({
+    // 3. If Shortfall > 0, show a required "Shortfall Reason" text field. Block saving until it is filled.
+    if (shortfall > 0 && !shortfallReason.trim()) {
+      showErrorToast('Please provide a Shortfall Reason');
+      return;
+    }
+
+    // 4. Build entries to save:
+    // insert ONE row into cutting_entries PER ticked size, all in a single insert call:
+    // - same style, cut date, cut type (bulk/sample), table/layers info for every row
+    // - qty = that size's Actual Cut
+    // - notes = the Notes field, plus "Shortfall: X pcs — <reason>" if that size was cut below its order qty
+    // - Skip sizes whose Actual Cut is 0.
+    const baseNotes = cutForm.notes?.trim() || '';
+    const entriesToSave: Partial<CuttingEntry>[] = [];
+
+    for (const sz of tickedSizesList) {
+      const orderQty = Number(sz.order_qty) || 0;
+      const actualCut = Number(sizeActualCuts[sz.size] || 0);
+
+      // Skip sizes whose Actual Cut is 0
+      if (actualCut <= 0) continue;
+
+      let sizeNote = baseNotes;
+      if (actualCut < orderQty) {
+        const sizeShortfall = orderQty - actualCut;
+        const shortfallText = `Shortfall: ${sizeShortfall} pcs — ${shortfallReason.trim()}`;
+        sizeNote = sizeNote ? `${sizeNote} | ${shortfallText}` : shortfallText;
+      }
+
+      entriesToSave.push({
         style_id: cutForm.style_id,
         cut_type: cutForm.cut_type,
         entry_date: cutForm.entry_date,
-        pieces_cut: qty,
-        size: cutForm.size || undefined,
-        tables_layers: cutForm.tables_layers || undefined,
+        pieces_cut: actualCut,
+        size: sz.size,
+        tables_layers: cutForm.tables_layers?.trim() || undefined,
         worker_id: cutForm.worker_id || undefined,
-        notes: cutForm.notes || undefined,
+        notes: sizeNote || undefined,
       });
+    }
 
-      if (isFirstBulkCut) {
-        showSuccessToast(`${styleCode} is now available for line setup.`);
-      } else {
-        showSuccessToast(
-          cutForm.cut_type === 'sample' 
-            ? `Sample cutting output recorded (${qty} pcs)` 
-            : `Bulk cutting output recorded (${qty} pcs)`
-        );
-      }
+    if (entriesToSave.length === 0) {
+      showErrorToast('At least one ticked size must have Actual Cut greater than 0');
+      return;
+    }
 
-      setIsCutModalOpen(false);
+    const styleCode = selectedCutStyle?.style_code || 'Style';
+    const prevBulkCut = bulkCutMap.get(cutForm.style_id) || 0;
+    const isFirstBulkCut = (cutForm.cut_type === 'bulk' || !cutForm.cut_type) && actualTotal > 0 && prevBulkCut === 0;
+
+    try {
+      await dataService.saveCuttingEntries(entriesToSave);
+
+      // 5. Success message listing the sizes and quantities saved
+      const savedSummary = entriesToSave.map(entry => `${entry.size}: ${entry.pieces_cut} pcs`).join(', ');
+      showSuccessToast(
+        `Saved cutting output: ${savedSummary}${isFirstBulkCut ? ` — ${styleCode} is now available for line setup.` : ''}`
+      );
+
+      handleCloseCutModal();
       setCutForm({
         style_id: '',
         cut_type: 'bulk',
         entry_date: new Date().toISOString().split('T')[0],
         pieces_cut: '',
+        size: '',
         tables_layers: '',
         worker_id: '',
         notes: ''
       });
       loadData();
     } catch (err) {
-      showErrorToast('Failed to save cutting entry');
+      showErrorToast('Failed to save cutting entries');
     }
   };
 
@@ -829,7 +927,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                 </div>
               </div>
               <button 
-                onClick={() => setIsCutModalOpen(false)}
+                onClick={handleCloseCutModal}
                 className="text-stone-400 hover:text-stone-600 p-1 rounded-lg hover:bg-stone-100"
               >
                 <X className="w-5 h-5" />
@@ -887,7 +985,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 {/* Entry Date */}
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">Cut Date *</label>
@@ -899,49 +997,150 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                   />
                 </div>
-
-                {/* Size Field */}
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">
-                    Size {availableSizes.length > 0 ? '*' : '(Free Text)'}
-                  </label>
-                  {availableSizes.length > 0 ? (
-                    <select
-                      required
-                      value={cutForm.size || ''}
-                      onChange={e => setCutForm(prev => ({ ...prev, size: e.target.value }))}
-                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                    >
-                      {availableSizes.map(sz => (
-                        <option key={sz.size} value={sz.size}>
-                          {sz.size} (Order: {sz.order_qty} pcs)
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      placeholder="e.g. S, M, L, XL"
-                      value={cutForm.size || ''}
-                      onChange={e => setCutForm(prev => ({ ...prev, size: e.target.value }))}
-                      className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                    />
-                  )}
-                </div>
               </div>
 
-              {/* Pieces Cut */}
-              <div>
-                <label className="block font-bold text-stone-700 mb-1">Pieces Cut (Qty) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  placeholder="e.g. 500"
-                  value={cutForm.pieces_cut}
-                  onChange={e => setCutForm(prev => ({ ...prev, pieces_cut: e.target.value }))}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-stone-900 font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
+              {/* Multi-Size Section */}
+              <div className="space-y-3 pt-2 border-t border-stone-100">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block font-bold text-stone-700">
+                      Sizes to Cut *
+                    </label>
+                    {modalSizesToDisplay.length > 0 && (
+                      <div className="flex items-center space-x-2 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSizes(modalSizesToDisplay.map(s => s.size));
+                            const cuts: Record<string, number> = {};
+                            modalSizesToDisplay.forEach(s => {
+                              cuts[s.size] = Number(s.order_qty) || 0;
+                            });
+                            setSizeActualCuts(cuts);
+                          }}
+                          className="text-indigo-600 hover:text-indigo-800 font-bold"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-stone-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSizes([]);
+                            setSizeActualCuts({});
+                          }}
+                          className="text-stone-500 hover:text-stone-700 font-medium"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {!cutForm.style_id ? (
+                    <p className="text-stone-400 italic py-2">Select a garment style first to view sizes</p>
+                  ) : modalSizesToDisplay.length === 0 ? (
+                    <p className="text-stone-400 italic py-2">No sizes found for this style</p>
+                  ) : (
+                    /* Checkboxes labelled "S (Order: 10)" */
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {modalSizesToDisplay.map(sz => {
+                        const isChecked = selectedSizes.includes(sz.size);
+                        return (
+                          <label
+                            key={sz.size}
+                            className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition select-none ${
+                              isChecked
+                                ? 'bg-indigo-50 border-indigo-500 text-indigo-900 ring-1 ring-indigo-500/20 shadow-2xs'
+                                : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleSize(sz.size, Number(sz.order_qty) || 0)}
+                              className="rounded border-stone-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                            />
+                            <span>{sz.size} (Order: {sz.order_qty})</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* For each ticked size: Size | Order Qty (read-only) | Actual Cut (number input) */}
+                {tickedSizesList.length > 0 && (
+                  <div className="border border-stone-200 rounded-2xl overflow-hidden bg-white mt-2">
+                    <div className="grid grid-cols-12 gap-2 bg-stone-100/80 px-3 py-2 text-[11px] font-bold text-stone-600 uppercase tracking-wider">
+                      <div className="col-span-3">Size</div>
+                      <div className="col-span-4">Order Qty</div>
+                      <div className="col-span-5">Actual Cut</div>
+                    </div>
+                    <div className="divide-y divide-stone-100 max-h-48 overflow-y-auto">
+                      {tickedSizesList.map(sz => (
+                        <div key={sz.size} className="grid grid-cols-12 gap-2 items-center px-3 py-2 text-xs">
+                          <div className="col-span-3 font-bold text-stone-900">
+                            {sz.size}
+                          </div>
+                          <div className="col-span-4 text-stone-600 font-medium">
+                            {sz.order_qty} pcs
+                          </div>
+                          <div className="col-span-5">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              required
+                              value={sizeActualCuts[sz.size] ?? ''}
+                              onChange={e => handleActualCutChange(sz.size, e.target.value)}
+                              placeholder="0"
+                              className="w-full px-2.5 py-1 bg-stone-50 border border-stone-300 rounded-lg text-stone-900 font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white text-xs"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Auto-calculated live totals */}
+                {tickedSizesList.length > 0 && (
+                  <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 grid grid-cols-3 gap-2 text-center mt-2">
+                    <div>
+                      <div className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Planned Total</div>
+                      <div className="text-sm font-black text-stone-900 mt-0.5">{plannedTotal} pcs</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Actual Total</div>
+                      <div className="text-sm font-black text-indigo-700 mt-0.5">{actualTotal} pcs</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Shortfall</div>
+                      <div className={`text-sm font-black mt-0.5 ${shortfall > 0 ? 'text-rose-600' : 'text-stone-700'}`}>
+                        {shortfall} pcs
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Shortfall Reason: If Shortfall > 0, show required text field */}
+                {shortfall > 0 && (
+                  <div className="bg-rose-50/60 border border-rose-200 rounded-2xl p-3 space-y-1 mt-2">
+                    <label className="block font-bold text-rose-800 text-xs">
+                      Shortfall Reason <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. fabric defect, 2 pcs damaged"
+                      value={shortfallReason}
+                      onChange={e => setShortfallReason(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-rose-300 rounded-xl text-stone-900 font-medium placeholder:text-stone-400 focus:ring-2 focus:ring-rose-500 text-xs"
+                    />
+                    <p className="text-[10px] text-rose-600">Actual cut ({actualTotal}) is less than planned order ({plannedTotal}). Reason is required.</p>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -990,16 +1189,16 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
               <div className="pt-3 border-t border-stone-100 flex items-center justify-end space-x-2">
                 <button
                   type="button"
-                  onClick={() => setIsCutModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-300 font-bold text-stone-700 hover:bg-stone-100"
+                  onClick={handleCloseCutModal}
+                  className="px-4 py-2 rounded-xl border border-stone-300 font-bold text-stone-700 hover:bg-stone-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md cursor-pointer"
                 >
-                  Save Cutting Entry
+                  Save Cutting Output
                 </button>
               </div>
             </form>
