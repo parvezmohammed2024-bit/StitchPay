@@ -690,7 +690,23 @@ class DataService {
           p_include_done: includeDone,
         });
         if (!error && data && Array.isArray(data)) {
-          return data as GarmentStyle[];
+          const list = data as GarmentStyle[];
+          // If RPC doesn't include cutting_priority, fetch and merge from styles table
+          if (list.length > 0 && !('cutting_priority' in list[0])) {
+            try {
+              const { data: priorities } = await supabase.from('styles').select('id, cutting_priority');
+              if (priorities) {
+                const map = new Map(priorities.map(p => [p.id, p.cutting_priority]));
+                return list.map(item => ({
+                  ...item,
+                  cutting_priority: map.get(item.id) ?? null
+                }));
+              }
+            } catch {
+              // ignore
+            }
+          }
+          return list;
         }
         if (error) {
           console.warn('RPC fn_entry_styles returned error, using fallback:', error);
@@ -721,7 +737,22 @@ class DataService {
           p_include_done: includeDone,
         });
         if (!error && data && Array.isArray(data)) {
-          return data as GarmentStyle[];
+          const list = data as GarmentStyle[];
+          if (list.length > 0 && !('cutting_priority' in list[0])) {
+            try {
+              const { data: priorities } = await supabase.from('styles').select('id, cutting_priority');
+              if (priorities) {
+                const map = new Map(priorities.map(p => [p.id, p.cutting_priority]));
+                return list.map(item => ({
+                  ...item,
+                  cutting_priority: map.get(item.id) ?? null
+                }));
+              }
+            } catch {
+              // ignore
+            }
+          }
+          return list;
         }
         if (error) {
           console.warn('RPC wp_entry_styles returned error, using fallback:', error);
@@ -1059,6 +1090,7 @@ class DataService {
       status: cleanStyle.status ?? existing?.status ?? 'upcoming',
       requires_cutting: cleanStyle.requires_cutting ?? existing?.requires_cutting ?? true,
       wage_model: cleanStyle.wage_model ?? existing?.wage_model ?? 'individual',
+      cutting_priority: cleanStyle.cutting_priority !== undefined ? cleanStyle.cutting_priority : (existing?.cutting_priority ?? null),
       notes: cleanStyle.notes ?? existing?.notes ?? null,
     };
 
@@ -1367,9 +1399,9 @@ class DataService {
         if (!error && data) {
           const arr = Array.isArray(data) ? data : [data];
           return arr.map((item: any, idx: number) => {
-            const orderQty = Number(item.order_qty || item.ordered || 0);
-            const cutQty = Number(item.cut_qty || item.cut || 0);
-            const readyQty = Number(item.ready_qty || item.ready || 0);
+            const orderQty = Number(item.ordered_qty ?? item.order_qty ?? item.ordered ?? 0);
+            const cutQty = Number(item.cut_qty ?? item.cut ?? 0);
+            const readyQty = Number(item.ready_qty ?? item.ready ?? 0);
             return {
               size: item.size || 'N/A',
               seq_no: item.seq_no !== undefined ? Number(item.seq_no) : (idx + 1),

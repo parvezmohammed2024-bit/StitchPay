@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Scissors, Plus, AlertTriangle, CheckCircle2, Clock, 
   Calendar, Layers, Filter, Image as ImageIcon, FileText, 
-  Upload, Sparkles, AlertCircle, Check, X, Tag, UserCheck, Trash2, ClipboardList
+  Upload, Sparkles, AlertCircle, Check, X, Tag, UserCheck, Trash2, ClipboardList,
+  GripVertical
 } from 'lucide-react';
 import { dataService } from '../lib/dataService';
 import { supabase } from '../lib/supabase';
@@ -14,6 +15,7 @@ import { showSuccessToast, showErrorToast } from '../lib/toast';
 import { StyleImageLightbox } from '../components/StyleImageLightbox';
 import { NewStyleBadge } from '../components/NewStyleBadge';
 import { ViewEntriesModal } from '../components/ViewEntriesModal';
+import { sortPendingCuttingStyles, saveAllPendingCuttingPriorities } from '../lib/cuttingPriority';
 
 interface CuttingScreenProps {
   role: UserRole;
@@ -34,6 +36,63 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   const [samples, setSamples] = useState<GarmentSample[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Priority Reordering States (admin & supervisor only)
+  const canReorder = role === 'admin' || role === 'supervisor';
+  const [isSavingOrder, setIsSavingOrder] = useState<boolean>(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleMovePending = async (fromIndex: number, toIndex: number) => {
+    if (!canReorder || isSavingOrder) return;
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= boardData.pending.length ||
+      toIndex >= boardData.pending.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+
+    const currentPending = [...boardData.pending];
+    const previousStyles = [...styles];
+
+    // Reorder pending array
+    const nextPending = [...currentPending];
+    const [movedItem] = nextPending.splice(fromIndex, 1);
+    nextPending.splice(toIndex, 0, movedItem);
+
+    // Optimistically update cutting_priority for ALL pending styles in the new order (1, 2, 3…)
+    const priorityMap = new Map<string, number>();
+    nextPending.forEach((item, idx) => {
+      priorityMap.set(item.id, idx + 1);
+    });
+
+    setStyles(prev =>
+      prev.map(s => {
+        if (priorityMap.has(s.id)) {
+          return { ...s, cutting_priority: priorityMap.get(s.id)! };
+        }
+        return s;
+      })
+    );
+
+    setIsSavingOrder(true);
+    try {
+      // 4. Save new order to cutting_priority for ALL pending styles (1, 2, 3…)
+      await saveAllPendingCuttingPriorities(nextPending);
+      // Show "Order saved" only after Supabase confirms
+      showSuccessToast('Order saved');
+    } catch (err: any) {
+      console.error('Failed to save cutting priority order to database:', err);
+      // On error, show the exact message and put the cards back
+      setStyles(previousStyles);
+      showErrorToast(err?.message || 'Failed to save order to database');
+    } finally {
+      setIsSavingOrder(false);
+    }
+  };
 
   // View Entries Modal State (Admin Only)
   const [viewEntriesTarget, setViewEntriesTarget] = useState<{
@@ -194,14 +253,10 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
       }
     });
 
-    // Sort PENDING by ship deadline, soonest first
-    pending.sort((a, b) => {
-      if (!a.target_ship_date) return 1;
-      if (!b.target_ship_date) return -1;
-      return new Date(a.target_ship_date).getTime() - new Date(b.target_ship_date).getTime();
-    });
+    // 1. Sort pending styles by cutting_priority (lowest first). Styles with no priority go at the bottom, oldest first.
+    const sortedPending = sortPendingCuttingStyles(pending);
 
-    return { pending, inProgress, done };
+    return { pending: sortedPending, inProgress, done };
   }, [styles, bulkCutMap, sampleCutMap]);
 
   // Handle Style Sizes & Multi-Size Calculations
@@ -744,11 +799,24 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                     PENDING ({boardData.pending.length})
                   </h3>
                 </div>
-                <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                  Priority Sorted
-                </span>
+                {isSavingOrder ? (
+                  <span className="text-[10px] bg-amber-200 text-amber-900 font-black px-2.5 py-0.5 rounded-full border border-amber-300 animate-pulse">
+                    Saving order...
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                    Priority Sorted
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-stone-500 -mt-2">Upcoming styles with 0 bulk pieces cut</p>
+              <div className="flex items-center justify-between text-[11px] text-stone-500 -mt-2">
+                <span>Upcoming styles with 0 bulk pieces cut</span>
+                {canReorder && boardData.pending.length > 1 && (
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                    Drag or ▲ ▼ to reorder
+                  </span>
+                )}
+              </div>
 
               <div className="space-y-3.5 flex-1 overflow-y-auto max-h-[750px] pr-1">
                 {boardData.pending.length === 0 ? (
@@ -763,6 +831,49 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                       priorityIndex={idx + 1}
                       hasPPApproval={hasApprovedPPSample(style.id)}
                       role={role}
+                      canReorder={canReorder}
+                      isSavingOrder={isSavingOrder}
+                      isFirst={idx === 0}
+                      isLast={idx === boardData.pending.length - 1}
+                      onMoveUp={() => handleMovePending(idx, idx - 1)}
+                      onMoveDown={() => handleMovePending(idx, idx + 1)}
+                      draggable={canReorder && !isSavingOrder}
+                      onDragStart={(e) => {
+                        if (!canReorder || isSavingOrder) return;
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', String(idx));
+                        setDraggedIndex(idx);
+                      }}
+                      onDragOver={(e) => {
+                        if (!canReorder || isSavingOrder) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDragEnter={(e) => {
+                        if (!canReorder || isSavingOrder) return;
+                        e.preventDefault();
+                        setDragOverIndex(idx);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverIndex === idx) setDragOverIndex(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!canReorder || isSavingOrder) return;
+                        const sourceIdxStr = e.dataTransfer.getData('text/plain');
+                        const sourceIdx = sourceIdxStr !== '' ? parseInt(sourceIdxStr, 10) : draggedIndex;
+                        if (sourceIdx !== null && !isNaN(sourceIdx) && sourceIdx !== idx) {
+                          handleMovePending(sourceIdx, idx);
+                        }
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      isDragged={draggedIndex === idx}
+                      isDragOver={dragOverIndex === idx}
                       onViewEntries={() => setViewEntriesTarget({ styleId: style.id, styleCode: style.style_code, styleName: style.name })}
                       onRecordCut={() => {
                         setCutForm(prev => ({ ...prev, style_id: style.id, cut_type: 'bulk' }));
@@ -1580,34 +1691,152 @@ interface StyleCardProps {
   onRecordCut: () => void;
   role?: UserRole;
   onViewEntries?: () => void;
+  canReorder?: boolean;
+  isSavingOrder?: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragEnter?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  isDragged?: boolean;
+  isDragOver?: boolean;
 }
 
-const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, onRecordCut, role, onViewEntries }) => {
+const StyleCard: React.FC<StyleCardProps> = ({ 
+  style, 
+  priorityIndex, 
+  onRecordCut, 
+  role, 
+  onViewEntries,
+  canReorder,
+  isSavingOrder,
+  isFirst,
+  isLast,
+  onMoveUp,
+  onMoveDown,
+  draggable,
+  onDragStart,
+  onDragOver,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+  isDragged,
+  isDragOver,
+}) => {
 
   const percent = Math.min(100, Math.round((style.bulk_cut / (style.order_qty || 1)) * 100));
   const piecesPending = Math.max(0, style.order_qty - style.bulk_cut);
 
   // Size breakdown table state
   const [sizeBreakdown, setSizeBreakdown] = useState<StyleSizeBreakdownRow[]>([]);
+  const [styleSizes, setStyleSizes] = useState<StyleSize[]>([]);
 
   useEffect(() => {
     let isMounted = true;
     dataService.getStyleSizeBreakdown(style.id).then(res => {
-      if (isMounted) setSizeBreakdown(res);
+      if (isMounted && res && res.length > 0) {
+        setSizeBreakdown(res);
+      }
+    });
+    dataService.getStyleSizes(style.id).then(sizes => {
+      if (isMounted) {
+        setStyleSizes(sizes || []);
+        setSizeBreakdown(prev => {
+          if (prev.length > 0) return prev;
+          return (sizes || []).map((s, idx) => ({
+            size: s.size,
+            seq_no: s.seq_no ?? (idx + 1),
+            order_qty: Number(s.order_qty) || 0,
+            cut_qty: 0,
+            ready_qty: 0,
+            cut_balance: Number(s.order_qty) || 0,
+            ready_balance: Number(s.order_qty) || 0,
+          }));
+        });
+      }
     });
     return () => { isMounted = false; };
   }, [style.id, style.bulk_cut]);
 
   return (
-    <div id={`style-card-${style.id}`} className="bg-white rounded-2xl border border-stone-200 p-4 shadow-2xs hover:shadow-md transition-all space-y-3 relative overflow-hidden flex flex-col justify-between">
-      {/* Header: Priority, Thumbnail & Status */}
+    <div 
+      id={`style-card-${style.id}`} 
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className={`bg-white rounded-2xl border p-4 shadow-2xs hover:shadow-md transition-all space-y-3 relative overflow-hidden flex flex-col justify-between ${
+        isDragged 
+          ? 'opacity-40 border-dashed border-indigo-500 bg-indigo-50/20' 
+          : isDragOver 
+          ? 'ring-2 ring-indigo-600 bg-indigo-50/50 border-indigo-400' 
+          : 'border-stone-200'
+      }`}
+    >
+      {/* 2. Clear serial badge at the TOP of each card: "SL #1", "SL #2"… matching the order */}
+      {priorityIndex !== undefined && (
+        <div className="flex items-center justify-between bg-stone-100/90 border-b border-stone-200 -mx-4 -mt-4 px-3.5 py-2 mb-1 rounded-t-2xl">
+          <div className="flex items-center space-x-2">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-indigo-700 text-white font-mono font-black text-xs tracking-wider shadow-2xs">
+              SL #{priorityIndex}
+            </span>
+            <span className="text-[11px] font-bold text-stone-600 uppercase tracking-wider">
+              Pending Cutting
+            </span>
+          </div>
+
+          {canReorder && (
+            <div className="flex items-center space-x-1">
+              <button
+                type="button"
+                disabled={isFirst || isSavingOrder}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveUp?.();
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-stone-300 text-stone-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed transition font-black text-xs shadow-2xs cursor-pointer"
+                title="Move up in priority (▲)"
+                aria-label="Move style up"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                disabled={isLast || isSavingOrder}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveDown?.();
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-stone-300 text-stone-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed transition font-black text-xs shadow-2xs cursor-pointer"
+                title="Move down in priority (▼)"
+                aria-label="Move style down"
+              >
+                ▼
+              </button>
+              <div 
+                className="cursor-grab active:cursor-grabbing p-1 text-stone-400 hover:text-stone-700 hidden sm:flex items-center ml-0.5"
+                title="Drag to reorder on desktop"
+              >
+                <GripVertical className="w-4 h-4" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Header: Thumbnail & Status */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center space-x-3">
-          {priorityIndex && (
-            <span className="w-6 h-6 rounded-full bg-indigo-700 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-              #{priorityIndex}
-            </span>
-          )}
           <StyleImageLightbox
             imageUrl={style.image_url}
             styleCode={style.style_code}
@@ -1707,7 +1936,10 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, onRecordCut
           </div>
           <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
             {sizeBreakdown.map(sb => {
-              const orderedQty = Number(sb.order_qty) || 0;
+              const matchedSize = styleSizes.find(
+                s => (s.size || '').trim().toLowerCase() === (sb.size || '').trim().toLowerCase()
+              );
+              const orderedQty = matchedSize !== undefined ? (Number(matchedSize.order_qty) || 0) : (Number(sb.order_qty) || 0);
               const cutQty = Number(sb.cut_qty) || 0;
               const overCut = cutQty - orderedQty;
               const balance = Math.max(0, orderedQty - cutQty);

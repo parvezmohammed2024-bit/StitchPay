@@ -74,6 +74,7 @@ export interface GarmentStyle {
   notes: string | null;
   requires_cutting?: boolean;
   wage_model?: 'individual' | 'team';
+  cutting_priority?: number | null;
   created_at?: string;
   // Computed
   completed_pieces?: number;

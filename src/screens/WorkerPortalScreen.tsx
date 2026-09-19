@@ -14,6 +14,7 @@ import { ReceiveFromSewingView } from '../components/ReceiveFromSewingView';
 import { StyleImageLightbox } from '../components/StyleImageLightbox';
 import { NewStyleBadge } from '../components/NewStyleBadge';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { sortPendingCuttingStyles } from '../lib/cuttingPriority';
 
 const STANDARD_SIZE_RANK: Record<string, number> = {
   'xxxs': 1, '3xs': 1,
@@ -1921,17 +1922,40 @@ export const WorkerPortalScreen: React.FC = () => {
             </div>
 
             {/* ACTIVE CUTTING ORDERS BOARD */}
-            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 shadow-xs space-y-6">
               <div className="flex items-center justify-between border-b border-stone-200 pb-3">
                 <h3 className="text-base font-black text-stone-900 flex items-center space-x-2">
                   <Scissors className="w-4 h-4 text-indigo-700 rotate-90" />
                   <span>Active In-House Cutting Orders</span>
                 </h3>
-                <span className="text-xs text-stone-500 font-medium">Styles requiring table cutting</span>
+                <span className="text-xs text-stone-500 font-medium">Priority Queue (SL #) & In-Progress</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {garmentStyles.filter(s => s.requires_cutting !== false && s.status !== 'completed' && s.status !== 'delivered').map(st => {
+              {(() => {
+                const cuttingStyles = garmentStyles.filter(
+                  s => s.requires_cutting !== false && s.status !== 'completed' && s.status !== 'delivered' && s.status !== 'archived'
+                );
+
+                // Identify pending cutting styles (0 bulk pieces cut), matching Cutting Board PENDING column
+                const pendingStyles = cuttingStyles.filter(st => {
+                  const bulkCutTotal = allCuttingEntries
+                    .filter(c => c.style_id === st.id && (c.cut_type === 'bulk' || !c.cut_type))
+                    .reduce((s, c) => s + (c.pieces_cut || 0), 0);
+                  return bulkCutTotal === 0;
+                });
+
+                // In-progress styles (some bulk pieces cut, but not completed)
+                const inProgressStyles = cuttingStyles.filter(st => {
+                  const bulkCutTotal = allCuttingEntries
+                    .filter(c => c.style_id === st.id && (c.cut_type === 'bulk' || !c.cut_type))
+                    .reduce((s, c) => s + (c.pieces_cut || 0), 0);
+                  return bulkCutTotal > 0 && bulkCutTotal < (st.order_qty || 1);
+                });
+
+                // Sort pending styles by cutting_priority (lowest first; no priority at bottom oldest first)
+                const sortedPendingStyles = sortPendingCuttingStyles<GarmentStyle>(pendingStyles);
+
+                const renderStyleCard = (st: GarmentStyle, priorityIndex?: number) => {
                   const styleCutTotal = allCuttingEntries
                     .filter(c => c.style_id === st.id)
                     .reduce((s, c) => s + (c.pieces_cut || 0), 0);
@@ -1939,7 +1963,21 @@ export const WorkerPortalScreen: React.FC = () => {
                   const cutPct = Math.min(100, Math.round((styleCutTotal / (st.order_qty || 1)) * 100));
 
                   return (
-                    <div key={st.id} id={`style-card-${st.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+                    <div key={st.id} id={`style-card-${st.id}`} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+                      {/* Top serial badge: "SL #1", "SL #2"… matching the order */}
+                      {priorityIndex !== undefined && (
+                        <div className="flex items-center justify-between bg-stone-100/90 border-b border-stone-200 -mx-4 -mt-4 px-3.5 py-2 mb-1 rounded-t-2xl">
+                          <div className="flex items-center space-x-2">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-indigo-700 text-white font-mono font-black text-xs tracking-wider shadow-2xs">
+                              SL #{priorityIndex}
+                            </span>
+                            <span className="text-[11px] font-bold text-stone-600 uppercase tracking-wider">
+                              Pending Cutting
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                           <StyleImageLightbox
@@ -2067,8 +2105,58 @@ export const WorkerPortalScreen: React.FC = () => {
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                };
+
+                return (
+                  <div className="space-y-6">
+                    {/* Priority Queue Section (Pending Styles) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                          <h4 className="text-sm font-black text-stone-800 uppercase tracking-wider">
+                            Pending Cutting Queue ({sortedPendingStyles.length})
+                          </h4>
+                        </div>
+                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                          Priority Ordered
+                        </span>
+                      </div>
+
+                      {sortedPendingStyles.length === 0 ? (
+                        <div className="bg-stone-50 border border-dashed border-stone-200 rounded-2xl p-6 text-center text-xs text-stone-400">
+                          No pending cutting orders in queue
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {sortedPendingStyles.map((st, idx) => renderStyleCard(st, idx + 1))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* In-Progress Section */}
+                    {inProgressStyles.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                            <h4 className="text-sm font-black text-stone-800 uppercase tracking-wider">
+                              In-Progress Cutting Orders ({inProgressStyles.length})
+                            </h4>
+                          </div>
+                          <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                            In Progress
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {inProgressStyles.map(st => renderStyleCard(st))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* CUTTING LOG SUBMISSIONS TABLE */}
@@ -2397,11 +2485,47 @@ export const WorkerPortalScreen: React.FC = () => {
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-900 focus:outline-none focus:border-indigo-700"
                 >
                   <option value="">Select Style...</option>
-                  {garmentStyles
-                    .filter(st => st.requires_cutting !== false && st.status !== 'completed' && st.status !== 'delivered')
-                    .map(st => (
-                      <option key={st.id} value={st.id}>{st.style_code} - {st.name}</option>
-                    ))}
+                  {(() => {
+                    const validStyles = garmentStyles.filter(
+                      st => st.requires_cutting !== false && st.status !== 'completed' && st.status !== 'delivered' && st.status !== 'archived'
+                    );
+                    const pendingStyles = validStyles.filter(st => {
+                      const bulkCutTotal = allCuttingEntries
+                        .filter(c => c.style_id === st.id && (c.cut_type === 'bulk' || !c.cut_type))
+                        .reduce((s, c) => s + (c.pieces_cut || 0), 0);
+                      return bulkCutTotal === 0;
+                    });
+                    const inProgressStyles = validStyles.filter(st => {
+                      const bulkCutTotal = allCuttingEntries
+                        .filter(c => c.style_id === st.id && (c.cut_type === 'bulk' || !c.cut_type))
+                        .reduce((s, c) => s + (c.pieces_cut || 0), 0);
+                      return bulkCutTotal > 0 && bulkCutTotal < (st.order_qty || 1);
+                    });
+                    const sortedPending = sortPendingCuttingStyles<GarmentStyle>(pendingStyles);
+
+                    return (
+                      <>
+                        {sortedPending.length > 0 && (
+                          <optgroup label="Pending Cutting Queue (Priority Order)">
+                            {sortedPending.map((st, idx) => (
+                              <option key={st.id} value={st.id}>
+                                SL #{idx + 1} - {st.style_code} ({st.name})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {inProgressStyles.length > 0 && (
+                          <optgroup label="In Progress Cutting">
+                            {inProgressStyles.map(st => (
+                              <option key={st.id} value={st.id}>
+                                {st.style_code} ({st.name})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </>
+                    );
+                  })()}
                 </select>
               </div>
 
