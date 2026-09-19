@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Zap, Calendar, Shirt, Scissors, Plus, Minus, Check, 
   ChevronDown, ChevronUp, AlertCircle, Sparkles, CheckCircle,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService, getLocalDateString } from '../lib/dataService';
+import { supabase } from '../lib/supabase';
 import { 
   GarmentStyle, GarmentProcess, Worker, ProductionEntry, 
   FactorySettings, UserRole, DailyAssignment, CuttingEntry 
@@ -28,6 +29,7 @@ interface AssignmentEntryDraft {
   qty_reject: number;
   expanded: boolean;
   savedQtyOk: number; // accumulated output already saved today
+  worker_id?: string;
 }
 
 export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, workerToken: initialWorkerToken, workerSection: initialWorkerSection }) => {
@@ -234,7 +236,32 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
     return groups;
   }, [assignments, styles, processes]);
 
+  const sewingWorkers = useMemo(() => {
+    return workers.filter(w => (w.status === 'active' || !w.status) && w.section && w.section.toLowerCase().includes('sew'));
+  }, [workers]);
+
   const handleSaveAll = async () => {
+    // Validate that every pending entry has a worker selected
+    for (const assign of assignments) {
+      const draft = drafts.get(assign.id);
+      if (!draft) continue;
+
+      const diffQty = draft.qty_ok - draft.savedQtyOk;
+      if (diffQty > 0 || draft.qty_rework > 0 || draft.qty_reject > 0) {
+        const workerId = draft.worker_id || assign.worker_id;
+        if (!workerId) {
+          setToastMessage('Worker is required for all production entries.');
+          return;
+        }
+      }
+    }
+
+    let enteredBy: string | undefined;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) enteredBy = user.id;
+    } catch {}
+
     let savedCount = 0;
     for (const assign of assignments) {
       const draft = drafts.get(assign.id);
@@ -242,18 +269,26 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
 
       const diffQty = draft.qty_ok - draft.savedQtyOk;
       if (diffQty > 0 || draft.qty_rework > 0 || draft.qty_reject > 0) {
-        await dataService.saveProductionEntry({
+        const workerId = draft.worker_id || assign.worker_id;
+
+        const payload: Partial<ProductionEntry> = {
           assignment_id: assign.id,
           entry_date: entryDate,
           shift,
-          worker_id: assign.worker_id,
+          worker_id: workerId,
           style_id: assign.style_id,
           process_id: assign.process_id,
           qty_ok: diffQty > 0 ? diffQty : draft.qty_ok,
           qty_rework: draft.qty_rework,
           qty_reject: draft.qty_reject,
           rate_snapshot: assign.agreed_rate,
-        });
+        };
+
+        if (enteredBy) {
+          payload.entered_by = enteredBy;
+        }
+
+        await dataService.saveProductionEntry(payload);
         savedCount++;
       }
     }
@@ -614,6 +649,32 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
                             </div>
                           </div>
 
+                          {/* REQUIRED WORKER SELECTION DROPDOWN */}
+                          <div className="pt-2 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <label className="text-xs font-bold text-stone-700 flex items-center space-x-1 shrink-0">
+                              <span>Worker</span>
+                              <span className="text-rose-600">*</span>
+                            </label>
+                            <select
+                              required
+                              value={draft.worker_id || assign.worker_id || ''}
+                              onChange={(e) => {
+                                const newDrafts = new Map(drafts);
+                                const cur = drafts.get(assign.id) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0 };
+                                newDrafts.set(assign.id, { ...cur, worker_id: e.target.value });
+                                setDrafts(newDrafts);
+                              }}
+                              className="w-full sm:w-72 px-2.5 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-semibold text-stone-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                            >
+                              <option value="">Select Sewing Worker...</option>
+                              {sewingWorkers.map(w => (
+                                <option key={w.id} value={w.id}>
+                                  {w.full_name} ({w.worker_code})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
                           {/* COLLAPSIBLE REWORK & REJECT */}
                           {draft.expanded && (
                             <div className="pt-2 border-t border-stone-200 grid grid-cols-2 gap-3 text-xs bg-stone-50 p-2.5 rounded-lg">
@@ -712,13 +773,17 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">Worker</label>
+              <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1">
+                Worker <span className="text-rose-600">*</span>
+              </label>
               <select
+                required
                 value={unplannedWorkerId}
                 onChange={(e) => setUnplannedWorkerId(e.target.value)}
                 className="w-full bg-white border border-stone-300 text-stone-900 rounded-xl px-3 py-2 text-sm outline-none"
               >
-                {workers.map(w => (
+                <option value="">Select Sewing Worker...</option>
+                {sewingWorkers.map(w => (
                   <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
                 ))}
               </select>

@@ -1616,7 +1616,14 @@ class DataService {
       };
 
       if (validAssignmentId) rawPayload.assignment_id = validAssignmentId;
-      if (isValidUUID(entry.entered_by)) rawPayload.entered_by = entry.entered_by;
+      let enteredBy = entry.entered_by;
+      if (!enteredBy && isSupabaseConfigured) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id) enteredBy = user.id;
+        } catch {}
+      }
+      if (isValidUUID(enteredBy)) rawPayload.entered_by = enteredBy;
       if (entry.note) rawPayload.note = entry.note;
 
       const payload = sanitizePayload(rawPayload);
@@ -1796,7 +1803,13 @@ class DataService {
       if (entry.worker_id && isValidUUID(entry.worker_id)) rawPayload.worker_id = entry.worker_id;
       if (notesText) rawPayload.note = notesText;
 
-      const rawEnteredBy = (entry as any).entered_by;
+      let rawEnteredBy = (entry as any).entered_by;
+      if (!rawEnteredBy && isSupabaseConfigured) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id) rawEnteredBy = user.id;
+        } catch {}
+      }
       if (isValidUUID(rawEnteredBy)) {
         rawPayload.entered_by = rawEnteredBy;
       }
@@ -1862,6 +1875,9 @@ class DataService {
         cut_type: cutTypeVal,
       };
 
+      const qtyReject = Number((entry as any).qty_reject || 0);
+      rawPayload.qty_reject = qtyReject;
+
       const tableLayers = entry.tables_layers || (entry as any).lay_id;
       if (tableLayers && typeof tableLayers === 'string' && tableLayers.trim().length > 0) {
         rawPayload.lay_id = tableLayers.trim();
@@ -1874,6 +1890,17 @@ class DataService {
 
       if (entry.worker_id && isValidUUID(entry.worker_id)) {
         rawPayload.worker_id = entry.worker_id;
+      }
+
+      let enteredBy = (entry as any).entered_by;
+      if (!enteredBy && isSupabaseConfigured) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id) enteredBy = user.id;
+        } catch {}
+      }
+      if (isValidUUID(enteredBy)) {
+        rawPayload.entered_by = enteredBy;
       }
 
       if (typeof notesText === 'string' && notesText.trim().length > 0) {
@@ -3119,7 +3146,14 @@ class DataService {
       if (entry.style_id) rawPayload.style_id = entry.style_id;
       if (entry.stage_id) rawPayload.stage_id = entry.stage_id;
       if (entry.worker_id && isValidUUID(entry.worker_id)) rawPayload.worker_id = entry.worker_id;
-      if (isValidUUID(entry.entered_by)) rawPayload.entered_by = entry.entered_by;
+      let enteredBy = entry.entered_by;
+      if (!enteredBy && isSupabaseConfigured) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.id) enteredBy = user.id;
+        } catch {}
+      }
+      if (isValidUUID(enteredBy)) rawPayload.entered_by = enteredBy;
       if (entry.note) rawPayload.note = entry.note;
 
       const rawSize = entry.size;

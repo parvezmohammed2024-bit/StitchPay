@@ -5,6 +5,7 @@ import {
   Search, X, User, ClipboardList, Check, HelpCircle
 } from 'lucide-react';
 import { dataService, getLocalDateString } from '../lib/dataService';
+import { supabase } from '../lib/supabase';
 import { showErrorToast, showSuccessToast } from '../lib/toast';
 import { 
   GarmentStyle, FinishingStage, FinishingEntry, Worker, 
@@ -108,8 +109,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const [garmentsSewnMap, setGarmentsSewnMap] = useState<Record<string, number>>({});
 
   const finishingWorkers = useMemo(() => {
-    const fw = workers.filter(w => w.section && w.section.toLowerCase().includes('finish'));
-    return fw.length > 0 ? fw : workers;
+    return workers.filter(w => (w.status === 'active' || !w.status) && w.section && w.section.toLowerCase().includes('finish'));
   }, [workers]);
 
   const [sewingProcesses, setSewingProcesses] = useState<GarmentProcess[]>([]);
@@ -136,6 +136,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   // Daily Entry Form Modal State
   const [isEntryModalOpen, setIsEntryModalOpen] = useState<boolean>(false);
   const [entryFormStyleId, setEntryFormStyleId] = useState<string>('');
+  const [entryFormWorkerId, setEntryFormWorkerId] = useState<string>('');
   const [entryDate, setEntryDate] = useState<string>(getLocalDateString());
   const [entryShift, setEntryShift] = useState<'day' | 'night'>('day');
   const [entryNotes, setEntryNotes] = useState<string>('');
@@ -453,22 +454,43 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       return;
     }
 
+    if (!quickLogWorkerId) {
+      showErrorToast('Worker is required.');
+      return;
+    }
+
     const isReady = isStageReady(quickLogStage, allStages);
+
+    let enteredBy: string | undefined;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) enteredBy = user.id;
+    } catch {}
+
+    const quickLogPayload: Partial<FinishingEntry> = {
+      style_id: quickLogStyle.id,
+      stage_id: quickLogStage.id,
+      worker_id: quickLogWorkerId,
+      entry_date: getLocalDateString(),
+      shift: quickLogShift,
+      qty_ok: qtyOk,
+      qty_rework: qtyRework,
+      qty_reject: qtyReject,
+    };
+
+    if (isReady && quickLogSize?.trim()) {
+      quickLogPayload.size = quickLogSize.trim();
+    }
+    if (quickLogNotes?.trim()) {
+      quickLogPayload.note = quickLogNotes.trim();
+    }
+    if (enteredBy) {
+      quickLogPayload.entered_by = enteredBy;
+    }
 
     setQuickLogSaving(true);
     try {
-      await dataService.saveFinishingEntries([{
-        style_id: quickLogStyle.id,
-        stage_id: quickLogStage.id,
-        worker_id: quickLogWorkerId || null,
-        entry_date: getLocalDateString(),
-        shift: quickLogShift,
-        qty_ok: qtyOk,
-        qty_rework: qtyRework,
-        qty_reject: qtyReject,
-        size: isReady ? (quickLogSize || null) : null,
-        note: quickLogNotes || null,
-      }]);
+      await dataService.saveFinishingEntries([quickLogPayload]);
 
       showSuccessToast(`Logged ${qtyOk} pcs output for ${quickLogStage.name}.`);
       setIsQuickLogOpen(false);
@@ -486,6 +508,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
   const handleOpenEntryModal = (styleId?: string) => {
     const targetId = styleId || (styles.length > 0 ? styles[0].id : '');
     setEntryFormStyleId(targetId);
+    setEntryFormWorkerId('');
     setEntryDate(getLocalDateString());
     setEntryShift('day');
     setEntryNotes('');
@@ -560,6 +583,12 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
     const styleEntries = allEntries.filter(e => e.style_id === entryFormStyleId);
     let prevStageTotal = Infinity;
 
+    let enteredBy: string | undefined;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) enteredBy = user.id;
+    } catch {}
+
     for (let i = 0; i < targetStages.length; i++) {
       const stg = targetStages[i];
       const inp = stageInputs[stg.id] || { qty_ok: '0', qty_rework: '0', qty_reject: '0', worker_id: '' };
@@ -581,20 +610,35 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
       prevStageTotal = newCumulative;
 
       if (qtyOk > 0 || qtyRework > 0 || qtyReject > 0) {
+        const workerId = inp.worker_id || entryFormWorkerId;
+        if (!workerId) {
+          showErrorToast(`Worker is required for ${stg.name}.`);
+          return;
+        }
+
         const isReady = isStageReady(stg, targetStages);
-        entriesToSave.push({
+        const entryPayload: Partial<FinishingEntry> = {
           style_id: entryFormStyleId,
           stage_id: stg.id,
-          worker_id: inp.worker_id || null,
+          worker_id: workerId,
           entry_date: entryDate,
           shift: entryShift,
           qty_ok: qtyOk,
           qty_rework: qtyRework,
           qty_reject: qtyReject,
-          size: isReady ? (inp.size || null) : null,
-          note: entryNotes || null,
-          entered_by: null,
-        });
+        };
+
+        if (isReady && inp.size?.trim()) {
+          entryPayload.size = inp.size.trim();
+        }
+        if (entryNotes?.trim()) {
+          entryPayload.note = entryNotes.trim();
+        }
+        if (enteredBy) {
+          entryPayload.entered_by = enteredBy;
+        }
+
+        entriesToSave.push(entryPayload);
       }
     }
 
@@ -1245,13 +1289,16 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
               {/* WORKER & SHIFT */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Worker (Optional)</label>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Worker <span className="text-rose-600">*</span>
+                  </label>
                   <select
+                    required
                     value={quickLogWorkerId}
                     onChange={(e) => setQuickLogWorkerId(e.target.value)}
                     className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium text-stone-900"
                   >
-                    <option value="">Select Worker...</option>
+                    <option value="">Select Finishing Worker...</option>
                     {finishingWorkers.map(w => (
                       <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
                     ))}
@@ -1334,8 +1381,8 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
             <form onSubmit={handleSaveFinishingEntries} className="flex flex-col flex-1 overflow-hidden min-h-0">
               {/* SCROLLABLE BODY CONTENT */}
               <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
-                {/* TOP SELECTORS: STYLE, DATE, SHIFT */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* TOP SELECTORS: STYLE, WORKER, DATE, SHIFT */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-stone-700 mb-1">Garment Style</label>
                     <select
@@ -1345,6 +1392,33 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                     >
                       {styles.filter(s => s.status !== 'completed' && s.status !== 'delivered').map(s => (
                         <option key={s.id} value={s.id}>{s.style_code} — {s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-700 mb-1">
+                      Worker <span className="text-rose-600">*</span>
+                    </label>
+                    <select
+                      required
+                      value={entryFormWorkerId}
+                      onChange={(e) => {
+                        const newWorkerId = e.target.value;
+                        setEntryFormWorkerId(newWorkerId);
+                        setStageInputs(prev => {
+                          const updated = { ...prev };
+                          Object.keys(updated).forEach(k => {
+                            updated[k] = { ...updated[k], worker_id: newWorkerId };
+                          });
+                          return updated;
+                        });
+                      }}
+                      className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">Select Finishing Worker...</option>
+                      {finishingWorkers.map(w => (
+                        <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
                       ))}
                     </select>
                   </div>
@@ -1403,21 +1477,27 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                               </div>
 
                               {/* Worker Assignment Dropdown */}
-                              <select
-                                value={inp.worker_id}
-                                onChange={(e) => {
-                                  setStageInputs({
-                                    ...stageInputs,
-                                    [stg.id]: { ...inp, worker_id: e.target.value }
-                                  });
-                                }}
-                                className="px-2.5 py-1 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700"
-                              >
-                                <option value="">Optional Worker Assignment...</option>
-                                {finishingWorkers.map(w => (
-                                  <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
-                                ))}
-                              </select>
+                              <div className="flex items-center space-x-1.5">
+                                <label className="text-[11px] font-bold text-stone-600">
+                                  Worker <span className="text-rose-600">*</span>
+                                </label>
+                                <select
+                                  required
+                                  value={inp.worker_id || entryFormWorkerId}
+                                  onChange={(e) => {
+                                    setStageInputs({
+                                      ...stageInputs,
+                                      [stg.id]: { ...inp, worker_id: e.target.value }
+                                    });
+                                  }}
+                                  className="px-2.5 py-1 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-700"
+                                >
+                                  <option value="">Select Finishing Worker...</option>
+                                  {finishingWorkers.map(w => (
+                                    <option key={w.id} value={w.id}>{w.full_name} ({w.worker_code})</option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
 
                             {/* Quantity & Size Inputs */}
