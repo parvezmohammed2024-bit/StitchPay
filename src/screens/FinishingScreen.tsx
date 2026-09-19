@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { StyleImage } from '../components/StyleImage';
 import { ViewEntriesModal } from '../components/ViewEntriesModal';
+import { NewStyleBadge } from '../components/NewStyleBadge';
 
 interface FinishingScreenProps {
   role: UserRole;
@@ -870,6 +871,7 @@ export const FinishingScreen: React.FC<FinishingScreenProps> = ({ role, onNaviga
                       <h3 className="text-base sm:text-lg font-black text-stone-900 tracking-tight truncate">{summary.style.name}</h3>
                       <p className="text-xs text-stone-500 font-medium truncate flex items-center space-x-2 flex-wrap">
                         <span className="font-mono font-bold text-stone-800">{summary.style.style_code}</span>
+                        <NewStyleBadge createdAt={summary.style.created_at} styleCode={summary.style.style_code} />
                         {summary.style.buyer_name ? <span className="text-stone-700"> • {summary.style.buyer_name}</span> : ''}
                         {role === 'admin' && (
                           <button
