@@ -61,7 +61,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
   });
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [sizeActualCuts, setSizeActualCuts] = useState<Record<string, number | string>>({});
-  const [shortfallReason, setShortfallReason] = useState<string>('');
+  const [cuttingReason, setCuttingReason] = useState<string>('');
 
   // Sample Form
   const [sampleForm, setSampleForm] = useState({
@@ -211,20 +211,19 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
         setAvailableSizes(sizes);
         setSelectedSizes([]);
         setSizeActualCuts({});
-        setShortfallReason('');
+        setSizeRejects({});
+        setCuttingReason('');
       });
     } else {
       setAvailableSizes([]);
       setSelectedSizes([]);
       setSizeActualCuts({});
       setSizeRejects({});
-      setShortfallReason('');
-      setRejectReason('');
+      setCuttingReason('');
     }
   }, [cutForm.style_id]);
 
   const [sizeRejects, setSizeRejects] = useState<Record<string, number | string>>({});
-  const [rejectReason, setRejectReason] = useState<string>('');
 
   const selectedCutStyle = styles.find(s => s.id === cutForm.style_id);
   const modalSizesToDisplay: StyleSize[] = availableSizes.length > 0
@@ -247,6 +246,15 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
     return sum + (val === '' || isNaN(Number(val)) ? 0 : Number(val));
   }, 0);
   const shortfall = plannedTotal - actualTotal;
+
+  const requiresReason = tickedSizesList.some(sz => {
+    const orderQty = Number(sz.order_qty) || 0;
+    const actualVal = sizeActualCuts[sz.size];
+    const actualCut = actualVal === '' || isNaN(Number(actualVal)) ? 0 : Number(actualVal);
+    const rejectVal = sizeRejects[sz.size];
+    const rejectCut = rejectVal === '' || isNaN(Number(rejectVal)) ? 0 : Number(rejectVal);
+    return rejectCut > 0 || actualCut < orderQty;
+  });
 
   const handleToggleSize = (sizeName: string, orderQty: number) => {
     if (selectedSizes.includes(sizeName)) {
@@ -303,8 +311,7 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
     setSelectedSizes([]);
     setSizeActualCuts({});
     setSizeRejects({});
-    setShortfallReason('');
-    setRejectReason('');
+    setCuttingReason('');
   };
 
   const handleSaveCutEntry = async (e: React.FormEvent) => {
@@ -331,15 +338,9 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
       return;
     }
 
-    // If Shortfall > 0, require Shortfall Reason
-    if (shortfall > 0 && !shortfallReason.trim()) {
-      showErrorToast('Please provide a Shortfall Reason');
-      return;
-    }
-
-    // If rejectTotal > 0, require Rejection Reason
-    if (rejectTotal > 0 && !rejectReason.trim()) {
-      showErrorToast('Please provide a reason for rejected cutting pieces');
+    // If any size has rejected pieces OR is cut below its order qty, require single reason
+    if (requiresReason && !cuttingReason.trim()) {
+      showErrorToast('Please provide a reason');
       return;
     }
 
@@ -362,14 +363,11 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
       if (actualCut <= 0 && rejectCut <= 0) continue;
 
       let sizeNote = baseNotes;
-      if (actualCut < orderQty) {
-        const sizeShortfall = orderQty - actualCut;
-        const shortfallText = `Shortfall: ${sizeShortfall} pcs — ${shortfallReason.trim()}`;
-        sizeNote = sizeNote ? `${sizeNote} | ${shortfallText}` : shortfallText;
-      }
-      if (rejectCut > 0) {
-        const rejectText = `Reject: ${rejectCut} pcs — ${rejectReason.trim()}`;
-        sizeNote = sizeNote ? `${sizeNote} | ${rejectText}` : rejectText;
+      if (cuttingReason.trim()) {
+        const reasonText = cuttingReason.trim().toLowerCase().startsWith('reason')
+          ? cuttingReason.trim()
+          : `Reason: ${cuttingReason.trim()}`;
+        sizeNote = sizeNote ? `${sizeNote} | ${reasonText}` : reasonText;
       }
 
       const entryPayload: Partial<CuttingEntry> & { qty_reject?: number; entered_by?: string } = {
@@ -1200,39 +1198,21 @@ export const CuttingScreen: React.FC<CuttingScreenProps> = ({ role }) => {
                   </div>
                 )}
 
-                {/* Shortfall Reason: If Shortfall > 0, show required text field */}
-                {shortfall > 0 && (
+                {/* ONE Reason field: Show when any size has rejected pieces OR is cut below its order qty */}
+                {requiresReason && (
                   <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-3 space-y-1 mt-2">
                     <label className="block font-bold text-amber-800 text-xs">
-                      Shortfall Reason <span className="text-amber-600">*</span>
+                      Reason <span className="text-amber-600">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. fabric shortage, end of roll"
-                      value={shortfallReason}
-                      onChange={e => setShortfallReason(e.target.value)}
+                      placeholder="e.g. fabric shortage, flaws, cutting defect"
+                      value={cuttingReason}
+                      onChange={e => setCuttingReason(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-stone-900 font-medium placeholder:text-stone-400 focus:ring-2 focus:ring-amber-500 text-xs"
                     />
-                    <p className="text-[10px] text-amber-700">Good cut ({actualTotal}) is less than planned order ({plannedTotal}). Reason is required.</p>
-                  </div>
-                )}
-
-                {/* Rejection Reason: If rejectTotal > 0, show required text field */}
-                {rejectTotal > 0 && (
-                  <div className="bg-rose-50/60 border border-rose-200 rounded-2xl p-3 space-y-1 mt-2">
-                    <label className="block font-bold text-rose-800 text-xs">
-                      Rejection Reason <span className="text-rose-600">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. fabric flaw, shading, cutting misalignment"
-                      value={rejectReason}
-                      onChange={e => setRejectReason(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-rose-300 rounded-xl text-stone-900 font-medium placeholder:text-stone-400 focus:ring-2 focus:ring-rose-500 text-xs"
-                    />
-                    <p className="text-[10px] text-rose-700">{rejectTotal} pcs rejected. Rejection reason is required and will be saved in note.</p>
+                    <p className="text-[10px] text-amber-700">Reason is required because one or more sizes have rejected pieces or cut quantity below order quantity.</p>
                   </div>
                 )}
               </div>

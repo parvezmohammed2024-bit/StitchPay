@@ -1791,7 +1791,9 @@ class DataService {
         cut_type: cutTypeVal,
       };
 
-      if ((entry as any).lay_id) rawPayload.lay_id = (entry as any).lay_id;
+      if ((entry as any).lay_id && isValidUUID((entry as any).lay_id)) {
+        rawPayload.lay_id = (entry as any).lay_id;
+      }
 
       // When a style has no size breakdown, OMIT the size field entirely rather than sending an explicit null
       const rawSize = entry.size || (entry as any).size;
@@ -1801,7 +1803,15 @@ class DataService {
 
       if ((entry as any).color) rawPayload.color = (entry as any).color;
       if (entry.worker_id && isValidUUID(entry.worker_id)) rawPayload.worker_id = entry.worker_id;
-      if (notesText) rawPayload.note = notesText;
+
+      const tableText = entry.tables_layers && typeof entry.tables_layers === 'string' && entry.tables_layers.trim().length > 0
+        ? `Table: ${entry.tables_layers.trim()}`
+        : '';
+      const otherNotes = typeof notesText === 'string' && notesText.trim().length > 0
+        ? notesText.trim()
+        : '';
+      const combinedNote = [tableText, otherNotes].filter(Boolean).join(' | ');
+      if (combinedNote) rawPayload.note = combinedNote;
 
       let rawEnteredBy = (entry as any).entered_by;
       if (!rawEnteredBy && isSupabaseConfigured) {
@@ -1878,9 +1888,11 @@ class DataService {
       const qtyReject = Number((entry as any).qty_reject || 0);
       rawPayload.qty_reject = qtyReject;
 
-      const tableLayers = entry.tables_layers || (entry as any).lay_id;
-      if (tableLayers && typeof tableLayers === 'string' && tableLayers.trim().length > 0) {
-        rawPayload.lay_id = tableLayers.trim();
+      // Do NOT write Table/Layers text into lay_id. Never set lay_id from free text.
+      // If a real UUID lay_id was passed, preserve it; otherwise do not set lay_id.
+      const rawLayId = (entry as any).lay_id;
+      if (rawLayId && isValidUUID(rawLayId)) {
+        rawPayload.lay_id = rawLayId;
       }
 
       const rawSize = entry.size || (entry as any).size;
@@ -1903,8 +1915,18 @@ class DataService {
         rawPayload.entered_by = enteredBy;
       }
 
-      if (typeof notesText === 'string' && notesText.trim().length > 0) {
-        rawPayload.note = notesText.trim();
+      // Add Table/Layers text to the note, e.g. "Table: Table 1, 100 layers | <other notes>"
+      const tableLayers = entry.tables_layers || (rawLayId && !isValidUUID(rawLayId) ? rawLayId : undefined);
+      const tableText = (tableLayers && typeof tableLayers === 'string' && tableLayers.trim().length > 0)
+        ? `Table: ${tableLayers.trim()}`
+        : '';
+      const otherNotes = (typeof notesText === 'string' && notesText.trim().length > 0)
+        ? notesText.trim()
+        : '';
+
+      const combinedNote = [tableText, otherNotes].filter(Boolean).join(' | ');
+      if (combinedNote) {
+        rawPayload.note = combinedNote;
       }
 
       // Sanitize payload ensuring no null/undefined or empty string keys are sent
@@ -1918,7 +1940,7 @@ class DataService {
         cut_type: cutTypeVal,
         pieces_cut: qtyCut,
         size: cleanPayload.size || null,
-        tables_layers: cleanPayload.lay_id || null,
+        tables_layers: (tableLayers && typeof tableLayers === 'string' ? tableLayers.trim() : null),
         worker_id: cleanPayload.worker_id || null,
         notes: cleanPayload.note || null,
         created_at: entry.created_at || new Date().toISOString(),

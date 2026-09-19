@@ -29,6 +29,8 @@ interface AssignmentEntryDraft {
   qty_reject: number;
   expanded: boolean;
   savedQtyOk: number; // accumulated output already saved today
+  savedQtyRework: number; // accumulated rework already saved today
+  savedQtyReject: number; // accumulated reject already saved today
   worker_id?: string;
 }
 
@@ -133,16 +135,20 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
       // Initialize drafts map with accumulated saved output from today's production entries
       const initialDrafts = new Map<string, AssignmentEntryDraft>();
       for (const a of validAssignments) {
-        const savedForAssignment = entryList
-          .filter(e => e.worker_id === a.worker_id && e.process_id === a.process_id && e.entry_date === entryDate)
-          .reduce((sum, e) => sum + e.qty_ok, 0);
+        const matchingEntries = entryList
+          .filter(e => e.worker_id === a.worker_id && e.process_id === a.process_id && e.entry_date === entryDate);
+        const savedForAssignment = matchingEntries.reduce((sum, e) => sum + (e.qty_ok || 0), 0);
+        const savedRework = matchingEntries.reduce((sum, e) => sum + (e.qty_rework || 0), 0);
+        const savedReject = matchingEntries.reduce((sum, e) => sum + (e.qty_reject || 0), 0);
 
         initialDrafts.set(a.id, {
           qty_ok: savedForAssignment,
-          qty_rework: 0,
-          qty_reject: 0,
+          qty_rework: savedRework,
+          qty_reject: savedReject,
           expanded: false,
           savedQtyOk: savedForAssignment,
+          savedQtyRework: savedRework,
+          savedQtyReject: savedReject,
         });
       }
       setDrafts(initialDrafts);
@@ -161,7 +167,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
 
   // Helper to update draft qty
   const updateDraftQty = (assignmentId: string, field: 'qty_ok' | 'qty_rework' | 'qty_reject', delta: number) => {
-    const cur = drafts.get(assignmentId) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0 };
+    const cur = drafts.get(assignmentId) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0, savedQtyRework: 0, savedQtyReject: 0 };
     const newQty = Math.max(0, cur[field] + delta);
     const newDrafts = new Map(drafts);
     newDrafts.set(assignmentId, {
@@ -172,7 +178,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
   };
 
   const setDraftQtyDirect = (assignmentId: string, field: 'qty_ok' | 'qty_rework' | 'qty_reject', val: number) => {
-    const cur = drafts.get(assignmentId) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0 };
+    const cur = drafts.get(assignmentId) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0, savedQtyRework: 0, savedQtyReject: 0 };
     const newDrafts = new Map(drafts);
     newDrafts.set(assignmentId, {
       ...cur,
@@ -246,8 +252,11 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
       const draft = drafts.get(assign.id);
       if (!draft) continue;
 
-      const diffQty = draft.qty_ok - draft.savedQtyOk;
-      if (diffQty > 0 || draft.qty_rework > 0 || draft.qty_reject > 0) {
+      const newQtyOk = Math.max(0, draft.qty_ok - draft.savedQtyOk);
+      const newQtyRework = Math.max(0, draft.qty_rework - (draft.savedQtyRework || 0));
+      const newQtyReject = Math.max(0, draft.qty_reject - (draft.savedQtyReject || 0));
+
+      if (newQtyOk > 0 || newQtyRework > 0 || newQtyReject > 0) {
         const workerId = draft.worker_id || assign.worker_id;
         if (!workerId) {
           setToastMessage('Worker is required for all production entries.');
@@ -267,30 +276,35 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
       const draft = drafts.get(assign.id);
       if (!draft) continue;
 
-      const diffQty = draft.qty_ok - draft.savedQtyOk;
-      if (diffQty > 0 || draft.qty_rework > 0 || draft.qty_reject > 0) {
-        const workerId = draft.worker_id || assign.worker_id;
+      const newQtyOk = Math.max(0, draft.qty_ok - draft.savedQtyOk);
+      const newQtyRework = Math.max(0, draft.qty_rework - (draft.savedQtyRework || 0));
+      const newQtyReject = Math.max(0, draft.qty_reject - (draft.savedQtyReject || 0));
 
-        const payload: Partial<ProductionEntry> = {
-          assignment_id: assign.id,
-          entry_date: entryDate,
-          shift,
-          worker_id: workerId,
-          style_id: assign.style_id,
-          process_id: assign.process_id,
-          qty_ok: diffQty > 0 ? diffQty : draft.qty_ok,
-          qty_rework: draft.qty_rework,
-          qty_reject: draft.qty_reject,
-          rate_snapshot: assign.agreed_rate,
-        };
-
-        if (enteredBy) {
-          payload.entered_by = enteredBy;
-        }
-
-        await dataService.saveProductionEntry(payload);
-        savedCount++;
+      // If all three new amounts are 0, do not save a row
+      if (newQtyOk === 0 && newQtyRework === 0 && newQtyReject === 0) {
+        continue;
       }
+
+      const workerId = draft.worker_id || assign.worker_id;
+
+      const payload: Partial<ProductionEntry> = {
+        assignment_id: assign.id,
+        entry_date: entryDate,
+        shift,
+        worker_id: workerId,
+        style_id: assign.style_id,
+        process_id: assign.process_id,
+        qty_ok: newQtyOk,
+        qty_rework: newQtyRework,
+        qty_reject: newQtyReject,
+      };
+
+      if (enteredBy) {
+        payload.entered_by = enteredBy;
+      }
+
+      await dataService.saveProductionEntry(payload);
+      savedCount++;
     }
 
     setToastMessage(`Saved ${savedCount} line entry logs — Total ${currencySymbol}${totalWageValueAccrued.toFixed(0)}`);
@@ -547,7 +561,7 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
                   <div className="space-y-3 pt-1">
                     {procGroup.items.map(assign => {
                       const worker = workers.find(w => w.id === assign.worker_id);
-                      const draft = drafts.get(assign.id) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0 };
+                      const draft = drafts.get(assign.id) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0, savedQtyRework: 0, savedQtyReject: 0 };
                       const targetQty = assign.target_qty || 250;
                       const progressPct = Math.min(100, Math.round((draft.qty_ok / targetQty) * 100));
 
@@ -624,14 +638,6 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
                               >
                                 +10
                               </button>
-
-                              <button
-                                onClick={() => toggleExpand(assign.id)}
-                                className="p-2 text-stone-500 hover:text-stone-900 bg-stone-100 rounded-lg transition"
-                                title="Expand rework & reject"
-                              >
-                                {draft.expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                              </button>
                             </div>
                           </div>
 
@@ -649,30 +655,45 @@ export const QuickEntryScreen: React.FC<QuickEntryScreenProps> = ({ role, worker
                             </div>
                           </div>
 
-                          {/* REQUIRED WORKER SELECTION DROPDOWN */}
+                          {/* REQUIRED WORKER SELECTION DROPDOWN & REWORK / REJECT TOGGLE */}
                           <div className="pt-2 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <label className="text-xs font-bold text-stone-700 flex items-center space-x-1 shrink-0">
-                              <span>Worker</span>
-                              <span className="text-rose-600">*</span>
-                            </label>
-                            <select
-                              required
-                              value={draft.worker_id || assign.worker_id || ''}
-                              onChange={(e) => {
-                                const newDrafts = new Map(drafts);
-                                const cur = drafts.get(assign.id) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0 };
-                                newDrafts.set(assign.id, { ...cur, worker_id: e.target.value });
-                                setDrafts(newDrafts);
-                              }}
-                              className="w-full sm:w-72 px-2.5 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-semibold text-stone-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                            <div className="flex items-center space-x-2 flex-1">
+                              <label className="text-xs font-bold text-stone-700 flex items-center space-x-1 shrink-0">
+                                <span>Worker</span>
+                                <span className="text-rose-600">*</span>
+                              </label>
+                              <select
+                                required
+                                value={draft.worker_id || assign.worker_id || ''}
+                                onChange={(e) => {
+                                  const newDrafts = new Map(drafts);
+                                  const cur = drafts.get(assign.id) || { qty_ok: 0, qty_rework: 0, qty_reject: 0, expanded: false, savedQtyOk: 0, savedQtyRework: 0, savedQtyReject: 0 };
+                                  newDrafts.set(assign.id, { ...cur, worker_id: e.target.value });
+                                  setDrafts(newDrafts);
+                                }}
+                                className="w-full sm:w-72 px-2.5 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs font-semibold text-stone-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                              >
+                                <option value="">Select Sewing Worker...</option>
+                                {sewingWorkers.map(w => (
+                                  <option key={w.id} value={w.id}>
+                                    {w.full_name} ({w.worker_code})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(assign.id)}
+                              className={`inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all active:scale-95 shrink-0 ${
+                                draft.expanded
+                                  ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-xs'
+                                  : 'bg-stone-100 hover:bg-stone-200 border-stone-300 text-stone-700'
+                              }`}
                             >
-                              <option value="">Select Sewing Worker...</option>
-                              {sewingWorkers.map(w => (
-                                <option key={w.id} value={w.id}>
-                                  {w.full_name} ({w.worker_code})
-                                </option>
-                              ))}
-                            </select>
+                              <span>{draft.expanded ? '− Rework / Reject' : '+ Rework / Reject'}</span>
+                              {draft.expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
                           </div>
 
                           {/* COLLAPSIBLE REWORK & REJECT */}
