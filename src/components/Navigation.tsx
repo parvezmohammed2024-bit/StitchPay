@@ -19,6 +19,7 @@ export type ScreenId =
   | 'teams'
   | 'bulkGrid' 
   | 'styles' 
+  | 'buyers'
   | 'workers' 
   | 'attendance' 
   | 'payroll' 
@@ -45,6 +46,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
     { id: 'rateBids' as ScreenId, label: 'Rate Approvals', icon: BadgePercent, roles: ['admin', 'supervisor'] },
     { id: 'teams' as ScreenId, label: 'Teams', icon: Users, roles: ['admin', 'supervisor'] },
     { id: 'styles' as ScreenId, label: t('navStyles'), icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
+    { id: 'buyers' as ScreenId, label: 'Buyers', icon: Building2, roles: ['admin'] },
     { id: 'workers' as ScreenId, label: t('navWorkers'), icon: Users, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'bulkGrid' as ScreenId, label: t('navBulkGrid'), icon: Table, roles: ['admin', 'supervisor'] },
     { id: 'attendance' as ScreenId, label: t('navAttendance'), icon: CalendarCheck, roles: ['admin', 'supervisor', 'accounts'] },
@@ -67,6 +69,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeScreen, onNavigate
   const moreSheetItems = [
     { id: 'cutting' as ScreenId, label: 'Cutting Board', icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'styles' as ScreenId, label: 'Styles & Processes', icon: Scissors, roles: ['admin', 'supervisor', 'accounts'] },
+    { id: 'buyers' as ScreenId, label: 'Buyers', icon: Building2, roles: ['admin'] },
     { id: 'bulkGrid' as ScreenId, label: 'Bulk Grid', icon: Table, roles: ['admin', 'supervisor'] },
     { id: 'attendance' as ScreenId, label: 'Attendance', icon: CalendarCheck, roles: ['admin', 'supervisor', 'accounts'] },
     { id: 'payroll' as ScreenId, label: 'Payroll Run', icon: Banknote, roles: ['admin', 'accounts'] },

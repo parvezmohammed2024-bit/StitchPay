@@ -12,6 +12,7 @@ import { GarmentStyle, GarmentProcess, UserRole, FactorySettings, ProductionEntr
 import { StyleImage } from '../components/StyleImage';
 import { StyleImageUploader } from '../components/StyleImageUploader';
 import { NewStyleBadge } from '../components/NewStyleBadge';
+import { BuyerSelect } from '../components/BuyerSelect';
 
 export function getNextReorderCode(sourceCode: string, allStyles: { style_code: string }[]): string {
   if (!sourceCode) return 'R2';
@@ -121,6 +122,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     setStyleForm({
       name: '',
       style_code: '',
+      buyer_id: undefined,
       buyer_name: '',
       order_qty: 10000,
       selling_price: null,
@@ -151,6 +153,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     setStyleForm({
       name: st.name,
       style_code: nextStyleCode,
+      buyer_id: st.buyer_id || undefined,
       buyer_name: st.buyer_name || '',
       order_qty: '' as any, // All size quantities EMPTY: user enters new quantities
       selling_price: st.selling_price !== undefined ? st.selling_price : null,
@@ -201,6 +204,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
       id: st.id,
       name: st.name,
       style_code: st.style_code,
+      buyer_id: st.buyer_id || undefined,
       buyer_name: st.buyer_name || '',
       order_qty: st.order_qty,
       selling_price: st.selling_price !== undefined ? st.selling_price : null,
@@ -1939,12 +1943,17 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
               </div>
 
               <div>
-                <label className="text-xs text-stone-700 font-medium">Buyer Name</label>
-                <input
-                  type="text"
-                  value={cloneForm.buyer_name || ''}
-                  onChange={e => setCloneForm({ ...cloneForm, buyer_name: e.target.value })}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1"
+                <label className="text-xs text-stone-700 font-medium block mb-1">Buyer (Optional)</label>
+                <BuyerSelect
+                  selectedBuyerId={cloneForm.buyer_id}
+                  initialBuyerName={cloneForm.buyer_name}
+                  onSelectBuyer={b => {
+                    setCloneForm(prev => ({
+                      ...prev,
+                      buyer_id: b ? b.id : undefined,
+                      buyer_name: b ? b.name : '',
+                    }));
+                  }}
                 />
               </div>
 
@@ -2028,13 +2037,17 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-stone-700 block font-medium">Buyer Name</label>
-                  <input
-                    type="text"
-                    value={styleForm.buyer_name || ''}
-                    onChange={e => setStyleForm({ ...styleForm, buyer_name: e.target.value })}
-                    placeholder="e.g. Zara / H&M"
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1"
+                  <label className="text-xs text-stone-700 block font-medium mb-1">Buyer (Optional)</label>
+                  <BuyerSelect
+                    selectedBuyerId={styleForm.buyer_id}
+                    initialBuyerName={styleForm.buyer_name}
+                    onSelectBuyer={b => {
+                      setStyleForm(prev => ({
+                        ...prev,
+                        buyer_id: b ? b.id : undefined,
+                        buyer_name: b ? b.name : '',
+                      }));
+                    }}
                   />
                 </div>
 

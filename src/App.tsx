@@ -19,6 +19,7 @@ import { FinishingScreen } from './screens/FinishingScreen';
 import { BulkGridScreen } from './screens/BulkGridScreen';
 import { RateBidsScreen } from './screens/RateBidsScreen';
 import { StylesBuilderScreen } from './screens/StylesBuilderScreen';
+import { BuyersScreen } from './screens/BuyersScreen';
 import { WorkersScreen } from './screens/WorkersScreen';
 import { AttendanceScreen } from './screens/AttendanceScreen';
 import { PayrollRunScreen } from './screens/PayrollRunScreen';
@@ -207,6 +208,7 @@ export default function App() {
             {activeScreen === 'rateBids' && <RateBidsScreen role={role} />}
             {activeScreen === 'teams' && <TeamsScreen role={role} />}
             {activeScreen === 'styles' && <StylesBuilderScreen role={role} />}
+            {activeScreen === 'buyers' && <BuyersScreen role={role} />}
             {activeScreen === 'workers' && <WorkersScreen role={role} />}
             {activeScreen === 'attendance' && <AttendanceScreen role={role} />}
             {activeScreen === 'payroll' && <PayrollRunScreen role={role} />}

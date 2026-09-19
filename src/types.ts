@@ -46,10 +46,23 @@ export interface Worker {
   outstanding_advance?: number;
 }
 
+export interface Buyer {
+  id: string;
+  name: string;
+  contact_person?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  country?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at?: string;
+}
+
 export interface GarmentStyle {
   id: string;
   style_code: string;
   name: string;
+  buyer_id?: string | null;
   buyer_name: string | null;
   image_url: string | null;
   order_qty: number;

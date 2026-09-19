@@ -7,7 +7,7 @@ import {
   MgmtOrderOverviewRecord, MgmtUserRecord, TodaySectionRow, StyleSize, StyleSizeBreakdownRow,
   AvailableToReceiveRow, StyleDailyOutput, WorkerNotification, StylePipelineRow, EntryAudit,
   ProductionTeam, ProductionTeamMember, FactorySummary, FactoryStatusRow,
-  DrillCuttingRow, DrillSewingRow, DrillFinishingStageRow, DrillReadyRow
+  DrillCuttingRow, DrillSewingRow, DrillFinishingStageRow, DrillReadyRow, Buyer
 } from '../types';
 
 function formatLockedPeriodError(err: any): Error {
@@ -93,6 +93,7 @@ class DataService {
   private cuttingEntries: CuttingEntry[] = [];
   private samples: GarmentSample[] = [];
   private styleSizes: StyleSize[] = [];
+  private buyers: Buyer[] = [];
   private styleDailyOutputs: StyleDailyOutput[] = [];
   private teams: ProductionTeam[] = [];
   private teamMembers: ProductionTeamMember[] = [];
@@ -527,8 +528,113 @@ class DataService {
     }
   }
 
+  // --- BUYERS ---
+  public async getBuyers(): Promise<Buyer[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('buyers')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      if (error) {
+        console.error('Error fetching active buyers from Supabase:', error);
+        throw error;
+      }
+      return (data || []) as Buyer[];
+    }
+    return [];
+  }
+
+  public async getAllBuyers(): Promise<Buyer[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from('buyers')
+        .select('*')
+        .order('name', { ascending: true });
+      if (!error && data) {
+        return data as Buyer[];
+      }
+      const { data: minData, error: minError } = await supabase
+        .from('buyers')
+        .select('id, name, is_active')
+        .order('name', { ascending: true });
+      if (!minError && minData) {
+        return minData as Buyer[];
+      }
+      if (error || minError) {
+        throw error || minError;
+      }
+    }
+    return [];
+  }
+
+  public async saveBuyer(buyer: Partial<Buyer>): Promise<Buyer> {
+    const id = buyer.id || crypto.randomUUID();
+    const dbPayload: any = {
+      id,
+      name: (buyer.name || '').trim(),
+      contact_person: buyer.contact_person !== undefined ? (buyer.contact_person ? buyer.contact_person.trim() : null) : null,
+      phone: buyer.phone !== undefined ? (buyer.phone ? buyer.phone.trim() : null) : null,
+      email: buyer.email !== undefined ? (buyer.email ? buyer.email.trim() : null) : null,
+      country: buyer.country !== undefined ? (buyer.country ? buyer.country.trim() : null) : null,
+      notes: buyer.notes !== undefined ? (buyer.notes ? buyer.notes.trim() : null) : null,
+      is_active: buyer.is_active !== false,
+    };
+
+    if (isSupabaseConfigured) {
+      const cleanPayload = sanitizePayload(dbPayload);
+      const { data, error } = await supabase.from('buyers').upsert(cleanPayload).select().single();
+      if (error) {
+        this.handleError(error, 'Error saving buyer');
+        throw error;
+      }
+      await this.getBuyers();
+      return (data as Buyer) || (dbPayload as Buyer);
+    } else {
+      const idx = this.buyers.findIndex(b => b.id === id);
+      if (idx >= 0) this.buyers[idx] = { ...this.buyers[idx], ...dbPayload };
+      else this.buyers.push(dbPayload as Buyer);
+      return dbPayload as Buyer;
+    }
+  }
+
+  public async getGarmentsSewnOnlyRpc(styleId: string): Promise<number> {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.rpc('fn_garments_sewn', {
+          p_style_id: styleId,
+        });
+        if (!error && data !== null && data !== undefined) {
+          return Number(data) || 0;
+        }
+        const { data: data2, error: error2 } = await supabase.rpc('fn_garments_sewn', {
+          p_style_id: styleId,
+          p_from: null,
+          p_to: null,
+        });
+        if (!error2 && data2 !== null && data2 !== undefined) {
+          return Number(data2) || 0;
+        }
+        if (error || error2) {
+          console.warn('fn_garments_sewn returned error:', error || error2);
+        }
+      } catch (err) {
+        console.warn('RPC fn_garments_sewn call failed:', err);
+      }
+    }
+    return 0;
+  }
+
   // --- STYLES & PROCESSES ---
   public async getStyles(): Promise<GarmentStyle[]> {
+    let buyersList: Buyer[] = [];
+    try {
+      buyersList = await this.getBuyers();
+    } catch {
+      // ignore
+    }
+    const buyersMap = new Map(buyersList.map(b => [b.id, b]));
+
     if (isSupabaseConfigured) {
       const { data, error } = await supabase.from('styles').select('*').order('created_at', { ascending: true });
       if (!this.handleError(error, 'Error fetching styles') && data) {
@@ -541,6 +647,10 @@ class DataService {
     const deliveriesList = this.deliveries;
 
     return this.styles.map(st => {
+      // Everywhere a buyer name is shown on cards, read it from the buyers table via buyer_id
+      const buyer = st.buyer_id ? buyersMap.get(st.buyer_id) : null;
+      const resolvedBuyerName = buyer ? buyer.name : (st.buyer_name || null);
+
       const styleProcs = procs.filter(p => p.style_id === st.id);
       const totalLabourCost = styleProcs.reduce((sum, p) => sum + Number(p.rate || 0), 0);
       
@@ -560,6 +670,7 @@ class DataService {
 
       return {
         ...st,
+        buyer_name: resolvedBuyerName,
         total_labour_cost: totalLabourCost,
         completed_pieces,
         delivered_pieces,
@@ -936,11 +1047,10 @@ class DataService {
     const existing = cleanStyle.id ? this.styles.find(s => s.id === cleanStyle.id) : null;
     const id = cleanStyle.id || crypto.randomUUID();
 
-    const dbPayload = {
+    const dbPayload: any = {
       id,
       style_code: cleanStyle.style_code ?? existing?.style_code ?? `ST-${Math.floor(1000 + Math.random() * 9000)}`,
       name: cleanStyle.name ?? existing?.name ?? 'New Style',
-      buyer_name: cleanStyle.buyer_name ?? existing?.buyer_name ?? null,
       image_url: cleanStyle.image_url ?? existing?.image_url ?? null,
       order_qty: cleanStyle.order_qty ?? existing?.order_qty ?? 1000,
       selling_price: cleanStyle.selling_price !== undefined ? cleanStyle.selling_price : (existing?.selling_price ?? null),
@@ -951,6 +1061,16 @@ class DataService {
       wage_model: cleanStyle.wage_model ?? existing?.wage_model ?? 'individual',
       notes: cleanStyle.notes ?? existing?.notes ?? null,
     };
+
+    // Save the selected buyer's id to styles.buyer_id. Buyer is optional; if none is selected, omit buyer_id (never send null).
+    const chosenBuyerId = cleanStyle.buyer_id !== undefined ? cleanStyle.buyer_id : existing?.buyer_id;
+    if (chosenBuyerId && String(chosenBuyerId).trim() !== '') {
+      dbPayload.buyer_id = String(chosenBuyerId).trim();
+      const matchedBuyer = this.buyers.find(b => b.id === dbPayload.buyer_id);
+      dbPayload.buyer_name = matchedBuyer ? matchedBuyer.name : (cleanStyle.buyer_name ?? existing?.buyer_name ?? null);
+    } else if (cleanStyle.buyer_name) {
+      dbPayload.buyer_name = cleanStyle.buyer_name;
+    }
 
     if (isSupabaseConfigured) {
       const cleanPayload = sanitizePayload(dbPayload);
@@ -3971,11 +4091,17 @@ class DataService {
 
     const calcPct = (qty: number) => orderQty > 0 ? Math.min(100, Math.round((qty / orderQty) * 100)) : 0;
 
+    let buyerName = item.buyer_name || item.buyer || null;
+    if (item.buyer_id && this.buyers && this.buyers.length > 0) {
+      const b = this.buyers.find(x => x.id === item.buyer_id);
+      if (b) buyerName = b.name;
+    }
+
     return {
       style_id: item.style_id || item.id || '',
       style_code: item.style_code || item.code || 'Style',
       style_name: item.style_name || item.name || '',
-      buyer_name: item.buyer_name || item.buyer || 'N/A',
+      buyer_name: buyerName || 'N/A',
       image_url: item.image_url || null,
       order_qty: orderQty,
       requires_cutting: item.requires_cutting !== undefined ? Boolean(item.requires_cutting) : true,
