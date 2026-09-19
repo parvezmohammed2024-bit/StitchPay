@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { StylePipelineRow } from '../types';
 import { StyleImage } from './StyleImage';
+import { NewStyleBadge } from './NewStyleBadge';
 
 interface StylePipelineCardProps {
   pipeline: StylePipelineRow;
@@ -73,9 +74,12 @@ export const StylePipelineCard: React.FC<StylePipelineCardProps> = ({ pipeline, 
           />
           <div className="min-w-0">
             <h4 className="font-bold text-sm truncate">{style_name || style_code}</h4>
-            <p className={`text-xs font-mono truncate ${subText}`}>
-              {style_code} • {buyer_name || 'N/A'}
-            </p>
+            <div className="flex items-center space-x-1.5 flex-wrap">
+              <p className={`text-xs font-mono truncate ${subText}`}>
+                {style_code} • {buyer_name || 'N/A'}
+              </p>
+              <NewStyleBadge styleCode={style_code} />
+            </div>
           </div>
         </div>
 

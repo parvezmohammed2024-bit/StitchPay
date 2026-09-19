@@ -2,10 +2,25 @@ import React from 'react';
 
 interface NewStyleBadgeProps {
   createdAt?: string | null;
+  styleCode?: string | null;
   className?: string;
 }
 
-export const NewStyleBadge: React.FC<NewStyleBadgeProps> = ({ createdAt, className = '' }) => {
+export const NewStyleBadge: React.FC<NewStyleBadgeProps> = ({ createdAt, styleCode, className = '' }) => {
+  // Check if this is a re-order style using "-R" in the style code
+  const isReOrder = Boolean(styleCode && /-R/i.test(styleCode));
+
+  if (isReOrder) {
+    return (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black tracking-wider bg-amber-600 text-white uppercase shadow-xs select-none ${className}`}
+        title="Re-order Style"
+      >
+        RE-ORDER
+      </span>
+    );
+  }
+
   if (!createdAt) return null;
 
   const createdTime = new Date(createdAt).getTime();

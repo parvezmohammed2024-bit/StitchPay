@@ -704,7 +704,7 @@ export const DailySetupScreen: React.FC<DailySetupScreenProps> = ({ role, onProp
                     <div className="text-lg font-bold text-stone-900 flex items-center space-x-2 flex-wrap">
                       <span className="text-amber-800">{style.style_code}</span>
                       <span className="text-stone-600 text-sm font-normal">— {style.name}</span>
-                      <NewStyleBadge createdAt={style.created_at} />
+                      <NewStyleBadge createdAt={style.created_at} styleCode={style.style_code} />
                       {role === 'admin' && (
                         <button
                           type="button"

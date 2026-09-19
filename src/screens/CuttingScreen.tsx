@@ -1619,7 +1619,7 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, priorityIndex, onRecordCut
               <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
                 {style.style_code}
               </span>
-              <NewStyleBadge createdAt={style.created_at} />
+              <NewStyleBadge createdAt={style.created_at} styleCode={style.style_code} />
               {role === 'admin' && onViewEntries && (
                 <button
                   type="button"

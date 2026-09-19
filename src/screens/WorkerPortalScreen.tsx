@@ -15,6 +15,49 @@ import { StyleImageLightbox } from '../components/StyleImageLightbox';
 import { NewStyleBadge } from '../components/NewStyleBadge';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
+const STANDARD_SIZE_RANK: Record<string, number> = {
+  'xxxs': 1, '3xs': 1,
+  'xxs': 2, '2xs': 2,
+  'xs': 3,
+  's': 4, 'small': 4,
+  'm': 5, 'medium': 5, 'med': 5,
+  'l': 6, 'large': 6,
+  'xl': 7, '1x': 7,
+  'xxl': 8, '2xl': 8, '2x': 8,
+  'xxxl': 9, '3xl': 9, '3x': 9,
+  '4xl': 10, '4x': 10,
+  '5xl': 11, '5x': 11,
+  '6xl': 12, '6x': 12,
+  '7xl': 13, '7x': 13,
+  'free': 90, 'free size': 90, 'fs': 90,
+  'standard': 91, 'std': 91,
+};
+
+function sortSizesNormal(sizes: StyleSize[]): StyleSize[] {
+  return [...sizes].sort((a, b) => {
+    if (a.seq_no !== undefined && b.seq_no !== undefined && a.seq_no !== b.seq_no) {
+      return a.seq_no - b.seq_no;
+    }
+    const cleanA = (a.size || '').trim().toLowerCase();
+    const cleanB = (b.size || '').trim().toLowerCase();
+    const rankA = STANDARD_SIZE_RANK[cleanA];
+    const rankB = STANDARD_SIZE_RANK[cleanB];
+    if (rankA !== undefined && rankB !== undefined) {
+      return rankA - rankB;
+    }
+    if (rankA !== undefined) return -1;
+    if (rankB !== undefined) return 1;
+
+    const numA = parseFloat(cleanA);
+    const numB = parseFloat(cleanB);
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB;
+    }
+
+    return 0;
+  });
+}
+
 export const WorkerPortalScreen: React.FC = () => {
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -144,6 +187,7 @@ export const WorkerPortalScreen: React.FC = () => {
   const [cuttingSelectedSizes, setCuttingSelectedSizes] = useState<string[]>([]);
   const [cuttingSizeActualCuts, setCuttingSizeActualCuts] = useState<Record<string, number | string>>({});
   const [cuttingShortfallReason, setCuttingShortfallReason] = useState<string>('');
+  const [allStyleSizes, setAllStyleSizes] = useState<StyleSize[]>([]);
 
   useEffect(() => {
     if (cuttingForm.style_id) {
@@ -294,6 +338,7 @@ export const WorkerPortalScreen: React.FC = () => {
     setAllPeriodEntries([]);
     setMyFinishingEntries([]);
     setMyCuttingEntries([]);
+    setAllStyleSizes([]);
   };
 
   const loadWorkerData = async (workerId: string) => {
@@ -305,7 +350,8 @@ export const WorkerPortalScreen: React.FC = () => {
 
     const [
       wrkList, attTodayList, allAttList, assignList, entryList,
-      stylesList, finishingList, cuttingList, stagesList, factorySet
+      stylesList, finishingList, cuttingList, stagesList, factorySet,
+      sizesList
     ] = await Promise.all([
       dataService.getWorkers(),
       dataService.getAttendance(todayStr),
@@ -317,6 +363,7 @@ export const WorkerPortalScreen: React.FC = () => {
       dataService.getCuttingEntries(),
       dataService.getFinishingStages(),
       dataService.getSettings(),
+      dataService.getStyleSizes(),
     ]);
 
     setWorkersList(wrkList);
@@ -324,6 +371,7 @@ export const WorkerPortalScreen: React.FC = () => {
     setAllEntries(entryList);
     setGarmentStyles(stylesList);
     setAllFinishingStages(stagesList);
+    setAllStyleSizes(sizesList || []);
 
     // Filter today attendance
     const att = attTodayList.find(a => a.worker_id === workerId) || null;
@@ -1178,7 +1226,7 @@ export const WorkerPortalScreen: React.FC = () => {
                                 <span>Team output</span>
                               </span>
                             )}
-                            <NewStyleBadge createdAt={workStyle?.created_at} />
+                            <NewStyleBadge createdAt={workStyle?.created_at} styleCode={workStyle?.style_code || work.style_code} />
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
@@ -1609,7 +1657,7 @@ export const WorkerPortalScreen: React.FC = () => {
                               <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
                                 {st.style_code}
                               </span>
-                              <NewStyleBadge createdAt={st.created_at} />
+                              <NewStyleBadge createdAt={st.created_at} styleCode={st.style_code} />
                             </div>
                             <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
                           </div>
@@ -1905,7 +1953,7 @@ export const WorkerPortalScreen: React.FC = () => {
                               <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
                                 {st.style_code}
                               </span>
-                              <NewStyleBadge createdAt={st.created_at} />
+                              <NewStyleBadge createdAt={st.created_at} styleCode={st.style_code} />
                             </div>
                             <h4 className="text-sm font-black text-stone-900 mt-1">{st.name}</h4>
                           </div>
@@ -1925,6 +1973,72 @@ export const WorkerPortalScreen: React.FC = () => {
                           <div className="bg-indigo-700 h-full rounded-full transition-all" style={{ width: `${cutPct}%` }}></div>
                         </div>
                       </div>
+
+                      {/* Size Breakdown Grid - 3 per row */}
+                      {(() => {
+                        const rawSizes = allStyleSizes.filter(s => s.style_id === st.id);
+                        const sizesForStyle = rawSizes.length > 0
+                          ? rawSizes
+                          : [{
+                              style_id: st.id,
+                              size: 'Standard',
+                              seq_no: 1,
+                              order_qty: st.order_qty || 0,
+                            }];
+                        const sortedSizes = sortSizesNormal(sizesForStyle);
+
+                        return (
+                          <div className="grid grid-cols-3 gap-1.5 pt-1">
+                            {sortedSizes.map(sz => {
+                              const szClean = (sz.size || '').trim().toLowerCase();
+                              const ordered = Number(sz.order_qty) || 0;
+
+                              const cut = allCuttingEntries
+                                .filter(c => {
+                                  if (c.style_id !== st.id) return false;
+                                  if (c.cut_type && c.cut_type !== 'bulk') return false;
+                                  const entrySizeClean = (c.size || '').trim().toLowerCase();
+                                  return entrySizeClean === szClean || (!entrySizeClean && szClean === 'standard');
+                                })
+                                .reduce((sum, c) => sum + Number((c as any).qty_cut ?? c.pieces_cut ?? 0), 0);
+
+                              const remaining = Math.max(0, ordered - cut);
+                              const isFullyCut = cut >= ordered;
+                              const isOverCut = cut > ordered;
+
+                              return (
+                                <div
+                                  key={sz.id || `${st.id}-${sz.size}`}
+                                  className={`px-1.5 py-1.5 rounded-xl border text-center flex flex-col justify-center min-w-0 transition-colors ${
+                                    isOverCut
+                                      ? 'bg-amber-100/90 border-amber-300 text-amber-950'
+                                      : isFullyCut
+                                      ? 'bg-stone-200/80 border-stone-300 text-stone-600'
+                                      : 'bg-white border-stone-200 text-stone-900 shadow-2xs'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-center space-x-1 font-bold text-xs truncate leading-tight">
+                                    <span className="font-extrabold truncate">{sz.size}</span>
+                                    <span className="font-mono text-[11px] opacity-90">{cut}/{ordered}</span>
+                                    {isFullyCut && (
+                                      <span className={`text-xs font-black ${isOverCut ? 'text-amber-800' : 'text-stone-500'}`}>✓</span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] leading-tight mt-0.5 font-bold truncate">
+                                    {isOverCut ? (
+                                      <span className="text-amber-800 font-mono">+{cut - ordered} over</span>
+                                    ) : isFullyCut ? (
+                                      <span className="text-stone-400 font-medium">Done</span>
+                                    ) : (
+                                      <span className="text-indigo-700 font-mono">{remaining} left</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
 
                       <div className="pt-1 flex justify-end">
                         {isCuttingWorker ? (

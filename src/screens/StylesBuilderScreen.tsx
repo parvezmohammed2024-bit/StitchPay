@@ -3,7 +3,7 @@ import {
   Scissors, Plus, Copy, FileSpreadsheet, Trash2, Edit3, 
   DollarSign, Shirt, Check, X, AlertTriangle, Archive, CheckCircle2,
   Layers, RefreshCw, Calendar, Clock, History, AlertCircle, ArrowUpRight,
-  TrendingDown, CheckCircle, Info, Users
+  TrendingDown, CheckCircle, Info, Users, RotateCcw
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { dataService } from '../lib/dataService';
@@ -11,6 +11,29 @@ import { showErrorToast, showSuccessToast } from '../lib/toast';
 import { GarmentStyle, GarmentProcess, UserRole, FactorySettings, ProductionEntry, FinishingStage } from '../types';
 import { StyleImage } from '../components/StyleImage';
 import { StyleImageUploader } from '../components/StyleImageUploader';
+import { NewStyleBadge } from '../components/NewStyleBadge';
+
+export function getNextReorderCode(sourceCode: string, allStyles: { style_code: string }[]): string {
+  if (!sourceCode) return 'R2';
+  // Strip trailing -R or -R<number> to get the base style code
+  const baseCode = sourceCode.replace(/-R\d*$/i, '').trim();
+  const escapedBase = baseCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rRegex = new RegExp(`^${escapedBase}-R(\\d+)$`, 'i');
+
+  let maxR = 1;
+  for (const s of allStyles) {
+    const code = (s.style_code || '').trim();
+    const match = code.match(rRegex);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxR) {
+        maxR = num;
+      }
+    }
+  }
+
+  return `${baseCode}-R${maxR + 1}`;
+}
 
 interface StylesBuilderScreenProps {
   role: UserRole;
@@ -76,6 +99,8 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
 
   // New / Edit Style Form
   const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
+  const [reorderSourceStyleId, setReorderSourceStyleId] = useState<string | null>(null);
+  const [sampleRequired, setSampleRequired] = useState<boolean>(false);
   const [isUploadingStyleImage, setIsUploadingStyleImage] = useState(false);
   const [styleForm, setStyleForm] = useState<Partial<GarmentStyle>>({
     name: '',
@@ -91,6 +116,8 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
 
   const handleOpenAddStyleModal = () => {
     setEditingStyleId(null);
+    setReorderSourceStyleId(null);
+    setSampleRequired(false);
     setStyleForm({
       name: '',
       style_code: '',
@@ -114,8 +141,62 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     setShowStyleModal(true);
   };
 
+  const handleOpenReorderStyle = async (st: GarmentStyle) => {
+    setEditingStyleId(null);
+    setReorderSourceStyleId(st.id);
+    setSampleRequired(false); // Sample Required: default No
+
+    const nextStyleCode = getNextReorderCode(st.style_code, styles);
+
+    setStyleForm({
+      name: st.name,
+      style_code: nextStyleCode,
+      buyer_name: st.buyer_name || '',
+      order_qty: '' as any, // All size quantities EMPTY: user enters new quantities
+      selling_price: st.selling_price !== undefined ? st.selling_price : null,
+      start_date: new Date().toISOString().split('T')[0], // today
+      target_ship_date: '', // empty
+      status: 'upcoming',
+      image_url: st.image_url || null,
+      requires_cutting: st.requires_cutting !== false,
+      wage_model: st.wage_model || 'individual',
+    });
+
+    try {
+      const stages = await dataService.getFinishingStages(st.id);
+      const hasButtons = stages.some(s => (s.code || '').includes('button') || (s.name || '').toLowerCase().includes('button'));
+      setHasButtonsForNewStyle(hasButtons);
+    } catch {
+      // ignore
+    }
+
+    // Size list: copied, but all size quantities EMPTY. The user enters the new quantities.
+    try {
+      const existingSizes = await dataService.getStyleSizes(st.id);
+      if (existingSizes && existingSizes.length > 0) {
+        setEnableSizeBreakdown(true);
+        setSizeRows(existingSizes.map(s => ({
+          id: crypto.randomUUID(),
+          size: s.size,
+          order_qty: '' as any,
+        })));
+      } else {
+        setEnableSizeBreakdown(false);
+        setSizeRows([]);
+      }
+    } catch (err) {
+      console.warn('Error fetching sizes for re-order:', err);
+      setEnableSizeBreakdown(false);
+      setSizeRows([]);
+    }
+
+    setShowStyleModal(true);
+  };
+
   const handleOpenEditStyleModal = (st: GarmentStyle) => {
     setEditingStyleId(st.id);
+    setReorderSourceStyleId(null);
+    setSampleRequired(false);
     setStyleForm({
       id: st.id,
       name: st.name,
@@ -285,15 +366,65 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
     }
 
     try {
+      const isReorder = Boolean(reorderSourceStyleId);
+      const sourceId = reorderSourceStyleId;
+
+      const totalSizeQty = sizeRows.reduce((sum, r) => sum + (Number(r.order_qty) || 0), 0);
+      const finalOrderQty = enableSizeBreakdown && totalSizeQty > 0
+        ? totalSizeQty
+        : (Number(styleForm.order_qty) || 0);
+
       const saved = await dataService.saveStyle({
         ...styleForm,
-        id: editingStyleId || styleForm.id,
+        order_qty: finalOrderQty,
+        id: editingStyleId || undefined,
       });
 
-      // Default the standard 8 stages automatically on new style creation or if style has 0 stages
-      const currentStages = await dataService.getFinishingStages(saved.id);
-      if (!editingStyleId || currentStages.length === 0) {
-        await dataService.applyDefaultFinishingStages(saved.id, hasButtonsForNewStyle);
+      if (isReorder && sourceId) {
+        // 1. Sewing operations and piece rates: copied exactly
+        const sourceProcs = await dataService.getProcesses(sourceId);
+        for (const p of sourceProcs) {
+          await dataService.saveProcess({
+            style_id: saved.id,
+            seq_no: p.seq_no,
+            name: p.name,
+            machine_type: p.machine_type,
+            smv: p.smv,
+            rate: p.rate,
+            is_active: p.is_active !== false,
+          });
+        }
+
+        // 2. Finishing stages: copied exactly ONCE. Check there are no duplicate stages after copying.
+        const sourceStages = await dataService.getFinishingStages(sourceId);
+        if (sourceStages && sourceStages.length > 0) {
+          const seen = new Set<string>();
+          const uniqueStages: typeof sourceStages = [];
+          for (const stg of sourceStages) {
+            const key = (stg.name || stg.code || '').trim().toLowerCase();
+            if (key && !seen.has(key)) {
+              seen.add(key);
+              uniqueStages.push(stg);
+            }
+          }
+          for (const [idx, s] of uniqueStages.entries()) {
+            await dataService.saveFinishingStage({
+              style_id: saved.id,
+              seq_no: s.seq_no ?? idx + 1,
+              name: s.name,
+              code: s.code,
+              is_active: true,
+            });
+          }
+        } else {
+          await dataService.applyDefaultFinishingStages(saved.id, hasButtonsForNewStyle);
+        }
+      } else {
+        // Default the standard 8 stages automatically on new style creation or if style has 0 stages
+        const currentStages = await dataService.getFinishingStages(saved.id);
+        if (!editingStyleId || currentStages.length === 0) {
+          await dataService.applyDefaultFinishingStages(saved.id, hasButtonsForNewStyle);
+        }
       }
 
       if (enableSizeBreakdown) {
@@ -307,9 +438,28 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
         await dataService.saveStyleSizes(saved.id, []);
       }
 
-      showSuccessToast(editingStyleId ? `Style ${saved.style_code} updated successfully.` : `Style ${saved.style_code} created as ${saved.status}.`);
+      if (sampleRequired) {
+        await dataService.saveSample({
+          style_id: saved.id,
+          sample_type: 'PP',
+          status: 'Pending',
+          qty: 1,
+          requested_date: new Date().toISOString().split('T')[0],
+          notes: 'PP sample requested on style order creation',
+        });
+      }
+
+      showSuccessToast(
+        isReorder
+          ? `Re-order style ${saved.style_code} created successfully.`
+          : editingStyleId
+          ? `Style ${saved.style_code} updated successfully.`
+          : `Style ${saved.style_code} created as ${saved.status}.`
+      );
       setShowStyleModal(false);
       setEditingStyleId(null);
+      setReorderSourceStyleId(null);
+      setSampleRequired(false);
       setStyleForm({
         name: '',
         style_code: '',
@@ -320,6 +470,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
         status: 'upcoming',
         image_url: null,
         requires_cutting: true,
+        wage_model: 'individual',
       });
       setSelectedStyle(saved);
       await loadData();
@@ -646,6 +797,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                     <span className="text-xs font-mono font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
                       {st.style_code}
                     </span>
+                    <NewStyleBadge createdAt={st.created_at} styleCode={st.style_code} />
                     {st.requires_cutting === false && (
                       <span className="text-[10px] font-bold text-stone-700 bg-stone-100 border border-stone-300 px-1.5 py-0.5 rounded-md flex items-center space-x-1" title="Pre-cut fabric supplied in-house">
                         <Scissors className="w-3 h-3 text-stone-500 line-through" />
@@ -889,12 +1041,12 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
             {/* Card Actions Footer */}
             <div className="flex items-center justify-between pt-1 border-t border-stone-200" onClick={e => e.stopPropagation()}>
               <button
-                onClick={() => handleOpenCloneNewStyle(st)}
-                title="Clone to new style code (Repeat order)"
-                className="flex items-center space-x-1 text-[11px] text-amber-800 hover:text-amber-900 font-bold"
+                onClick={() => handleOpenReorderStyle(st)}
+                title="Re-order this style (pre-fills Add Style Order form)"
+                className="flex items-center space-x-1 text-[11px] text-amber-800 hover:text-amber-900 font-bold cursor-pointer"
               >
-                <Layers className="w-3.5 h-3.5 text-amber-700" />
-                <span>Repeat Order</span>
+                <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                <span>Re-order</span>
               </button>
 
               {isOwnerAdmin && (
@@ -1045,11 +1197,12 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-stone-200">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2">
+                <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2 flex-wrap">
                   <span>{styleTab === 'sewing' ? 'Sewing Operations Breakdown' : 'Finishing Stages Pipeline'} — {selectedStyle.name}</span>
                   <span className="text-xs font-mono text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300 font-bold">
                     {selectedStyle.style_code}
                   </span>
+                  <NewStyleBadge createdAt={selectedStyle.created_at} styleCode={selectedStyle.style_code} />
                 </h2>
 
                 <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
@@ -1073,11 +1226,11 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
               {styleTab === 'sewing' ? (
                 <>
                   <button
-                    onClick={() => handleOpenCloneNewStyle(selectedStyle)}
-                    className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-xs font-bold text-amber-900 px-3 py-2 rounded-xl transition-colors"
+                    onClick={() => handleOpenReorderStyle(selectedStyle)}
+                    className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-xs font-bold text-amber-900 px-3 py-2 rounded-xl transition-colors cursor-pointer"
                   >
-                    <Layers className="w-3.5 h-3.5 text-amber-800" />
-                    <span>Clone to New Style</span>
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-800" />
+                    <span>Re-order</span>
                   </button>
 
                   {isOwnerAdmin && (
@@ -1566,7 +1719,10 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">{st.style_code}</span>
+                          <div className="flex items-center space-x-1.5 flex-wrap">
+                            <span className="text-xs font-mono font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">{st.style_code}</span>
+                            <NewStyleBadge createdAt={st.created_at} styleCode={st.style_code} />
+                          </div>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
                             st.status === 'completed'
                               ? 'bg-blue-50 text-blue-800 border border-blue-200'
@@ -1604,12 +1760,12 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                       <button
                         onClick={() => {
                           setShowOrderHistory(false);
-                          handleOpenCloneNewStyle(st);
+                          handleOpenReorderStyle(st);
                         }}
-                        className="flex items-center space-x-1 text-xs text-indigo-700 hover:text-indigo-800 font-bold"
+                        className="flex items-center space-x-1 text-xs text-amber-800 hover:text-amber-900 font-bold cursor-pointer"
                       >
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>Repeat Order</span>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Re-order</span>
                       </button>
                     </div>
                   </div>
@@ -1828,9 +1984,9 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
           <div className="bg-white border border-stone-200 rounded-3xl max-w-md w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between border-b border-stone-200 pb-3 shrink-0 mb-3">
               <h3 className="text-lg font-bold text-stone-900">
-                {editingStyleId ? 'Edit Style Order' : 'Add Style Order'}
+                {reorderSourceStyleId ? 'Re-order Style' : (editingStyleId ? 'Edit Style Order' : 'Add Style Order')}
               </h3>
-              <button onClick={() => setShowStyleModal(false)} className="text-stone-400 hover:text-stone-900 p-1">
+              <button onClick={() => { setShowStyleModal(false); setReorderSourceStyleId(null); }} className="text-stone-400 hover:text-stone-900 p-1 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1886,8 +2042,9 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                   <label className="text-xs text-stone-700 block font-medium">Order Quantity (pcs)</label>
                   <input
                     type="number"
-                    value={styleForm.order_qty || 10000}
-                    onChange={e => setStyleForm({ ...styleForm, order_qty: parseInt(e.target.value) || 0 })}
+                    value={styleForm.order_qty !== undefined && styleForm.order_qty !== null ? styleForm.order_qty : ''}
+                    onChange={e => setStyleForm({ ...styleForm, order_qty: e.target.value === '' ? ('' as any) : parseInt(e.target.value) || 0 })}
+                    placeholder={reorderSourceStyleId ? 'Enter new order qty' : '10000'}
                     className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-900 mt-1 font-mono"
                   />
                 </div>
@@ -1954,40 +2111,83 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                 </select>
               </div>
 
-              {/* FINISHING PROCESSES QUESTION */}
+              {/* SAMPLE REQUIRED OPTION */}
               <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
-                <label className="text-xs font-bold text-stone-900 block">Finishing Stages Configuration</label>
-                <div className="space-y-2">
-                  <span className="text-[11px] text-stone-600 block font-medium">Does this style have buttons / buttonholes?</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setHasButtonsForNewStyle(true)}
-                      className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
-                        hasButtonsForNewStyle
-                          ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
-                          : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
-                      Yes (8 stages)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHasButtonsForNewStyle(false)}
-                      className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
-                        !hasButtonsForNewStyle
-                          ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
-                          : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
-                      No (6 stages)
-                    </button>
-                  </div>
-                  <span className="text-[10px] text-stone-500 block">
-                    Standard finishing process stages will be configured automatically so declared output reaches finishing.
-                  </span>
+                <label className="text-xs font-bold text-stone-900 block">Sample Required</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSampleRequired(false)}
+                    className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
+                      !sampleRequired
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
+                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                    }`}
+                  >
+                    No (Bulk Ready)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSampleRequired(true)}
+                    className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
+                      sampleRequired
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
+                        : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                    }`}
+                  >
+                    Yes (PP Sample First)
+                  </button>
                 </div>
+                <span className="text-[10px] text-stone-500 block">
+                  {sampleRequired
+                    ? 'A PP sample request will be initiated in Cutting for buyer approval before bulk cutting.'
+                    : 'Default: No sample required. Direct to bulk production.'}
+                </span>
               </div>
+
+              {/* FINISHING PROCESSES QUESTION (or copied notice if Re-order) */}
+              {reorderSourceStyleId ? (
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-1">
+                  <label className="text-xs font-bold text-stone-900 block">Finishing Stages</label>
+                  <p className="text-xs text-stone-600">
+                    Finishing stages and sequences will be copied exactly from the original style without duplicates.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200 space-y-2">
+                  <label className="text-xs font-bold text-stone-900 block">Finishing Stages Configuration</label>
+                  <div className="space-y-2">
+                    <span className="text-[11px] text-stone-600 block font-medium">Does this style have buttons / buttonholes?</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setHasButtonsForNewStyle(true)}
+                        className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
+                          hasButtonsForNewStyle
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
+                            : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        Yes (8 stages)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHasButtonsForNewStyle(false)}
+                        className={`p-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer ${
+                          !hasButtonsForNewStyle
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-900 shadow-2xs'
+                            : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        No (6 stages)
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-stone-500 block">
+                      Standard finishing process stages will be configured automatically so declared output reaches finishing.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* WAGE MODEL PER STYLE */}
               <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
@@ -2071,10 +2271,17 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                           <input
                             type="number"
                             placeholder="Qty"
-                            value={row.order_qty || ''}
+                            value={row.order_qty !== undefined && row.order_qty !== null && row.order_qty !== 0 ? row.order_qty : (row.order_qty === 0 ? '' : row.order_qty)}
                             onChange={e => {
-                              const val = parseInt(e.target.value) || 0;
-                              setSizeRows(prev => prev.map((r, i) => i === idx ? { ...r, order_qty: val } : r));
+                              const val = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
+                              setSizeRows(prev => {
+                                const nextRows = prev.map((r, i) => i === idx ? { ...r, order_qty: val } : r);
+                                const total = nextRows.reduce((sum, r) => sum + (Number(r.order_qty) || 0), 0);
+                                if (total > 0) {
+                                  setStyleForm(sf => ({ ...sf, order_qty: total }));
+                                }
+                                return nextRows;
+                              });
                             }}
                             className="w-24 bg-white border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-stone-900 text-right"
                           />
@@ -2150,15 +2357,18 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
               <div className="flex gap-2 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowStyleModal(false)}
-                  className="flex-1 bg-stone-100 text-stone-800 font-semibold py-2.5 rounded-xl text-xs border border-stone-200"
+                  onClick={() => {
+                    setShowStyleModal(false);
+                    setReorderSourceStyleId(null);
+                  }}
+                  className="flex-1 bg-stone-100 text-stone-800 font-semibold py-2.5 rounded-xl text-xs border border-stone-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isUploadingStyleImage}
-                  className="flex-1 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs shadow-xs flex items-center justify-center space-x-2"
+                  className="flex-1 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs shadow-xs flex items-center justify-center space-x-2 cursor-pointer"
                 >
                   {isUploadingStyleImage ? (
                     <>
@@ -2166,7 +2376,7 @@ export const StylesBuilderScreen: React.FC<StylesBuilderScreenProps> = ({ role }
                       <span>Uploading Image...</span>
                     </>
                   ) : (
-                    <span>{editingStyleId ? 'Save Style Changes' : 'Create Style Order'}</span>
+                    <span>{reorderSourceStyleId ? 'Create Re-order Style' : (editingStyleId ? 'Save Style Changes' : 'Create Style Order')}</span>
                   )}
                 </button>
               </div>

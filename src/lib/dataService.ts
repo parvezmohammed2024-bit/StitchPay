@@ -967,14 +967,14 @@ class DataService {
   }
 
   // --- STYLE SIZES & BREAKDOWN ---
-  public async getStyleSizes(styleId: string): Promise<StyleSize[]> {
+  public async getStyleSizes(styleId?: string): Promise<StyleSize[]> {
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase
-          .from('style_sizes')
-          .select('*')
-          .eq('style_id', styleId)
-          .order('seq_no', { ascending: true });
+        let query = supabase.from('style_sizes').select('*').order('seq_no', { ascending: true });
+        if (styleId) {
+          query = query.eq('style_id', styleId);
+        }
+        const { data, error } = await query;
         if (!error && data) {
           return data as StyleSize[];
         }
@@ -982,7 +982,10 @@ class DataService {
         console.warn('Error fetching style_sizes:', err);
       }
     }
-    return (this.styleSizes || []).filter(s => s.style_id === styleId).sort((a, b) => a.seq_no - b.seq_no);
+    if (styleId) {
+      return (this.styleSizes || []).filter(s => s.style_id === styleId).sort((a, b) => a.seq_no - b.seq_no);
+    }
+    return (this.styleSizes || []).sort((a, b) => a.seq_no - b.seq_no);
   }
 
   public async saveStyleSizes(styleId: string, sizes: { size: string; order_qty: number; seq_no?: number }[]): Promise<StyleSize[]> {
